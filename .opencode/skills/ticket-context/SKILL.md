@@ -43,7 +43,7 @@ Tower site names use an abbreviated format: `[FirstInitial][LastName]`
 
 **The first letter is the host's FIRST INITIAL, the rest is their LAST NAME.**
 
-**CRITICAL:** You CANNOT determine the exact host from the abbreviation alone. `SRoss` could be "Larry Doe" or "Rebecca Doe" — you MUST check the ticket comments to identify the correct host.
+**CRITICAL:** You CANNOT determine the exact host from the abbreviation alone. `MDane` could be "Mike Dane" or "Rebecca Dane" — you MUST check the ticket comments to identify the correct host.
 
 **For bottleneck analysis:** Use the search API with the host's LAST NAME (e.g., `Ross`) and pick the EXACT match from ticket comments.
 

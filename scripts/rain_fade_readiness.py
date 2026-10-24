@@ -46,13 +46,16 @@ import math
 import os
 import subprocess
 import sys
+from urllib.parse import urlsplit
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import envfile  # noqa: E402
 import rain_fade_model as rfm  # noqa: E402
 
 WAVE_GUI = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wave_gui.mjs")
+MAX_SPEEDTEST_S = 60   # per direction; the built-in test saturates the radios
 
 
 def decode_floor_dbm(sig: dict) -> float | None:
@@ -87,8 +90,8 @@ def haversine_km(a: dict, b: dict) -> float:
 
 def tier_overrides() -> tuple[float, float]:
     try:
-        red = float(os.environ.get("RF_TIER_RED_MM_H", rfm.RED_BELOW_MM_H))
-        amber = float(os.environ.get("RF_TIER_AMBER_MM_H", rfm.AMBER_BELOW_MM_H))
+        red = float(envfile.get("RF_TIER_RED_MM_H", str(rfm.RED_BELOW_MM_H)))
+        amber = float(envfile.get("RF_TIER_AMBER_MM_H", str(rfm.AMBER_BELOW_MM_H)))
     except ValueError as exc:
         raise SystemExit(f"RF_TIER_RED_MM_H / RF_TIER_AMBER_MM_H must be numbers: {exc}")
     return red, amber
@@ -172,8 +175,6 @@ def mcp_ucfg(host_ip: str, tool_cli: list, warnings: list) -> dict | None:
 
 
 def host_of(url: str) -> str:
-    from urllib.parse import urlsplit
-
     return urlsplit(url).hostname or url
 
 
@@ -186,7 +187,8 @@ def run(argv: list) -> int:
     ap.add_argument("--tau", type=float, default=45.0)
     ap.add_argument("--speedtest", action="store_true")
     ap.add_argument("--speedtest-duration", type=int, default=10,
-                    help="seconds per direction (default 10; keep short on live traffic)")
+                    help="seconds per direction (default 10, at most %d; the test loads the radios, so keep it short "
+                         "and run it only when operations agree)" % MAX_SPEEDTEST_S)
     ap.add_argument("--speedtest-from", choices=["ap", "st"], default="ap")
     ap.add_argument("--audit-config", action="store_true",
                     help="add carrierd/backup config truth via the NOC MCP tool CLI")
@@ -194,10 +196,14 @@ def run(argv: list) -> int:
                     default=["node", os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                                   "..", "mcp-server", "dist", "tool-cli.js")])
     args = ap.parse_args(argv)
+    for flag, value in (("--wave-ap", args.wave_ap), ("--wave-st", args.wave_st)):
+        parts = urlsplit(value)
+        if parts.scheme not in ("http", "https") or not parts.hostname or parts.username or parts.password:
+            ap.error(f"{flag} must look like https://<radio-ip> (no credentials in the URL)")
 
     warnings: list = []
     out: dict = {"mode": "rain-fade-readiness", "ap": args.wave_ap, "st": args.wave_st,
-                 "warnings": warnings, "timestamp": subprocess_needed()}
+                 "warnings": warnings, "timestamp": utc_now_iso()}
 
     report = read_end(args.wave_ap, warnings), read_end(args.wave_st, warnings)
     ap_read, st_read = report
@@ -242,7 +248,7 @@ def run(argv: list) -> int:
         src = {"ap": args.wave_ap, "st": args.wave_st}[args.speedtest_from]
         try:
             out["speedtest"] = run_wave_gui("speedtest", "--url", src,
-                                            "--duration", str(max(1, min(600, args.speedtest_duration))))
+                                            "--duration", str(max(1, min(MAX_SPEEDTEST_S, args.speedtest_duration))))
         except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
             warnings.append(f"speedtest failed: {exc}")
 
@@ -257,7 +263,7 @@ def run(argv: list) -> int:
     return 0
 
 
-def subprocess_needed() -> str:
+def utc_now_iso() -> str:
     from datetime import datetime, timezone
 
     return datetime.now(timezone.utc).isoformat()

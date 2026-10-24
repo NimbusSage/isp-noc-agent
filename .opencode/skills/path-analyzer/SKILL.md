@@ -234,7 +234,7 @@ Operator-invoked (or triggered by a per-storm ticket trail) mode for 60 GHz Wave
 for every Wave link on the path, forecast the rain rate at which it dies (ITU-R P.838-3,
 `scripts/rain_fade_model.py`), audit the 5 GHz backup / carrier-drop layer for the link's
 class (Wave internal backup radio vs carrier-drop + OSPF reroute), run the Wave built-in
-speed test, and post one comment under header `Rain Fade Readiness - {site}` with marker
+speed test only when the operator asks, and post one comment under header `Rain Fade Readiness - {site}` with marker
 `<!-- rain-fade-readiness -->`. Load `wave-gui` for the radio reads. Full procedure:
 `references/rain-fade-readiness.md`. Read-only + capacity tests only; never a bounce.
 
@@ -261,9 +261,8 @@ evidence, never an escalation on its own).
 | `BTEST_PROTOCOL` | `tcp` | tcp/udp |
 | `BTEST_TIMEOUT_MS` | `60000` | Per-btest SSH timeout |
 | `PATH_TRIAGE_MODE` | `direct` | immediate cutover |
-| `RAIN_HISTORY_URL` | — | optional rain history feed (rain-fade mode) |
-| `RF_TIER_RED_MM_H` | `25` | rain-fade tier red threshold (model default re-exported) |
-| `RF_TIER_AMBER_MM_H` | `50` | rain-fade tier amber threshold |
+| `RF_TIER_RED_MM_H` | `25` | rain-fade tier red threshold in mm/h (environment or `.env`) |
+| `RF_TIER_AMBER_MM_H` | `50` | rain-fade tier amber threshold in mm/h (environment or `.env`) |
 
 ## Integration with AGENTS.md
 

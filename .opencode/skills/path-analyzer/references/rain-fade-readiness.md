@@ -100,9 +100,10 @@ Config truth via MCP (not the GUI): `run-diagnostics ubnt-wave ucfg-show` on bot
 ## R4 — Classify and audit the backup layer per link class
 
 - **Class A — 5 GHz backup enabled & tuned** (`wireless.radios.backup.enabled=true`):
-  run the Wave built-in speed test from the AP
-  (`wave_gui.mjs speedtest --url <AP> [--duration 30] [| --direction rx|tx]`) to grade
-  what the backup actually carries when the 60 GHz fades. Record avg/max Mbps.
+  when the operator asks for a capacity test, run the Wave built-in speed test from the AP
+  (`wave_gui.mjs speedtest --url <AP> [--duration 10] [--direction rx|tx]`) to grade
+  what the backup actually carries when the 60 GHz fades. Record avg/max Mbps. The
+  unattended auto-trigger never runs it (it loads the radios).
 - **Class B — 5 GHz backup disabled + carrier drop** (`backup.enabled=false` and/or the
   carrier-drop pattern in `ucfg show`): the survival mode is kill-the-port + OSPF
   reroute. Audit without changing anything:
@@ -164,9 +165,9 @@ python3 scripts/rain_fade_model.py --freq 60 --dist <km> --margin <dB>
 - 7-day MyMate outage clustering per link device id (`outages?state=open`, plus recent
   resolved via device notes history) — N outages on rain events and lost-service times
   prove the *real* kill rain rate for the tier (if P.838 says the link dies at 25 mm/h
-  but MyMate shows it dropping at < ……, shift the score).
-- LibreNMS error counters on each Wave mgmt interface, optional `RAIN_HISTORY_URL` feed
-  (graceful degradation when absent; NEVER the workflow's substitute for MyMate evidence).
+  but MyMate shows it dropping at a much lower rate, shift the score).
+- LibreNMS error counters on each Wave mgmt interface (graceful degradation when absent;
+  NEVER the workflow's substitute for MyMate evidence).
 - Every claim in the comment cites evidence lines, not model-only numbers.
 
 ## R7 — Comment (only when a ticket ID is given)
@@ -189,10 +190,8 @@ ineffective inference.
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `RAIN_HISTORY_URL` | — | optional external rain history feed |
-| `RF_TIER_RED_MM_H` | `25` | kill-rate tier red threshold |
-| `RF_TIER_AMBER_MM_H` | `50` | tier amber threshold |
-| `RF_SPEEDTEST_DURATION` | `30` | seconds per speed test direction |
+| `RF_TIER_RED_MM_H` | `25` | kill-rate tier red threshold in mm/h (environment or `.env`) |
+| `RF_TIER_AMBER_MM_H` | `50` | tier amber threshold in mm/h (environment or `.env`) |
 | `WAVE_GUI_USER` / `WAVE_GUI_PASS` | — | only when overriding the credstore pool |
 
 All credential variables ride through the usual credstore path (`wave-gui` SKILL.md);

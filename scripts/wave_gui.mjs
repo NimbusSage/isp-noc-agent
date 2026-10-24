@@ -26,6 +26,7 @@ import https from 'node:https';
 import http from 'node:http';
 import { closeSync, constants, fchmodSync, mkdirSync, openSync, writeFileSync, writeSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadStore, poolCredentials } from './cred_store.mjs';
 
 // Used by the v1.0 API mode (read / speedtest) and defined here because main()'s sync
@@ -70,6 +71,24 @@ try {
   const u = new URL(URL0);
   if (!['http:', 'https:'].includes(u.protocol) || !u.hostname || u.username || u.password) throw new Error('bad');
 } catch { console.error('--url must be http(s)://host[:port] without embedded credentials'); process.exit(2); }
+
+// Where stored credentials may be sent: the same host policy the MCP server applies to its read tools
+// (private/loopback space unless NOC_READ_ALLOWED_HOSTS says otherwise). Without it, an agent steered by
+// hostile ticket text could aim the whole ubnt-wave credential pool at a host the operator does not own.
+// The policy lives in the compiled MCP server; if it is not built, refuse rather than skip the check.
+{
+  let policy;
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    policy = await import(pathToFileURL(path.join(here, '..', 'mcp-server', 'dist', 'security', 'hosts.js')).href);
+  } catch {
+    console.error('host policy unavailable: build the MCP server first (cd mcp-server && npm ci && npm run build)');
+    process.exit(2);
+  }
+  const hostname = new URL(URL0).hostname.replace(/^\[|\]$/g, '');
+  const verdict = policy.checkReadHost(hostname, process.env);
+  if (!verdict.ok) { console.error(`refusing ${hostname}: ${verdict.error}`); process.exit(2); }
+}
 
 /** Write the captured session token with mode 0600 from the first byte. */
 function writeTokenFile(file, token) {
@@ -117,7 +136,7 @@ async function main() {
   if (['read', 'speedtest'].includes(cmd)) {
     const out = cmd === 'read'
       ? await apiRead()
-      : await apiSpeedtest(argval('--mac'), argval('--direction') || 'both', Number(argval('--duration') || 30));
+      : await apiSpeedtest(argval('--mac'), argval('--direction') || 'both', Math.max(1, Math.min(120, Number(argval('--duration') || 30) || 30)));
     console.log(JSON.stringify(out));
     return;
   }

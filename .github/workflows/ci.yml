@@ -37,6 +37,8 @@ jobs:
         working-directory: mcp-server
       - run: npm run build
         working-directory: mcp-server
+      - name: radio tools refuse hosts the MCP host policy refuses
+        run: node --test scripts/wave_gui_host.test.mjs
       - run: npm test
         working-directory: mcp-server
 

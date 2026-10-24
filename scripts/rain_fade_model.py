@@ -47,6 +47,8 @@ import math
 import os
 import sys
 
+import envfile
+
 # --- ITU-R P.838-3 coefficient fit (exact published values) -----------------
 
 _COEFFS_KH = {
@@ -250,8 +252,8 @@ def main() -> None:
     ap.add_argument("--method", choices=["p838", "p530"], default="p838")
     args = ap.parse_args()
     try:
-        tier_red = float(os.environ.get("RF_TIER_RED_MM_H", RED_BELOW_MM_H))
-        tier_amber = float(os.environ.get("RF_TIER_AMBER_MM_H", AMBER_BELOW_MM_H))
+        tier_red = float(envfile.get("RF_TIER_RED_MM_H", str(RED_BELOW_MM_H)))
+        tier_amber = float(envfile.get("RF_TIER_AMBER_MM_H", str(AMBER_BELOW_MM_H)))
     except ValueError:
         print(json.dumps({"error": "RF_TIER_RED_MM_H / RF_TIER_AMBER_MM_H must be numbers"}))
         sys.exit(3)

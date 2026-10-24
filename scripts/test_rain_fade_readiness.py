@@ -140,6 +140,32 @@ class MockScripts(unittest.TestCase):
         # red threshold 1.0 → 1.6 mm/h kill now classifies amber.
         self.assertEqual(d["tier"], "amber")
 
+    def test_speedtest_duration_is_capped(self):
+        code, out = self.run_cli("--wave-ap", URL_A, "--wave-st", URL_B, "--speedtest", "--speedtest-duration", "600")
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["speedtest"]["durationSec"], rr.MAX_SPEEDTEST_S)
+
+    def test_tier_thresholds_come_from_dotenv_when_the_environment_has_none(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            env_file = os.path.join(tmp, "dotenv")
+            with open(env_file, "w") as fh:
+                fh.write('RF_TIER_RED_MM_H="1.0"\n')
+            os.environ.pop("RF_TIER_RED_MM_H", None)
+            os.environ["NOC_DOTENV"] = env_file
+            self.addCleanup(os.environ.pop, "NOC_DOTENV", None)
+            code, out = self.run_cli("--wave-ap", URL_A, "--wave-st", URL_B)
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out)["tier"], "amber")      # 1.6 mm/h is above the .env red threshold of 1.0
+
+    def test_radio_urls_are_checked_before_anything_runs(self):
+        for bad in ("ftp://10.0.0.1", "10.0.0.1", "https://admin:hunter22@10.0.0.1"):    # secret-scan:allow(fake credential fixture for an offline test)
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err), self.assertRaises(SystemExit) as ctx:
+                rr.run(["--wave-ap", bad, "--wave-st", URL_B])
+            self.assertEqual(ctx.exception.code, 2)
+            self.assertNotIn("hunter22", err.getvalue())                                  # secret-scan:allow(fake credential fixture for an offline test)
+
 
 if __name__ == "__main__":
     unittest.main()

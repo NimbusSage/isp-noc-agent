@@ -22,6 +22,11 @@ mutation this skill ever performs is `enable-ssh` through `wave_gui.mjs` **with 
 1. Explicit env override: `WAVE_GUI_USER` / `WAVE_GUI_PASS` (operator-supplied per run).
 2. The encrypted MCP credstore `ubnt-wave` pool (priority order) via `scripts/cred_store.mjs`; passphrase is `NOC_MCP_PASSPHRASE` from the environment or repo `.env` — never echoed, never on a command line.
 
+Host policy: `--url` must pass the same host policy as the MCP server's read tools: private, link-local
+and loopback addresses only, unless `NOC_READ_ALLOWED_HOSTS` replaces that list. Credentials are never sent
+to a host the policy refuses. The policy lives in the compiled MCP server, so the tool refuses to run until
+it is built (`cd mcp-server && npm ci && npm run build`).
+
 The browser modes `probe` / `enable-ssh` require the env pair. The gen3 web UI password
 may differ from an SSH password on the same radio — the credstore `ubnt-wave` pool holds
 the credentials that actually authenticate `POST /api/v1.0/user/login`; verify by running
@@ -95,7 +100,7 @@ Running the test *from the AP* (AP mgmt IP as `--url`) measures the link from th
 - Login HTTP 400: malformed body/framing — verify via `node --check scripts/wave_gui.mjs` and recent edits, not the radio.
 - Tokens are per-device and expire; each `read`/`speedtest` run logs itself in.
 - Radios respond on their WiFi-management IP (`network.interfaces.data.ipv4.cidr` in `ucfg show`); `https://<ip>` requires trusting self-signed cert (script sets `rejectUnauthorized:false`; browser uses `--ignore-certificate-errors`).
-- Re-run politeness: `speedtest` saturates the radio for the requested duration(s); coordinate with operations before running on links carrying live traffic (radio isolation is not guaranteed).
+- Re-run politeness: `speedtest` saturates the radio for the requested duration(s); coordinate with operations before running on links carrying live traffic (radio isolation is not guaranteed). The duration is capped at 120 s per direction, and the unattended rain-fade auto-trigger never runs it.
 
 ## Env
 

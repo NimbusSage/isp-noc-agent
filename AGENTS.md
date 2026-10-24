@@ -102,7 +102,7 @@ After the path comment, if ALL of these hold, run the readiness mode (see `path-
 1. The analyzed path contains a 60 GHz Wave hop (LibreNMS `os=airos-af60`/Wave hardware, or `site-pack/devices.md` naming the radios, and BOTH mgmt URLs are known).
 2. The ticket trail (subject, description, or any comment) cites weather (`rain|storm|weather|wet|thunder|lightning` or same meaning in other words).
 3. No previous comment on the ticket contains the `Rain Fade Readiness` header or the `<!-- rain-fade-readiness -->` marker (one readiness comment per ticket, ever).
-Then run `python3 scripts/rain_fade_readiness.py --wave-ap <AP_URL> --wave-st <ST_URL> --audit-config --speedtest --speedtest-duration 10` (timeout 600s), post ONE comment under header `Rain Fade Readiness - {site}` with `<!-- rain-fade-readiness -->` from the JSON it prints, never a bounce, no group/category change, and return the normal status (`needs_human`/`categorized`) with `rain_fade:<tier>:<kill_mm_h>` added to `evidence[]`. Script failure or missing credentials: skip silently (note in evidence), do not escalate for it.
+Then run `python3 scripts/rain_fade_readiness.py --wave-ap <AP_URL> --wave-st <ST_URL> --audit-config` (timeout 600s; never add `--speedtest` here: the built-in speed test loads the radios and runs only when the operator asks for it), post ONE comment under header `Rain Fade Readiness - {site}` with `<!-- rain-fade-readiness -->` from the JSON it prints, never a bounce, no group/category change, and return the normal status (`needs_human`/`categorized`) with `rain_fade:<tier>:<kill_mm_h>` added to `evidence[]`. Script failure or missing credentials: skip silently (note in evidence), do not escalate for it.
 
 ### Step 3.6: Correlate (DEGRADED only)
 
