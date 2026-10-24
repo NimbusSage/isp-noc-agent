@@ -18,7 +18,7 @@ Skills are the agent's knowledge modules. Each lives in `.opencode/skills/<name>
 | [`duplicate-detection`](../.opencode/skills/duplicate-detection/SKILL.md) | Detect duplicate tickets by matching tower site + issue type; auto-handle high-confidence duplicates |
 | [`correlated-issues`](../.opencode/skills/correlated-issues/SKILL.md) | After a DEGRADED analysis, find other active tickets downstream of the same bottleneck device |
 | [`correlated-auto-return`](../.opencode/skills/correlated-auto-return/SKILL.md) | When DEGRADED path shares a critical red hop with another ticket, auto-return downstream to CS L2 as correlated upstream issue (IP+name exact, 75 threshold, no category change) |
-| [`google-chat`](../.opencode/skills/google-chat/SKILL.md) | Format and send structured Google Chat notification cards; silent for handled_duplicate + auto_bounced_ihn + correlated_bounced + queued_for_peak |
+| [`google-chat`](../.opencode/skills/google-chat/SKILL.md) | Format and send structured Google Chat notification cards; silent for handled_duplicate + auto_bounced_ihn(_peak) + correlated_bounced + queued_for_peak + auto_closed* |
 | [`mymate`](../.opencode/skills/mymate/SKILL.md) | MyMate network monitor REST API — device status, outages, ping history, engine health (read-only `nocagent` auth) |
 | [`librenms`](../.opencode/skills/librenms/SKILL.md) | LibreNMS REST API (`http://10.0.0.5/api/v0`, `X-Auth-Token`) — sysName/hardware/geolocation corroboration (not site truth) |
 | [`ihn-auto-return`](../.opencode/skills/ihn-auto-return/SKILL.md) | Auto-return perfectly HEALTHY slow-tower tickets (all hops green, zero warnings) to CS Level 2 as IHN/tower-connection with tower-confidence scoring and single-bounce anti-loop (80, +40 exact) |

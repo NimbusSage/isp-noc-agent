@@ -31,8 +31,8 @@ failures on btest, unreachable towers); `bounce_reverted` → wrong bounces (§3
 ```bash
 python3 scripts/circuit_breaker.py clear
 # or via API:
-curl -X POST http://localhost:65333/governance/breaker \
-  -u "OCAGENT:$TICKET_WEBHOOK_AUTH_TOKEN" -H 'Content-Type: application/json' \
+printf 'header = "Authorization: Bearer %s"\n' "$TICKET_WEBHOOK_AUTH_TOKEN" | curl -sS -K /dev/stdin -X POST http://127.0.0.1:65333/governance/breaker \
+  -H 'Content-Type: application/json' \
   -d '{"action":"clear"}'
 ```
 Do not clear blind — the breaker exists so that you look first. If the cause was a
@@ -56,7 +56,7 @@ echo 'BOUNCE_AUTONOMOUS_ENABLED=false' >> .env && systemctl restart noc-agent
 **Restore:**
 ```bash
 python3 scripts/circuit_breaker.py clear
-# and if the kill switch was used: remove the line from .env, restart noc-agent
+# and if the kill switch was used: set BOUNCE_AUTONOMOUS_ENABLED to true (or 1/yes/on) in .env, restart noc-agent
 ```
 
 ---
@@ -93,7 +93,7 @@ tail -100 logs/webhook.log | grep -E 'parse|Failed'
 journalctl -u noc-agent --since "-1 hour" --no-pager | tail -50
 ```
 Fallback notifications already cover the miss — the tickets listed in the card are not
-lost, they just weren't processed. Re-send them via the webhook (Step 0 of
+lost, they just weren't processed. Re-send them via the webhook (see the 'Test Agent Directly' section in
 docs/n8n-integration.md) or handle manually.
 
 ---
@@ -107,7 +107,7 @@ cat logs/pending_peak_checks.json
 journalctl -u noc-agent --since "-1 day" --no-pager | grep -i peak
 ```
 The server schedules the next drain automatically; if the box was down at 20:05 CT,
-the queue persists and drains next window. To intervene manually, process a ticket as
+the queue persists and drains at the next scheduled peak window: at 20:05 CT if the service starts before the window and today's drain has not run, about one second after start if it starts inside the 20:00-21:00 CT window after 20:05, or tomorrow if today's drain has already run or the window has passed. To intervene manually, process a ticket as
 NOC normally (the anti-loop markers prevent double-bounces).
 
 ---

@@ -44,7 +44,7 @@ python3 scripts/demo.py --scenario breaker-open
 
 Tell your coding agent: `onboard me`
 
-The onboarding skill walks through four tiers. You can skip any tier, and each one is checked by `python3 scripts/doctor.py`. Tier 0 is the demo you just ran (no credentials). Tier 1 covers devices: MikroTik and LibreNMS. Tier 2 covers Sonar and notifications, plus the optional ticket pipeline server. Tier 3 covers Google Sheets and Calendar.
+The onboarding skill walks through four tiers. You can skip any tier, and each one is checked by `python3 scripts/doctor.py`. Tier 0 is the demo you just ran (no credentials). Tier 1 covers devices: MCP server built, device credential store, and harness registration; LibreNMS and MyMate are optional. Tier 2 covers Sonar: Sonar API and site-pack/profile.json ids; Google Chat, the pipeline server, and systemd are optional. Tier 3 covers Google: OAuth files for Calendar, Tracker Sheet, and Temp OSPF Sheet skills.
 
 If you don't have a coding agent configured yet, run this to see which ones are supported:
 

@@ -74,7 +74,7 @@ Legacy diagnostics credentials remain organized by **device type** and continue 
 Use synthetic values above as documentation only; never commit real customer passwords in the tracked example. Existing encrypted stores without `exactDeviceCredentials` load as an empty list and retain all legacy behavior.
 
 **Key concepts:**
-- **`deviceType`** — One of: `mikrotik-ssh`, `mikrotik-rest`, `ubnt-uisp`, `ubnt-airos`, plus isolated customer pools `customer-airos` / `customer-mt` (same read-only commands as `ubnt-airos` / `mikrotik-ssh`; separate credential pools for rename-site CPE reads)
+- **`deviceType`** — One of: `mikrotik-ssh`, `mikrotik-rest`, `ubnt-uisp`, `ubnt-airos`, `ubnt-wave`, plus isolated customer pools `customer-airos` / `customer-mt` (same read-only commands as `ubnt-airos` / `mikrotik-ssh`; separate credential pools for rename-site CPE reads)
 - **`credentials`** — Ordered list of credential pairs; server tries highest priority first
 - **`policy.maxAttempts`** — Max credential pairs to try before giving up (default: 5)
 - **`policy.timeoutMs`** — Connection timeout per attempt (default: 30000)
@@ -83,22 +83,39 @@ Use synthetic values above as documentation only; never commit real customer pas
 
 The MCP still has **no Site Survey command**. Exact-device credentials are not authorization to run airView or another potentially disruptive scan; per-model/firmware survey validation and an allowlisted safe operation are separate prerequisites.
 
-## OpenCode Integration
+## OpenCode integration
 
-Add to your OpenCode MCP config:
+`opencode.json` registers the server under the `mcp` key with the name `network-troubleshooter`. The entry uses `"type": "local"`, a `command` array, a `cwd`, and an `environment` map that passes values by name with `{env:NAME}` placeholders:
 
 ```json
 {
-  "mcpServers": {
+  "mcp": {
     "network-troubleshooter": {
-      "command": "node",
-      "args": ["/path/to/NocAgent/mcp-server/dist/index.js"],
-      "env": {
-        "NOC_MCP_PASSPHRASE": "${NOC_MCP_PASSPHRASE}"
+      "type": "local",
+      "command": ["node", "/path/to/NocAgent/mcp-server/dist/index.js"],
+      "cwd": "/path/to/NocAgent/mcp-server",
+      "environment": {
+        "NOC_MCP_PASSPHRASE": "{env:NOC_MCP_PASSPHRASE}"
       }
     }
   }
 }
+```
+
+The server finds its config, credential store, and audit log relative to the folder it starts in. The `cwd` must point to the `mcp-server` folder.
+
+To write this entry with real paths for your checkout:
+
+```bash
+python3 scripts/harness_setup.py --harness opencode --write
+```
+
+Other coding agents are covered in `docs/harnesses.md`.
+
+Build the server once before first use:
+
+```bash
+cd mcp-server && npm ci && npm run build
 ```
 
 ## Provisioning Exact-Device Bindings (operator-approved)
@@ -178,32 +195,28 @@ List all available device types, their credential counts, and supported commands
 
 **Returns:** Array of device types with credential counts and available commands.
 
-### MikroTik SSH/REST
-- `system-resource` — CPU, memory, uptime
-- `interface-list` — All interfaces with stats
-- `interface-monitor` — Real-time traffic (params: interface)
-- `ip-route` — Routing table
-- `ip-arp` — ARP table
-- `firewall-filter` — Firewall rules
-- `log-recent` — Recent log entries
-- `ping` — ICMP from device (params: address, count)
+### Commands by device type
 
-### UBNT UISP
-- `device-list` — List all managed devices
-- `device-detail` — Full device info (params: deviceId)
-- `device-statistics` — Throughput stats (params: deviceId, interval)
-- `device-interfaces` — Interface status (params: deviceId)
-- `alerts` — Active alerts
+The commands each device type may run are defined in `mcp-server/src/commands/allowlist.ts`. Every parameter is checked against a strict pattern before it is used.
 
-### UBNT airOS
-- `status` — Full device status
-- `stations` — Connected stations
-- `interfaces` — Interface stats
-- `board-info` — Hardware info
+The available device types are `mikrotik-ssh`, `mikrotik-rest`, `ubnt-uisp`, `ubnt-airos`, `ubnt-wave`, and the isolated customer pools `customer-airos` and `customer-mt`.
 
-## Temporary-site write status
+Run `list-device-types` to see the full list. It returns every device type with its credential count and its supported commands.
 
-The MCP has read-only planners (`temp-ospf-plan`, `temp-radio-plan`) plus gated `temp-radio-apply` / `temp-radio-rollback` (airOS SSH transport implemented, default-off behind four gates + host allowlist). Keep `run-diagnostics` read-only and do not pass through commands from prompts. Until the transport passes the customer-free safe-area test and per-incident infra credential bindings are provisioned, the operator performs individually agreed manual steps while we inspect before/after config, effects, and rollback together. Offline tests do not establish live write readiness.
+## Temporary-site tools
+
+The temporary-site executor is live-proven end to end.
+
+The read-only planners are `temp-ospf-plan` and `temp-radio-plan`.
+
+The gated executors are `temp-radio-apply` and `temp-radio-rollback` (airOS over SSH), `temp-ospf-apply` and `temp-ospf-rollback` (RouterOS), and `temp-mt-flip`, `temp-mt-rollback`, `temp-mt-bounce`, `temp-mt-alias`, `temp-mt-alias-remove`, and `temp-ap-wds`.
+
+Every write is off by default. All five of the following are required: `execute: true` in the call; `TEMP_SITE_WRITE_ENABLED` in the environment; the transport flag for the device family (`TEMP_SITE_AIROS_TRANSPORT`, `TEMP_SITE_ROUTEROS_TRANSPORT`, or `TEMP_SITE_MT_TRANSPORT`); `TEMP_SITE_ALLOWED_HOSTS` listing the target host; and an exact-device credential binding for the ID and host.
+
+Rollback snapshots are stored owner-only in `mcp-server/state/temp-site-snapshots`. Set `TEMP_SITE_SNAPSHOT_DIR` to override the path.
+
+Keep `run-diagnostics` read-only. Do not pass commands from prompts through to a device.
+
 
 ## Security Features
 

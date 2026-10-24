@@ -37,6 +37,7 @@ restore members into the same paths on the new install (plus the passphrase and 
 Google consent) and `scripts/doctor.py` confirms everything still works. Crypto note:
 the tarball is unencrypted at rest — keep the backup dir as protected (0700/0600) as
 the secrets it contains, ideally on a second encrypted disk.
+Set `BACKUP_PASSPHRASE` or `BACKUP_PASSPHRASE_FILE` to encrypt the archive with openssl and delete the plaintext tar; without a passphrase the archive is a plaintext `.tgz` (mode 0600) and a warning is logged; `BACKUP_KEEP` (default 14) keeps the newest archives of either kind.
 
 | Secret | Location | In git? |
 |---|---|---|
@@ -50,7 +51,7 @@ the secrets it contains, ideally on a second encrypted disk.
 Read-only checks per credential: Sonar GraphQL, Google Chat webhook, webhook
 server health, MyMate session login, LibreNMS, each OAuth token refresh, MCP
 store decryption, site profile, systemd unit. `--json` for machines, `--only` /
-`--skip` for single checks. The full run posts ONE labeled test message to the
+`--skip` for single checks (exit 2 on unknown names); pass `--notify` to post ONE labeled test message to the
 NOC chat space (`--skip chat` to stay silent). Exit 0 only when nothing fails.
 
 ### 17.4 The onboarding wizard

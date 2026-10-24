@@ -199,8 +199,7 @@ Add another HTTP Request node for Google Chat:
 ### Test Agent Directly
 
 ```bash
-curl -X POST https://your-server-ip:65333/webhook/ticket \
-  -H "Authorization: Basic $(echo -n 'OCAGENT:<TICKET_WEBHOOK_AUTH_TOKEN>' | base64)" \
+printf 'header = "Authorization: Bearer %s"\n' "$TICKET_WEBHOOK_AUTH_TOKEN" | curl -sS -K /dev/stdin -X POST http://your-server-ip:65333/webhook/ticket \
   -H "Content-Type: application/json" \
   -d '{"ticket_id":"<ticket-id>"}'
 ```

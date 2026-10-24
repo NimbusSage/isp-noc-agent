@@ -9,6 +9,7 @@
 ```bash
 # Install (renders deploy/*.template into /etc/systemd/system/)
 sudo bash scripts/install.sh
+# install.sh runs daemon-reload, enables noc-agent and the metrics/evals timers, and starts noc-agent when .env passes --check-config (pass --no-start to skip start; --enable-backup adds noc-backup.timer, daily 03:17)
 sudo systemctl daemon-reload
 sudo systemctl enable noc-agent
 sudo systemctl start noc-agent
@@ -83,7 +84,7 @@ The webhook log is JSON-lines format — each entry has `timestamp`, `message`, 
 4. Check `journalctl -u noc-agent` + `logs/webhook.log` for the failure point
 
 **Context length / prompt too large (256k):**
-- `OPENCODE_MODEL` pinned to `opencode/big-pickle` (`opencode.json` + `server/index.js`); prior floating default used `cohere/north-mini-code:free` (256k) and failed at ~245k input (`server/batch_prompt_template.md` reduces prompt to <30k, `MAX_BATCH_SIZE=3` chunks bursts)
+- `AGENT_MODEL` → `OPENCODE_MODEL` → `opencode/big-pickle` model resolution (`server/index.js`); prior floating default used `cohere/north-mini-code:free` (256k) and failed at ~245k input (`server/batch_prompt_template.md` reduces prompt to <30k, `MAX_BATCH_SIZE=3` chunks bursts)
 - Guard: `server/index.js` logs `Prompt token guard triggered` at >180k est.; check `logs/webhook.log` `approx_tokens`
 - `server/index.js` now reads `logs/result_<jobId>.json` (file-authoritative) before stdout scan
 
@@ -103,7 +104,7 @@ python3 scripts/decision_log.py query --since <date>      # what the agent did
 python3 scripts/metrics_rollup.py --no-chat               # rates + revert re-check
 ```
 
-`/governance` and `POST /governance/breaker` require the same token as the webhook. The command below reads the token from the environment so it does not appear on the command line:
+`/governance` and `POST /governance/breaker` authenticate via `GOVERNANCE_AUTH_TOKEN` if set, otherwise fall back to `TICKET_WEBHOOK_AUTH_TOKEN`; `GOVERNANCE_AUTH_TOKEN` requires the same 24-character minimum. The command below reads the token from the environment so it does not appear on the command line:
 
 ```bash
 printf 'header = "Authorization: Bearer %s"\n' "$TICKET_WEBHOOK_AUTH_TOKEN" | curl -sS -K /dev/stdin http://127.0.0.1:65333/governance

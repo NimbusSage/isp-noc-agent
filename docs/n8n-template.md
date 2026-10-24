@@ -90,8 +90,7 @@ The server listens on `127.0.0.1` by default, so n8n on a separate host cannot r
 curl -s http://<AGENT_SERVER_URL>:65333/health
 
 # 2. Direct POST bypassing n8n (proves the server + auth half)
-curl -s -X POST http://<AGENT_SERVER_URL>:65333/webhook/ticket \
-  -u "OCAGENT:<TICKET_WEBHOOK_AUTH_TOKEN>" \
+printf 'header = "Authorization: Bearer %s"\n' "$TICKET_WEBHOOK_AUTH_TOKEN" | curl -s -K /dev/stdin -X POST http://<AGENT_SERVER_URL>:65333/webhook/ticket \
   -H 'Content-Type: application/json' \
   -d '{"ticket_id":"999999","subject":"[Alpha] bravo pppoe - slow tower",
        "ticket_group_id":<NOC_GROUP_ID>,"ticket_group_name":"NOC","status":"OPEN",

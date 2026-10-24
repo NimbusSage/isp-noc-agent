@@ -10,7 +10,7 @@ The full step-by-step workflow is documented in [AGENTS.md](../AGENTS.md) (the a
 
 | Step | Action | Outcome |
 |------|--------|---------|
-| 0 | **Passthrough / auto-close** | Sys Admin out-of-office auto-replies auto-closed. Sys Admin tickets forwarded to Google Chat. PBS success tickets auto-closed. PBS failures get a summary comment + alert. |
+| 0 | **Passthrough / auto-close** | Sys Admin out-of-office auto-replies auto-closed. Sys Admin tickets forwarded to Google Chat. PBS success tickets auto-closed. PBS failures get a summary comment + alert. Subject containing 'Maintenance' or 'Scheduled Maintenance' auto-closed silently (`auto_closed_maintenance`). |
 | 1 | **Fetch details** | Use N8N-provided data, or query Sonar API |
 | 2 | **Duplicate detection** | >=`DUPLICATE_HIGH_THRESHOLD`% (default 85): auto-handle (comment + reassign). `DUPLICATE_MED_THRESHOLD`%–84%: informational comment. <50%: skip. |
 | 3 | **Categorize** | Tag as rain fade, slow speeds, outage, or other |

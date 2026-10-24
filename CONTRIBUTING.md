@@ -17,7 +17,7 @@ too:
 * `scripts/circuit_breaker.py` — governance breaker
 * `.opencode/skills/` — see break-down below
 
-Everything else (`README.md`, `docs/`, `mcp-server/`, eval fixtures, new
+Everything else (`README.md`, `docs/`, `mcp-server/` except CODEOWNERS paths, eval fixtures, new
 skills) is normal-review territory: open a PR and expect comments, not veto.
 
 ## Skill tiers
@@ -39,7 +39,7 @@ skills) is normal-review territory: open a PR and expect comments, not veto.
    `site-pack/` or env vars.
 3. **If your change affects operator-facing behavior** (workflow steps, new
    endpoint, new env var, changed skill), update the matching `README.md`
-   section — the README is the operator manual, and CI's docs check
+   section; workflow, env and endpoint details belong in the matching `docs/` page (linked from the README's Documentation index), and CI's docs check
    (`scripts/docs_check.py`) guards its cross-references.
 4. **Behavior changes need verification**: run the offline test batteries
    (`node --test scripts/*.test.mjs`, `mcp-server npm test`,

@@ -14,8 +14,9 @@ All secrets live in `.env` at the repo root. This file is gitignored and never c
 |----------|----------|---------|-------------|
 | `SONAR_TOKEN` | Yes | — | Sonar API bearer token |
 | `NOC_TICKETS_GOOGLE_CHAT_WEBHOOK_URL` | Yes | — | Google Chat incoming webhook URL for NOC ticket alerts |
-| `TICKET_WEBHOOK_AUTH_TOKEN` | Yes | — | Basic auth token for the webhook server (username is `OCAGENT`) |
+| `TICKET_WEBHOOK_AUTH_TOKEN` | Yes | — | Bearer or Basic auth token for the webhook server; the Basic username is ignored, only the password field is compared |
 | `WEBHOOK_PORT` | No | `65333` | Port for the webhook server |
+| `WEBHOOK_BIND` | No | `127.0.0.1` | Bind address for the webhook server; a cleartext token warning is logged when the address is not loopback and `WEBHOOK_TLS_PROXY=1` is not set |
 | `OPENCODE_PATH` | No | `~/.opencode/bin/opencode` | Path to the OpenCode CLI binary |
 | `AGENT_WORKSPACE` (or legacy `OPENCODE_WORKSPACE`) | No | install root | Workspace path passed to the agent harness via spawn `cwd` |
 | `AGENT_HARNESS` | No | `opencode` | Which CLI launches the agent: `opencode` (default), `claude`, `codex`, `gemini`, or `command`. `codex` and `gemini` are experimental. |
@@ -23,7 +24,7 @@ All secrets live in `.env` at the repo root. This file is gitignored and never c
 | `AGENT_COMMAND_TEMPLATE` | No | — | Split into arguments and run without a shell. Must contain `{prompt}` or `{prompt_file}`; `{workspace}` and `{model}` are also available. `{prompt_file}` is a private temporary file removed after the run. Shell syntax such as pipes or `&&` is refused unless `AGENT_COMMAND_SHELL=1`, which passes the prompt in the `NOC_PROMPT` environment variable instead of pasting it into the command. |
 | `BATCH_TIMEOUT_MS` | No | `2700000` (45 min) | Per-batch OpenCode process timeout. Batches run one at a time, so a long run delays the queue rather than failing. |
 | `WINDOW_DURATION_MS` | No | `60000` | Ticket collection window; mainly useful for testing (shorten to speed up batch turnaround). |
-| `NOC_AGENT_LOG_DIR` | No | `<repo>/logs` | Override for webhook.log + pending_tickets.json location; for testing only. |
+| `NOC_AGENT_LOG_DIR` | No | `<repo>/logs` | Fallback log dir when `NOC_LOG_DIR` is unset; webhook.log is written here; pending_tickets.json goes to `NOC_STATE_DIR` (defaults to log dir) |
 | `IHN_TOWER_THRESHOLD` | No | `80` | Tower-correctness confidence threshold for IHN auto-return bounce (`ihn-auto-return`, +40 exact literal) |
 | `CORRELATED_CONFIDENCE_THRESHOLD` | No | `75` | Correlated downstream bounce threshold (`correlated-auto-return`, IP+name exact) |
 | `DUPLICATE_HIGH_THRESHOLD` | No | `85` | High-confidence duplicate auto-handle threshold (`duplicate-detection`) |
@@ -81,7 +82,7 @@ All secrets live in `.env` at the repo root. This file is gitignored and never c
 | `BTEST_TIMEOUT_MS` | No | `60000` | Per-btest SSH timeout (btest blocks) |
 | `BTEST_PASSWORD` | Only for a dedicated btest account | — | Operator-supplied at runtime; password of the dedicated btest account some fiber routers use (`path-analyzer`). Never stored in the repo |
 | `PATH_TRIAGE_MODE` | No | `direct` | Triage mode `direct` (live) vs `analyzer` rollback |
-| `OPENCODE_MODEL` | No | `opencode/big-pickle` | Model pinned for `opencode run` |
+| `AGENT_MODEL` | No | `opencode/big-pickle` | Model for agent runs; `OPENCODE_MODEL` is the legacy alias, read when `AGENT_MODEL` is unset |
 | `MAX_BATCH_SIZE` | No | `3` | Max tickets per agent batch; larger bursts chunked to keep prompt < 50k |
 | `BOUNCE_AUTONOMOUS_ENABLED` | No | `false` | Master kill switch: `false` blocks ALL autonomous bounces (`sonar_bounce.py` exit 4) |
 | `BREAKER_WINDOW_SEC` | No | `604800` | Circuit breaker rolling window (7 days) |
@@ -149,7 +150,7 @@ The MCP server stores device credentials (MikroTik, UBNT, plus isolated customer
 cp mcp-server/config/credentials.example.json mcp-server/config/credentials.json
 nano mcp-server/config/credentials.json
 
-# 2. Encrypt it (overwrites the plaintext file with ciphertext)
+# 2. Encrypt it (writes credentials.enc alongside credentials.json; the plaintext source is not overwritten)
 NOC_MCP_PASSPHRASE="<your_passphrase>" npm run encrypt --prefix mcp-server -- mcp-server/config/credentials.json
 ```
 
@@ -162,7 +163,7 @@ See [mcp-server/README.md](../mcp-server/README.md) for the full credential stor
 - `.env` is gitignored at the repo root — never commit it.
 - `mcp-server/config/credentials.json` is gitignored; only `credentials.example.json` is tracked.
 - The MCP server redacts passwords, API tokens, private keys, serials, and non-allowlisted hostnames from all output before it reaches the agent. IPs and MACs are left visible (operator policy: they are the payload of ppp/ARP/DHCP/registration diagnostics and nearly always RFC 1918). Exact-device CPE credentials must use the separate one-attempt path, not the shared type-level pool; it does not establish a trusted device-ID-to-host match or provide a Site Survey operation.
-- The MCP server only accepts read-only, allowlisted commands — it fails closed on unknown input.
+- The MCP server read tools (`run-diagnostics`, `run-exact-device-diagnostics`, `lookup-device-by-exact-ip`, `list-device-types`) accept only allowlisted commands and fail closed on unknown input; write tools (`routeros-write`, `temp-*`) are available but gated and off by default.
 - N8N integration examples use placeholders for all tokens. See [docs/n8n-integration.md](../docs/n8n-integration.md).
 
 ---

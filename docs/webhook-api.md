@@ -60,6 +60,7 @@ Returns service status JSON. No auth required.
 |------|---------|
 | 202 | Ticket received, processing started |
 | 400 | Missing `ticket_id` |
+| 400 | Body parse error |
 | 401 | Missing authorization header |
 | 401 | Invalid credentials |
 | 500 | Server error (check logs) |
@@ -70,7 +71,7 @@ The server listens on `127.0.0.1` by default. Set `WEBHOOK_BIND` to bind to anot
 
 The server accepts `Authorization: Basic base64(OCAGENT:<token>)` (the username is ignored) or `Authorization: Bearer <token>`. Every authentication failure returns 401 with a generic body. `TICKET_WEBHOOK_AUTH_TOKEN` must be at least 24 characters and must not look like a placeholder, or the server exits at startup. Run `node server/index.js --check-config` to validate settings without starting the server; it prints no values.
 
-`/health` and `/healthz` require no token and return no sensitive data. `/governance` and `POST /governance/breaker` require the same token as the webhook.
+`/health` and `/healthz` require no token and return no sensitive data. All `/governance` routes use `GOVERNANCE_AUTH_TOKEN` if set, otherwise `TICKET_WEBHOOK_AUTH_TOKEN`; the governance rate limit is `WEBHOOK_GOVERNANCE_RATE_LIMIT` (default 10 requests per minute).
 
 A ticket id that is already queued or being processed returns 202 with status `duplicate_ignored`; a re-sent webhook with that id does nothing. `ticket_id` accepts 1 to 64 characters from `A-Za-z0-9._:-`.
 
@@ -82,7 +83,7 @@ Limits:
 
 ### Batching
 
-Tickets received within a **60-second collection window** are batched and processed in a single OpenCode run. This includes all ticket types (NOC, Sys Admin, PBS). Benefits: fewer agent spawns, better duplicate detection across related tickets, lower system load.
+Tickets received within a **60-second collection window** (`WINDOW_DURATION_MS`, default 60000 ms) are collected and passed to `flushTicketQueue`, which splits any batch above `MAX_BATCH_SIZE` (default 3) into separate queued jobs. This includes all ticket types (NOC, Sys Admin, PBS). Benefits: fewer agent spawns, better duplicate detection across related tickets, lower system load.
 
 **Serial processing:** Batches run **one at a time** through a FIFO queue. A new batch starts only when the previous one settles (success, failure, or timeout). Tickets that arrive while the queue is busy still get `202 Accepted` immediately and wait their turn. Only an OpenCode failure stops the pipeline — genuine failures send a fallback notification and the queue advances to the next batch.
 
@@ -104,8 +105,7 @@ Full setup instructions (HTTP Request node config, fallback logic, example workf
 **Quick test:**
 ```bash
 source .env
-curl -X POST http://localhost:65333/webhook/ticket \
-  -H "Authorization: Basic $(echo -n "OCAGENT:$TICKET_WEBHOOK_AUTH_TOKEN" | base64)" \
+printf 'header = "Authorization: Bearer %s"\n' "$TICKET_WEBHOOK_AUTH_TOKEN" | curl -sS -K /dev/stdin -X POST http://localhost:65333/webhook/ticket \
   -H "Content-Type: application/json" \
   -d '{"ticket_id":"<ticket-id>"}'
 ```
@@ -122,8 +122,7 @@ curl -X POST http://localhost:65333/webhook/ticket \
 
 ```bash
 source .env
-curl -X POST http://localhost:65333/webhook/ticket \
-  -H "Authorization: Basic $(echo -n "OCAGENT:$TICKET_WEBHOOK_AUTH_TOKEN" | base64)" \
+printf 'header = "Authorization: Bearer %s"\n' "$TICKET_WEBHOOK_AUTH_TOKEN" | curl -sS -K /dev/stdin -X POST http://localhost:65333/webhook/ticket \
   -H "Content-Type: application/json" \
   -d '{"ticket_id":"000000","subject":"[TestSite] test - slow tower","ticket_group_id":<your_noc_group_id>,"ticket_group_name":"NOC"}'
 ```

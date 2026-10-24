@@ -127,7 +127,7 @@ vault as other skills:
 
 `tracker_sheet.mjs` is the only boundary to Sheets. To swap the tracker for
 another data source (Airtable, Postgres, your CRM via API), reimplement the
-same commands (`inspect`, `append`, `find-open`, `mark-dispatched`, …)
+same commands (`inspect`, `plan-append`, `append`, `wait-for-ticket`, `export-training`, …)
 against your backend and keep the row/appends contract identical — the
 `tracker-sheet` skill and CI tests continue to pass against any backend that
 returns compatible responses.

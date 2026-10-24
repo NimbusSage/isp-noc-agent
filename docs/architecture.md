@@ -9,7 +9,7 @@ N8N Workflow
     |
     v
 Webhook Server (Express, port 65333)        <-- server/index.js
-    |  batches tickets for 60s, then spawns one agent run
+    |  batches tickets for 60s (max MAX_BATCH_SIZE per chunk), enqueues one job per chunk, runs one at a time
     v
 OpenCode CLI (non-interactive)              <-- spawns per batch
     |  loads AGENTS.md, invokes skills on demand
@@ -104,7 +104,7 @@ NocAgent/
 │   ├── src/                       # TypeScript source
 │   ├── config/
 │   │   ├── credentials.example.json   # Template (tracked)
-│   │   └── credentials.json           # Encrypted target (gitignored)
+│   │   └── credentials.json           # Plaintext source (gitignored; encrypted store is credentials.enc)
 │   └── package.json
 ├── docs/
 │   ├── n8n-integration.md         # N8N workflow setup guide
