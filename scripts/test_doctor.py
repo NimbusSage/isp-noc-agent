@@ -410,7 +410,11 @@ class NotifyTests(DoctorCase):
 
 class HarnessTests(unittest.TestCase):
     def test_harness_row_summarizes_harness_setup(self):
-        with mock.patch.object(doctor, "ROOT", REPO), mock.patch.dict(os.environ, {"PATH": os.environ.get("PATH", "")}, clear=True):
+        # Keep the interpreter's runtime environment (a hosted-toolcache Python needs LD_LIBRARY_PATH to start);
+        # drop only the variables that select or configure a harness.
+        keep = {k: v for k, v in os.environ.items()
+                if not k.startswith(("NOC_", "AGENT_", "CLAUDE_", "OPENCODE_", "CODEX_", "GEMINI_"))}
+        with mock.patch.object(doctor, "ROOT", REPO), mock.patch.dict(os.environ, keep, clear=True):
             out, err = io.StringIO(), io.StringIO()
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
                 doctor.run(["--json", "--only", "harness", "--harness", "claude"])

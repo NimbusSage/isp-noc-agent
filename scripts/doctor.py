@@ -420,13 +420,17 @@ def check_harness(env):
         add("harness", "unconfigured", "no coding-agent CLI found on PATH (looked for: claude, opencode, codex, gemini)",
             "install one agent CLI (claude, opencode, codex or gemini), then run: python3 scripts/harness_setup.py --harness <name> --write")
         return
+    proc = None
     try:
         proc = subprocess.run([sys.executable, "-B", str(script), "--check", "--json", "--repo", str(ROOT)],
                               capture_output=True, text=True, timeout=60)
         report = json.loads(proc.stdout)
         checks = report["harnesses"][wanted]
-    except Exception:
-        add("harness", "fail", "harness_setup.py --check did not produce a report",
+    except Exception as e:
+        why = type(e).__name__
+        if proc is not None:
+            why += f", exit {proc.returncode}" + (f", stderr: {proc.stderr.strip()[-160:]}" if proc.stderr.strip() else "")
+        add("harness", "fail", f"harness_setup.py --check did not produce a report ({why})",
             f"run it by hand to see why: python3 scripts/harness_setup.py --check --harness {wanted}")
         return
     has_bin = _have_binary(env, wanted)

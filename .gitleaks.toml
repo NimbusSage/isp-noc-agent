@@ -1,0 +1,18 @@
+# gitleaks configuration (CI runs `gitleaks detect` over the full history).
+# The default rules stay on. Only test files are exempt, because the redaction and
+# credential tests need secret-shaped fake values. scripts/secret_scan.py still scans
+# those files and requires an allow marker with a stated reason on each such line.
+title = "isp-noc-agent"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "fake credentials used by tests"
+paths = [
+  '''mcp-server/tests/.*''',
+  '''scripts/test_[A-Za-z0-9_]*\.py''',
+  '''scripts/[A-Za-z0-9_.-]*\.test\.mjs''',
+  '''server/index\.test\.mjs''',
+  '''scripts/demo/fixtures/.*''',
+]

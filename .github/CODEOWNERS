@@ -44,6 +44,7 @@ scripts/doctor.py                              @NimbusSage
 scripts/install.sh                             @NimbusSage
 .githooks/                                     @NimbusSage
 .github/                                       @NimbusSage
+.gitleaks.toml                                 @NimbusSage
 
 # Agent-harness configuration (what the agent may run / which tools it sees)
 .claude/                                       @NimbusSage

@@ -28,6 +28,7 @@ run_logged "python unit tests" python3 -B -m unittest discover -s scripts -p 'te
 
 echo "[pre-push] docs links + index completeness"
 python3 -B scripts/docs_check.py || fail "docs check"
+python3 -B scripts/docs_commands_check.py || fail "docs commands check"
 
 if [ -d mcp-server/node_modules ]; then
   echo "[pre-push] mcp-server tests"
