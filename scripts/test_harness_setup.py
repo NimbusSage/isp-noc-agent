@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -404,6 +405,31 @@ class TestCommittedConfig(unittest.TestCase):
         if not link.exists() and not link.is_symlink():
             self.skipTest("no .claude/skills")
         self.assertEqual(os.path.realpath(str(link)), os.path.realpath(str(REAL_REPO / ".opencode" / "skills")))
+
+
+class TestUnreadablePaths(unittest.TestCase):
+    def test_path_exists_treats_permission_errors_as_absent(self):
+        with mock.patch.object(Path, "exists", side_effect=PermissionError(13, "Permission denied")):
+            self.assertFalse(hs.path_exists(Path("/root/somewhere/else")))
+        self.assertTrue(hs.path_exists(Path(__file__)))
+
+    def test_check_survives_an_opencode_config_that_points_into_an_unreadable_checkout(self):
+        repo = Path(tempfile.mkdtemp(prefix="hs-perm-"))
+        self.addCleanup(shutil.rmtree, repo, True)
+        (repo / "opencode.json").write_text(json.dumps({"mcp": {hs.SERVER_NAME: {
+            "type": "local", "command": ["node", "/nonexistent-home/NocAgent/mcp-server/dist/index.js"],
+            "cwd": "/nonexistent-home/NocAgent/mcp-server"}}}))
+        real_exists = Path.exists
+
+        def deny(self_path, *a, **k):
+            if str(self_path).startswith("/nonexistent-home"):
+                raise PermissionError(13, "Permission denied")
+            return real_exists(self_path, *a, **k)
+
+        with mock.patch.object(Path, "exists", deny):
+            checks = hs.check_harness(repo, "opencode", False)      # must not raise
+        mcp = [c for c in checks if c["name"] == "mcp"]
+        self.assertTrue(mcp and mcp[0]["status"] == "fail", checks)
 
 
 if __name__ == "__main__":

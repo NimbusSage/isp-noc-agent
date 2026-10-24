@@ -212,6 +212,14 @@ def server_paths(repo: Path) -> Dict[str, Path]:
     }
 
 
+def path_exists(path: Path) -> bool:
+    """Path.exists() that treats an unreadable location (another user's home, a missing mount) as absent."""
+    try:
+        return Path(path).exists()
+    except OSError:
+        return False
+
+
 def read_text(path: Path) -> Optional[str]:
     try:
         return path.read_text(encoding="utf-8")
@@ -633,7 +641,7 @@ def check_mcp_json(repo: Path, rel: str, keys: List[str], strict: bool, harness:
     target = _entry_target(entry, repo)
     if target is None:
         out.append(_c("mcp", "fail", "%s entry does not launch dist/index.js or mcp_launch.mjs" % rel))
-    elif not target.exists():
+    elif not path_exists(target):
         hint = "points at %s which does not exist" % target
         if target.name == "index.js" and not str(target).startswith(str(repo)):
             hint += " (another checkout? run harness_setup.py --harness %s --write --force)" % harness
@@ -666,7 +674,7 @@ def check_codex_toml(repo: Path, strict: bool) -> List[Check]:
     match = re.search(r'^\s*args\s*=\s*\[\s*"([^"]+)"', block, re.M)
     if not match:
         out.append(_c("mcp", "fail", "%s: no args entry in the server table" % rel))
-    elif not Path(match.group(1)).exists():
+    elif not path_exists(Path(match.group(1))):
         out.append(_c("mcp", "fail", "args path %s does not exist (another checkout?)" % match.group(1)))
     else:
         out.append(_c("mcp", "ok", "%s -> %s" % (rel, match.group(1))))

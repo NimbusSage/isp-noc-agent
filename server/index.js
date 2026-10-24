@@ -558,6 +558,8 @@ let logWriteFailed = false;
 let shuttingDown = false;
 let startedAt = Date.now();
 let lastBatchAt = null;
+// Counters for GET /metrics (in memory; they reset when the service restarts).
+const METRICS = { ticketsReceived: 0, duplicatesIgnored: 0, batchesFinished: 0, batchesFailed: 0, outcomes: new Map() };
 let httpServer = null;
 
 const ticketQueue = [];      // collection window: { ticketData, jobId, receivedAt }
@@ -984,6 +986,7 @@ const OUTCOME_TO_BREAKER = {
 
 function recordOutcome(ticketResult, extra = {}) {
   const status = ticketResult.status || 'unknown';
+  METRICS.outcomes.set(status, (METRICS.outcomes.get(status) || 0) + 1);
   const payload = {
     kind: 'batch_result',
     status,
@@ -1439,6 +1442,7 @@ function settleJob(job) {
   processing = false;
   activeJob = null;
   lastBatchAt = Date.now();
+  METRICS.batchesFinished += 1;
   if (job && typeof job.done === 'function') { try { job.done(); } catch (_) { /* ignore */ } }
   updatePendingTracking();
   pumpQueue();
@@ -1758,6 +1762,7 @@ function processBatchWithAgent(batch) {
       try { fs.unlinkSync(batchFile); } catch (_) { /* ignore */ }
     })
     .catch((error) => {
+      METRICS.batchesFailed += 1;
       log('Batch agent processing failed', {
         batch_size: batch.length,
         job_id: primaryJobId,
@@ -1885,6 +1890,7 @@ function acceptTicket(body, jobId, res) {
   }
   const existing = findTrackedTicket(ticketId);
   if (existing) {
+    METRICS.duplicatesIgnored += 1;
     log('Duplicate ticket ignored (already queued or in flight)', { ticket_id: ticketId, existing_job_id: existing.jobId, job_id: jobId });
     return res.status(202).json({
       status: 'duplicate_ignored',
@@ -1917,6 +1923,7 @@ function acceptTicket(body, jobId, res) {
     job_id: jobId,
     source: 'ticket',
   });
+  METRICS.ticketsReceived += 1;
   log('Ticket queued', { ticket_id: ticketId, queue_size: ticketQueue.length });
 
   // Start window timer if not already running
@@ -2014,6 +2021,28 @@ function createApp() {
       last_batch_age_s: lastBatchAt === null ? null : Math.round((Date.now() - lastBatchAt) / 1000),
     };
     res.status(shuttingDown ? 503 : 200).json(body);
+  });
+
+  // Prometheus text metrics. Same token as the webhook (or GOVERNANCE_AUTH_TOKEN); counters reset on restart.
+  app.get('/metrics', govLimiter, govAuth, (req, res) => {
+    const lines = [];
+    const metric = (name, type, help, samples) => {
+      lines.push(`# HELP ${name} ${help}`, `# TYPE ${name} ${type}`);
+      for (const [labels, value] of samples) lines.push(`${name}${labels} ${value}`);
+    };
+    metric('noc_agent_up', 'gauge', 'Whether the service is accepting work (1) or shutting down (0).', [['', shuttingDown ? 0 : 1]]);
+    metric('noc_agent_uptime_seconds', 'gauge', 'Seconds since the service started.', [['', Math.round((Date.now() - startedAt) / 1000)]]);
+    metric('noc_agent_queue_depth', 'gauge', 'Tickets and jobs waiting or running.', [['', pendingWorkCount() + pendingJobs.filter((j) => j.kind === 'peak').length]]);
+    metric('noc_agent_processing', 'gauge', 'Whether an agent run is in flight.', [['', processing ? 1 : 0]]);
+    metric('noc_agent_breaker_open', 'gauge', 'Whether the circuit breaker is open (autonomous bounces blocked).', [['', readBreakerOpen() ? 1 : 0]]);
+    metric('noc_agent_last_batch_age_seconds', 'gauge', 'Seconds since the last agent run finished (-1 if none yet).', [['', lastBatchAt === null ? -1 : Math.round((Date.now() - lastBatchAt) / 1000)]]);
+    metric('noc_agent_tickets_received_total', 'counter', 'Tickets accepted into the queue.', [['', METRICS.ticketsReceived]]);
+    metric('noc_agent_duplicates_ignored_total', 'counter', 'Tickets ignored because the id was already queued or running.', [['', METRICS.duplicatesIgnored]]);
+    metric('noc_agent_batches_finished_total', 'counter', 'Agent runs that finished (successfully or not).', [['', METRICS.batchesFinished]]);
+    metric('noc_agent_batches_failed_total', 'counter', 'Agent runs that failed.', [['', METRICS.batchesFailed]]);
+    metric('noc_agent_outcomes_total', 'counter', 'Ticket outcomes by status.',
+      [...METRICS.outcomes.entries()].sort().map(([status, n]) => [`{status="${String(status).replace(/[^A-Za-z0-9_:-]/g, '_').slice(0, 64)}"}`, n]));
+    res.set('Content-Type', 'text/plain; version=0.0.4; charset=utf-8').send(lines.join('\n') + '\n');
   });
 
   // Governance: every path under /governance needs auth (and a tight rate limit) before anything else runs.

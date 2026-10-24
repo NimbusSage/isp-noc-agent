@@ -930,6 +930,21 @@ test('failure card is HTML-escaped and the webhook URL secret never reaches the 
   }
 });
 
+test('GET /metrics needs the token and reports queue state and counters in Prometheus text', async () => {
+  const s = await startServer({});
+  const noAuth = await fetch(`${s.base}/metrics`);
+  assert.equal(noAuth.status, 401);
+  await post(s, '/webhook/ticket', { body: { ticket_id: 'M1', subject: 'metrics' } });
+  const res = await fetch(`${s.base}/metrics`, { headers: { Authorization: `Bearer ${s.token}` } });
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-type') || '', /^text\/plain/);
+  const body = await res.text();
+  assert.match(body, /^noc_agent_up 1$/m);
+  assert.match(body, /^noc_agent_tickets_received_total 1$/m);
+  assert.match(body, /^# TYPE noc_agent_queue_depth gauge$/m);
+  assert.ok(!body.includes(s.token), 'the token must never appear in metrics');
+});
+
 test('NOTIFY_PROVIDER routes the failure alert to that provider and never to Google Chat', async () => {
   const hits = { notify: [], chat: [] };
   const mk = (bucket) => http.createServer((req, res) => {
