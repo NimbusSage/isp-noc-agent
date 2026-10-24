@@ -52,6 +52,7 @@ AUTH_FAILED  # status string in mk.sh
 file:scripts/install.sh  # installer flags (WITH_GUI, NODE_BIN, NO_START, ...) are install-time arguments
 file:scripts/mk.sh  # helper shell script; its variables are locals
 file:scripts/temp_bgp_rollback.sh  # operator-run shell script; its variables are locals except the NOC_ ones listed in .env.example
+WAVE_GUI  # not env-read: module constant = path to wave_gui.mjs; the literal is the child-env WAVE_GUI* filter prefix in rain_fade_readiness.py
 
 # --- dynamic names built at run time ---
 NOC_*_USER  # credstore.py builds NOC_<TYPE>_USER from the device type

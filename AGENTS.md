@@ -27,7 +27,8 @@ Load when the trigger applies.
 
 - `ticket-context` — subject/first note to tower site; weather, night/peak detection
 - `duplicate-detection` — new NOC ticket: same site + issue as an open ticket
-- `path-analyzer` — slow-tower triage: live traceroute + btest from the tower router
+- `path-analyzer` — slow-tower triage: live traceroute + btest from the tower router; `references/rain-fade-readiness.md` mode forecasts Wave-link rain kill rates (load `wave-gui`)
+- `wave-gui` — Ubiquiti Wave (WaveOS gen3) radio web UI/API: `read` (signal dBm/MCS/capacity/backup/carrier-drop), built-in speedtest, browser probe; creds via the `ubnt-wave` credstore pool
 - `wireless-health` — hop with variance or low throughput: radio signal/CCQ/jitter/loss
 - `comment-formatting` — HTML for Sonar comments (`Direct Path Analysis` header, `&quot;`)
 - `correlated-issues` — DEGRADED path: other active tickets behind the same bottleneck
@@ -95,6 +96,13 @@ Load `path-analyzer` and `ticket-context` (plus `mymate`, `librenms` to corrobor
 4. Post ONE unified comment via `scripts/sonar_comment.py --verify`: header `Direct Path Analysis - {tower}` plus `<!-- path-analyzer -->` (keeps `correlated-issues` indexing), `&quot;` for attributes, never `BODYPLACEHOLDER`. Post every successful result (HEALTHY or DEGRADED); retry once if verification fails.
 5. Analysis failure (tower unreachable, fiber router not found, btest auth failure): post nothing (`comment-formatting`); Chat line `Analysis: ✗ path analysis failed (…)`; return `needs_human`.
 
+### Step 3.5b: Rain-fade readiness auto-trigger (60 GHz path + weather trail)
+
+After the path comment, if ALL of these hold, run the readiness mode (see `path-analyzer` -> Rain-Fade Readiness, `references/rain-fade-readiness.md`):
+1. The analyzed path contains a 60 GHz Wave hop (LibreNMS `os=airos-af60`/Wave hardware, or `site-pack/devices.md` naming the radios, and BOTH mgmt URLs are known).
+2. The ticket trail (subject, description, or any comment) cites weather (`rain|storm|weather|wet|thunder|lightning` or same meaning in other words).
+3. No previous comment on the ticket contains the `Rain Fade Readiness` header or the `<!-- rain-fade-readiness -->` marker (one readiness comment per ticket, ever).
+Then run `python3 scripts/rain_fade_readiness.py --wave-ap <AP_URL> --wave-st <ST_URL> --audit-config --speedtest --speedtest-duration 10` (timeout 600s), post ONE comment under header `Rain Fade Readiness - {site}` with `<!-- rain-fade-readiness -->` from the JSON it prints, never a bounce, no group/category change, and return the normal status (`needs_human`/`categorized`) with `rain_fade:<tier>:<kill_mm_h>` added to `evidence[]`. Script failure or missing credentials: skip silently (note in evidence), do not escalate for it.
 
 ### Step 3.6: Correlate (DEGRADED only)
 

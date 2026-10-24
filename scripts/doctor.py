@@ -785,6 +785,69 @@ def check_oauth_files(env):
 
 
 # --------------------------------------------------------------------------
+# rain-fade wave toolchain (offline; run `check_rain_fade` before touching a radio)
+# --------------------------------------------------------------------------
+
+def check_rain_fade(env):
+    """Rain-fade readiness toolchain, offline only: scripts run, JS parses,
+    tier envs sane, MCP knows the 60 GHz device type. No live radio contact
+    here — live reads belong to `path-analyzer` rain-fade mode with wave-gui."""
+    ready, problems = [], []
+    rr = ROOT / "scripts" / "rain_fade_readiness.py"
+    if not rr.exists():
+        add("rain_fade", "fail", f"missing {rr.relative_to(ROOT)}",
+            "rain-fade readiness orchestrator absent; check repo checkout (git)")
+        return
+    for cmd in ([sys.executable, str(rr), "--help"],
+                [sys.executable, str(ROOT / "scripts" / "rain_fade_model.py"), "--help"]):
+        try:
+            proc = run_cmd(cmd, timeout=30)
+            if proc.returncode == 0:
+                ready.append(Path(cmd[1]).name)
+            else:
+                problems.append(f"{Path(cmd[1]).name} --help exit {proc.returncode}")
+        except Exception as e:
+            problems.append(f"{Path(cmd[1]).name}: {e}")
+    gui = ROOT / "scripts" / "wave_gui.mjs"
+    try:
+        proc = run_cmd(["node", "--check", str(gui)], timeout=30)
+        if proc.returncode == 0:
+            ready.append("wave_gui.mjs")
+        else:
+            problems.append(f"wave_gui.mjs node --check exit {proc.returncode}")
+    except Exception as e:
+        problems.append(f"node --check wave_gui.mjs: {e}")
+    tier_pairs = []
+    for key, envname in (("red", "RF_TIER_RED_MM_H"), ("amber", "RF_TIER_AMBER_MM_H")):
+        raw = env_val(env, envname)
+        if raw is None or is_placeholder(raw):
+            continue
+        try:
+            tier_pairs.append((key, float(raw)))
+        except ValueError:
+            problems.append(f"{envname}={raw!r} is not a number (mm/h tier threshold)")
+    if len(tier_pairs) == 2 and tier_pairs[0][1] >= tier_pairs[1][1]:
+        problems.append("RF_TIER_RED_MM_H must be BELOW RF_TIER_AMBER_MM_H "
+                        f"({tier_pairs[0][1]} !< {tier_pairs[1][1]}; red = link dies at drizzle)")
+    cli = ROOT / "mcp-server" / "dist" / "tool-cli.js"
+    if cli.exists():
+        try:
+            proc = run_cmd(["node", str(cli), "list-device-types", "{}"], timeout=60)
+            if proc.returncode == 0 and "ubnt-wave" in (proc.stdout or ""):
+                ready.append("mcp ubnt-wave")
+            else:
+                problems.append("mcp tool-cli list-device-types lacks ubnt-wave "
+                                "(check mcp-server build for devices/ubnt-wave.ts)")
+        except Exception as e:
+            problems.append(f"mcp tool-cli: {e}")
+    if problems:
+        add("rain_fade", "fail" if _in_ci() else "warn", "; ".join(problems),
+            "fix the rain-fade toolchain rows above; live radio reads are refused until they pass")
+    else:
+        add("rain_fade", "pass", f"wave toolchain ready: {', '.join(ready)}")
+
+
+# --------------------------------------------------------------------------
 # go-public gate
 # --------------------------------------------------------------------------
 
@@ -849,6 +912,7 @@ CHECKS = [
     ("google_chat", check_chat, 2, False),
     ("notify", check_notify, 2, False),
     ("systemd", check_systemd, 2, False),
+    ("rain_fade", check_rain_fade, 2, False),
     ("oauth_files", check_oauth_files, 3, True),
     ("portability_scan", check_portability_scan, None, False),
 ]

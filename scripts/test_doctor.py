@@ -427,5 +427,52 @@ class HarnessTests(unittest.TestCase):
             self.assertTrue(row["hint"])
 
 
+class RainFadeCheckTests(DoctorCase):
+    """check_rain_fade is offline: every fixture is fake, no live radio contact."""
+
+    def fixture_scripts(self, cli_print=None):
+        (self.root / "scripts").mkdir(parents=True, exist_ok=True)
+        for name in ("rain_fade_readiness.py", "rain_fade_model.py"):
+            (self.root / "scripts" / name).write_text("# fixture: --help exits 0\nimport sys\nif '--help' not in sys.argv: sys.exit(9)\nprint('usage ok')\n")
+        (self.root / "scripts" / "wave_gui.mjs").write_text("// fixture: valid JS\n")
+        cli = self.root / "mcp-server" / "dist" / "tool-cli.js"
+        cli.parent.mkdir(parents=True, exist_ok=True)
+        cli.write_text(cli_print or "console.log('{\"deviceType\":\"ubnt-wave\"}')\n")
+
+    def test_ready_when_toolchain_and_cli_scan_ok(self):
+        self.fixture_scripts()
+        code, rows = self.rows("--only", "rain_fade")
+        row = rows["results"][0]
+        self.assertEqual(code, 0, rows)
+        self.assertEqual(row["status"], "pass", row)
+        self.assertIn("mcp ubnt-wave", row["detail"])
+
+    def test_missing_orchestrator_is_a_fail(self):
+        code, rows = self.rows("--only", "rain_fade")
+        row = rows["results"][0]
+        self.assertEqual(row["name"], "rain_fade")
+        self.assertEqual(row["status"], "fail", row)
+        self.assertIn("missing", row["detail"])
+
+    def test_cli_without_wave_type_warns(self):
+        self.fixture_scripts(cli_print="console.log('{\"deviceType\":\"mikrotik\"}')\n")
+        code, rows = self.rows("--only", "rain_fade")
+        row = rows["results"][0]
+        self.assertEqual(row["status"], "warn" if not os.environ.get("CI") else "fail", row)
+        self.assertIn("ubnt-wave", row["detail"])
+
+    def test_inverted_tier_thresholds_flagged(self):
+        self.fixture_scripts()
+        self.write_env(RF_TIER_RED_MM_H="90", RF_TIER_AMBER_MM_H="50")
+        code, rows = self.rows("--only", "rain_fade")
+        self.assertIn("must be BELOW", rows["results"][0]["detail"])
+
+    def test_nonnumeric_tier_flagged(self):
+        self.fixture_scripts()
+        self.write_env(RF_TIER_RED_MM_H="drizzle")
+        code, rows = self.rows("--only", "rain_fade")
+        self.assertIn("RF_TIER_RED_MM_H", rows["results"][0]["detail"])
+
+
 if __name__ == "__main__":
     unittest.main()

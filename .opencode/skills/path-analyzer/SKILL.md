@@ -228,6 +228,24 @@ Any → mark hop `critical` (red) / `warning` (amber) per `comment-formatting`.
 
 **Verification:** helper collapses newlines and verifies `Direct Path Analysis` present, not `BODYPLACEHOLDER` (`sonar_comment.py:183`). Preserve HTML comment `<!-- path-analyzer -->` for `correlated-issues` indexing (update that skill to also match `Direct Path Analysis`).
 
+## Rain-Fade Readiness mode (Wave links)
+
+Operator-invoked (or triggered by a per-storm ticket trail) mode for 60 GHz Wave links:
+for every Wave link on the path, forecast the rain rate at which it dies (ITU-R P.838-3,
+`scripts/rain_fade_model.py`), audit the 5 GHz backup / carrier-drop layer for the link's
+class (Wave internal backup radio vs carrier-drop + OSPF reroute), run the Wave built-in
+speed test, and post one comment under header `Rain Fade Readiness - {site}` with marker
+`<!-- rain-fade-readiness -->`. Load `wave-gui` for the radio reads. Full procedure:
+`references/rain-fade-readiness.md`. Read-only + capacity tests only; never a bounce.
+
+**Batch auto-trigger (AGENTS.md Step 3.5b):** after the Direct Path Analysis comment, when
+the path contains a 60 GHz Wave hop whose BOTH mgmt URLs are known, the ticket trail cites
+weather, and the ticket has no prior `Rain Fade Readiness` header/marker, run the one-command
+orchestrator `python3 scripts/rain_fade_readiness.py --wave-ap <URL> --wave-st <URL>
+--audit-config --speedtest` and post the readiness comment from its JSON. One readiness
+comment per ticket, ever; script failure or missing credentials is a silent skip (note in
+evidence, never an escalation on its own).
+
 ## Env
 
 | Variable | Default | Purpose |
@@ -243,6 +261,9 @@ Any → mark hop `critical` (red) / `warning` (amber) per `comment-formatting`.
 | `BTEST_PROTOCOL` | `tcp` | tcp/udp |
 | `BTEST_TIMEOUT_MS` | `60000` | Per-btest SSH timeout |
 | `PATH_TRIAGE_MODE` | `direct` | immediate cutover |
+| `RAIN_HISTORY_URL` | — | optional rain history feed (rain-fade mode) |
+| `RF_TIER_RED_MM_H` | `25` | rain-fade tier red threshold (model default re-exported) |
+| `RF_TIER_AMBER_MM_H` | `50` | rain-fade tier amber threshold |
 
 ## Integration with AGENTS.md
 

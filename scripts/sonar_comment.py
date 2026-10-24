@@ -119,9 +119,11 @@ def verify_comment(ticket_id: int, comment_id: str) -> None:
     if "\n" in body or "\r" in body:
         print(f"NOTE: stored body contains newlines (id {found['id']}) — expected only with --preserve-newlines",
               file=sys.stderr)
-    if "Network Bottleneck Analyzer" not in body and "Duplicate Ticket" not in body and "Correlated" not in body and "Direct Path Analysis" not in body:
+    markers = ("Network Bottleneck Analyzer", "Duplicate Ticket", "Correlated",
+               "Direct Path Analysis", "Rain Fade Readiness")
+    if not any(m in body for m in markers):
         print(
-            f"WARNING: verification: body missing expected marker (Direct Path Analysis / Network Bottleneck Analyzer / Duplicate / Correlated). id={found['id']} len={len(body)}",
+            f"WARNING: verification: body missing expected marker (Direct Path Analysis / Network Bottleneck Analyzer / Duplicate / Correlated / Rain Fade Readiness). id={found['id']} len={len(body)}",
             file=sys.stderr,
         )
         # not fatal — caller can decide

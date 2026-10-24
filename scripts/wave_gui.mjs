@@ -6,6 +6,8 @@
 // usage:
 //   WAVE_GUI_USER=… WAVE_GUI_PASS=… node scripts/wave_gui.mjs probe --url https://H [--click "Text"]… [--session NAME]
 //   WAVE_GUI_USER=… WAVE_GUI_PASS=… node scripts/wave_gui.mjs enable-ssh --url https://H [--click …] --execute
+//   node scripts/wave_gui.mjs read --url https://H          # dashboard stats via the gen3 v1.0 API (no browser)
+//   node scripts/wave_gui.mjs speedtest --url https://H [--mac XX] [--duration 30] [--direction rx|tx]
 // Screenshots → logs/gui/<session>/*.png, element map → elements-N.txt
 //
 // Element map format: BUTTON|id|TYPE[ CHECKED]|x,y|text (x,y = viewport coords).
@@ -20,8 +22,16 @@
 //   * --ignore-certificate-errors stays: radios ship self-signed certificates.
 
 import puppeteer from 'puppeteer-core';
+import https from 'node:https';
+import http from 'node:http';
 import { closeSync, constants, fchmodSync, mkdirSync, openSync, writeFileSync, writeSync } from 'node:fs';
 import path from 'node:path';
+import { loadStore, poolCredentials } from './cred_store.mjs';
+
+// Used by the v1.0 API mode (read / speedtest) and defined here because main()'s sync
+// phase runs before the module tail is evaluated.
+const API_BASE = '/api/v1.0';
+const kbpsToMbps = (v) => (typeof v === 'number' && isFinite(v)) ? Math.round(v) / 1000 : v ?? null;
 
 const args = process.argv.slice(2);
 const cmd = args[0];
@@ -50,7 +60,11 @@ mkdirSync(SHOT_DIR, { recursive: true });
 
 const USER = process.env.WAVE_GUI_USER;
 const PASS = process.env.WAVE_GUI_PASS;
-if (!USER || !PASS) { console.error('WAVE_GUI_USER / WAVE_GUI_PASS env required'); process.exit(2); }
+if (!USER || !PASS) {
+  // read/speedtest fall back to the credstore ubnt-wave pool (see poolCredentials below);
+  // only the browser flows strictly require the explicit env pair.
+  if (['probe', 'enable-ssh'].includes(cmd)) { console.error('WAVE_GUI_USER / WAVE_GUI_PASS env required'); process.exit(2); }
+}
 if (!URL0) { console.error('device URL required: pass --url https://<radio-ip> (or set WAVE_DEVICE_URL)'); process.exit(2); }
 try {
   const u = new URL(URL0);
@@ -100,6 +114,13 @@ async function dump(page, n) {
 }
 
 async function main() {
+  if (['read', 'speedtest'].includes(cmd)) {
+    const out = cmd === 'read'
+      ? await apiRead()
+      : await apiSpeedtest(argval('--mac'), argval('--direction') || 'both', Number(argval('--duration') || 30));
+    console.log(JSON.stringify(out));
+    return;
+  }
   if (!['probe', 'enable-ssh'].includes(cmd)) { console.error('unknown command:', cmd); process.exit(2); }
   if (cmd === 'enable-ssh' && !EXECUTE) log('DRY-RUN: add --execute to actually change settings');
 
@@ -293,3 +314,266 @@ async function main() {
 }
 
 main().catch(e => { console.error('GUI-FAIL:', e.message); process.exit(1); });
+
+// =========================== v1.0 UI API mode (read / speedtest) ==========================
+// Verified live 2026-10-24 on Wave Pro firmware MGMP.ipq807x.v4.1.1 (anonymized 60 GHz link pair):
+//   login   POST /api/v1.0/user/login {username,password} → 200 with a 40-char x-auth-token
+//           response header (the legacy /api/auth route 401s for unauthenticated callers and
+//           is NOT the gen3 login path)
+//   stats   GET /api/v1.0/statistics    → [{wireless:{linkQuality,radios,peers,carrierDrop}}]
+//           capacity numbers are kbps (verified: combined 1751750 = 1.75G on a live radio)
+//   device  GET /api/v1.0/device        → {identification:{model,product,firmware,mac}}
+//   speed   POST /api/v1.0/tools/airos/speedtest/start {mac,duration, direction: rx|tx|dx}
+//           (direction: rx, tx or dx per the API's own error text; the modal default label
+//            "all" is NOT accepted by the endpoint)
+//           GET  /api/v1.0/tools/airos/speedtest → {status: running|completed,...}
+//           POST /api/v1.0/tools/airos/speedtest/stop {mac}
+//           speed-test numbers are Mbps (verified 664.38 avg_rx on the same radio)
+// pool in priority order (scripts/cred_store.mjs; passphrase = NOC_MCP_PASSPHRASE env or
+// repo .env). Secrets never printed/logged; tokens only inside the process.
+
+function guiCreds() {
+  if (USER && PASS) return [{ name: 'env', username: USER, password: PASS, priority: 100 }];
+  try {
+    const store = loadStore();
+    return (poolCredentials(store, 'ubnt-wave') || []).map((c, i) => ({
+      name: c.name || `pool-${i}`,
+      username: String(c.username || 'ubnt').trim() || 'ubnt',
+      password: String(c.password || ''),
+      priority: c.priority ?? i,
+    })).filter(c => c.password);
+  } catch (e) {
+    console.error('WAVE_GUI_USER/WAVE_GUI_PASS not set and the ubnt-wave credstore pool is unavailable: ' + e.message);
+    process.exit(2);
+  }
+}
+
+function apiRequest(rawUrl, method, headers = {}, data = null, timeoutMs = 20000) {
+  const u = new URL(rawUrl);
+  const mod = u.protocol === 'https:' ? https : http;
+  const payload = data == null ? null : Buffer.from(JSON.stringify(data));
+  const hostHeader = u.port ? `${u.hostname}:${u.port}` : u.hostname;
+  const opts = {
+    method,
+    host: u.hostname,
+    port: u.port,
+    path: u.pathname + u.search,
+    // Radios ship self-signed certificates (matches the browser --ignore-certificate-errors).
+    rejectUnauthorized: false,
+    timeout: timeoutMs,
+    headers: {
+      Host: hostHeader,
+      Accept: 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+      ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': payload.length } : {}),
+      ...headers,
+    },
+  };
+  return new Promise((resolve, reject) => {
+    const req = mod.request(opts, (res) => {
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers || {}, body }));
+    });
+    req.on('timeout', () => req.destroy(new Error('request timed out')));
+    req.on('error', reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+async function apiLoginLogin(base, creds, timeoutMs) {
+  // Try each pool credential in priority order; stop on the first HTTP 200 login.
+  const errors = [];
+  for (const cred of creds) {
+    const { status, headers } = await apiRequest(`${base}${API_BASE}/user/login`, 'POST', {},
+      { username: cred.username, password: cred.password }, timeoutMs);
+    const token = headers['x-auth-token'] || '';
+    if (status === 200 && token) return { token, credName: cred.name, username: cred.username };
+    if (status === 401 || status === 403) { errors.push(`${cred.name}:HTTP ${status}`); continue; }
+    throw new Error(`login to ${base} returned HTTP ${status}`);
+  }
+  throw new Error(`web UI login failed against ${creds.length} credential(s) (${errors.join(', ')}) — the gen3 web password may differ from the SSH pool`);
+}
+
+async function apiGet(base, token, path, timeoutMs = 20000) {
+  const r = await apiRequest(`${base}${API_BASE}${path}`, 'GET', { 'x-auth-token': token }, null, timeoutMs);
+  if (r.status === 401 || r.status === 403) throw new Error(`HTTP ${r.status} on ${path} (= session expired; re-run)`);
+  if (r.status !== 200) throw new Error(`HTTP ${r.status} on ${path}`);
+  try { return JSON.parse(r.body); } catch { throw new Error(`non-JSON response on ${path}: ${r.body.slice(0, 120)}`); }
+}
+
+/** Lowest nonzero histogram bin in dBm (bin width = span/(bins-1)); null when empty. */
+function decodeFloorDbm(sig) {
+  if (!sig || !Array.isArray(sig.histogram) || typeof sig.minSignal !== 'number') return null;
+  const bins = sig.histogram;
+  const firstIdx = bins.findIndex((v) => typeof v === 'number' && v > 0);
+  if (firstIdx < 0) return null;
+  const span = typeof sig.maxSignal === 'number' ? (sig.maxSignal - sig.minSignal) : (bins.length - 1);
+  const width = bins.length > 1 ? span / (bins.length - 1) : 0;
+  return Math.round((sig.minSignal + width * firstIdx) * 10) / 10;
+}
+
+function peerShape(peer, remotePeer) {
+  if (!peer) return null;
+  const q = peer.linkQuality || {};
+  const m = q.mcs || {};
+  const sig = q.signalHistogram || {};
+  const cap = q.capacity || {};
+  return {
+    id: peer.id,
+    connected: !!peer.connected,
+    linkState: peer.linkState ?? null,
+    connectionTimeMs: peer.connectionTime ?? null,
+    signalDbm: q.signal ?? null,
+    signalDayDbm: q.signalDay ?? null,
+    idealSignalDbm: q.idealSignal ?? null,
+    minSignalDbm: sig.minSignal ?? null,
+    maxSignalDbm: sig.maxSignal ?? null,
+    // Lowest signal bin the radio actually decoded frames at (empirical survival
+    // floor). margin = signalDayDbm - decodeFloorDbm feeds the rain-fade model.
+    decodeFloorDbm: decodeFloorDbm(sig),
+    mcs: {
+      rxIdx: m.rxIdx ?? null, txIdx: m.txIdx ?? null,
+      rxIdxIdeal: m.rxIdxIdeal ?? null, txIdxIdeal: m.txIdxIdeal ?? null,
+      rxLabel: m.rxLabel ?? null, txLabel: m.txLabel ?? null,
+    },
+    capacityMbps: {
+      combined: kbpsToMbps(cap.combined), combinedIdeal: kbpsToMbps(cap.combinedIdeal),
+      dl: kbpsToMbps(cap.dl), dlIdeal: kbpsToMbps(cap.dlIdeal),
+      ul: kbpsToMbps(cap.ul), ulIdeal: kbpsToMbps(cap.ulIdeal),
+    },
+    linkScore: q.linkScore ?? null,
+    airtimePct: q.airtime ? { dl: q.airtime.dl ?? null, ul: q.airtime.ul ?? null } : null,
+    gps: (peer && peer.gps) ? { lat: peer.gps.lat ?? null, lon: peer.gps.lon ?? null, altM: peer.gps.alt ?? null }
+      : (remotePeer && remotePeer.gps ? { lat: remotePeer.gps.lat ?? null, lon: remotePeer.gps.lon ?? null, altM: remotePeer.gps.alt ?? null } : null),
+  };
+}
+
+function radioShape(r) {
+  if (!r) return null;
+  return {
+    id: r.id ?? null,
+    linkState: r.linkState ?? null,
+    frequencyCenterMhz: r.frequency ? (r.frequency.center ?? null) : null,
+    channelWidthTxMhz: r.channelWidth ? (r.channelWidth.tx ?? null) : null,
+    waveAi: r.waveAi ?? null,
+    serviceUptimeMs: r.serviceUptime ?? null,
+    serviceDowntimeMs: r.serviceDowntime ?? null,
+    conductedTxDbm: r.outputPower ? (r.outputPower.conducted ?? null) : null,
+    eirpDbm: r.outputPower ? (r.outputPower.eirp ?? null) : null,
+    antennaName: r.antenna ? (r.antenna.name ?? null) : null,
+    antennaGainDbi: r.antenna ? (r.antenna.gain ?? null) : null,
+  };
+}
+
+async function apiRead() {
+  const base = URL0.replace(/\/$/, '');
+  const creds = guiCreds();
+  const { token, credName, username } = await apiLoginLogin(base, creds, 20000);
+  const [stats, device] = await Promise.all([
+    apiGet(base, token, '/statistics'),
+    apiGet(base, token, '/device'),
+  ]);
+  const w = (stats && stats[0] && stats[0].wireless) || {};
+  const radios = w.radios || [];
+  const peers = w.peers || [];
+  const ownMac = (device.identification && device.identification.mac) || '';
+  // Peer MAC: everything MAC-looking inside peers, minus this device's own MAC.
+  const macRe = /[0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5}/g;
+  const peerMacs = [...new Set(String(JSON.stringify(peers)).match(macRe) || [])].filter(m => m.toLowerCase() !== ownMac.toLowerCase());
+  const radioState = (id) => {
+    const r = radios.find((x) => x && x.id === id);
+    if (!r || !peers.length || !peers[0]) return null;
+    const localPeer = (peers[0].local || []).find((p) => p && p.id === id);
+    const remotePeer = (peers[0].remote || []).find((p) => p && p.id === id);
+    // localPeer.gps (when present) is this radio's own fix; the remote peer entry
+    // carries the far radio's fix. Both are kept so callers can haversine the path length.
+    return { ...radioShape(r), localPeer: peerShape(localPeer, remotePeer), remotePeer: peerShape(remotePeer) };
+  };
+  return {
+    mode: 'read',
+    url: base,
+    loginCredName: credName,
+    loginUsername: username,
+    device: {
+      model: (device.identification && device.identification.model) || null,
+      product: (device.identification && device.identification.product) || null,
+      firmware: (device.identification && device.identification.firmware) || null,
+      mac: ownMac,
+      family: (device.identification && device.identification.family) || null,
+    },
+    radios: { main: radioState('main'), backup: radioState('backup') },
+    carrierDrop: { dropped: !!(w.carrierDrop && w.carrierDrop.dropped), reported: !!w.carrierDrop },
+    peerMacs,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+async function apiSpeedtest(macArg, direction, duration) {
+  if (!Number.isFinite(duration) || duration <= 0 || duration > 600) {
+    throw new Error('--duration must be 1..600 seconds');
+  }
+  if (!['rx', 'tx', 'both'].includes(direction)) throw new Error(`bad --direction ${direction}: rx, tx or both`);
+  const base = URL0.replace(/\/$/, '');
+  const creds = guiCreds();
+  const { token } = await apiLoginLogin(base, creds, 20000);
+  // Friendlier diagnostics + stats needed for MAC auto-detection.
+  const stats = await apiGet(base, token, '/statistics');
+  const device = await apiGet(base, token, '/device');
+  const ownMac = (device.identification && device.identification.mac) || '';
+  const macRe = /[0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5}/g;
+  let mac = macArg;
+  if (!mac) {
+    const peers = (stats && stats[0] && stats[0].wireless && stats[0].wireless.peers) || [];
+    const found = [...new Set(String(JSON.stringify(peers)).match(macRe) || [])].filter(m => m.toLowerCase() !== ownMac.toLowerCase());
+    if (found.length === 1) mac = found[0];
+    else if (!found.length) throw new Error('no peer MAC found in statistics — pass --mac manually or check the link');
+    else throw new Error(`ambiguous peer MACs (${found.length}) in statistics — pass --mac`);
+  } else if (!macRe.test(mac)) throw new Error(`--mac must look like MM:MM:MM:MM:MM:MM, got ${mac}`);
+
+  const state = () => apiGet(base, token, '/tools/airos/speedtest');
+  // Clear any leftover test session before starting (endpoint accepts only rx|tx|dx).
+  await apiRequest(`${base}${API_BASE}/tools/airos/speedtest/stop`, 'POST', { 'x-auth-token': token }, { mac }, 20000).catch(() => {});
+
+  const runOne = async (dir) => {
+    const started = await apiRequest(`${base}${API_BASE}/tools/airos/speedtest/start`, 'POST', { 'x-auth-token': token }, { mac, duration, direction: dir }, 20000);
+    if (started.status !== 200) throw new Error(`speedtest/start (${dir}) HTTP ${started.status}: ${started.body.slice(0, 160)}`);
+    const t0 = Date.now();
+    const deadline = t0 + duration * 1000 + 60000;
+    let latest = null;
+    for (;;) {
+      await new Promise(r => setTimeout(r, 4000));
+      const s = await state();
+      latest = s;
+      if (s.status === 'completed') break;
+      if (Date.now() > deadline) { await apiRequest(`${base}${API_BASE}/tools/airos/speedtest/stop`, 'POST', { 'x-auth-token': token }, { mac }, 20000).catch(() => {}); throw new Error(`speedtest (${dir}) did not complete within ${Math.round((deadline - t0) / 1000)}s`); }
+    }
+    await apiRequest(`${base}${API_BASE}/tools/airos/speedtest/stop`, 'POST', { 'x-auth-token': token }, { mac }, 20000).catch(() => {});
+    return {
+      direction: dir,
+      status: latest.status,
+      durationSec: latest.duration ?? null,
+      avgMbps: dir === 'rx' ? latest.avg_rx ?? null : latest.avg_tx ?? null,
+      maxMbps: dir === 'rx' ? latest.max_rx ?? null : latest.max_tx ?? null,
+    };
+  };
+
+  const results = [];
+  if (direction === 'both') {
+    results.push(await runOne('rx'));
+    results.push(await runOne('tx'));
+  } else {
+    results.push(await runOne(direction));
+  }
+  return {
+    mode: 'speedtest',
+    url: base,
+    device: { model: (device.identification && device.identification.model) || null, mac: ownMac },
+    peerMac: mac,
+    durationSec: duration,
+    results,
+    timestamp: new Date().toISOString(),
+  };
+}
