@@ -1,0 +1,62 @@
+{
+  "_comment": "Per-ticket side-effect data for scripts/demo_agent_stub.py. Decisions live in agent_outputs/*.json; this file only supplies the synthetic details the stub writes into comments and chat cards. Hop IPs use the 10.0.0.0/16 and 198.51.100.0/24 documentation-style ranges.",
+  "91001": {
+    "path": {
+      "analyzer_site": "alpha1 pppoe",
+      "verdict": "HEALTHY",
+      "hops": [
+        { "name": "alpha1 pppoe", "ip": "10.0.1.1", "level": "ok", "note": "btest 412/388 Mbps, CPU 18%" },
+        { "name": "alpha-core", "ip": "10.0.1.2", "level": "ok", "note": "btest 405/391 Mbps, CPU 22%" },
+        { "name": "alpha-fiber-edge", "ip": "10.0.1.3", "level": "ok", "note": "btest 398/386 Mbps, CPU 15%" },
+        { "name": "transit-gw", "ip": "198.51.100.1", "level": "ok", "note": "first public hop" }
+      ]
+    },
+    "bounce": { "reason": "IHN", "add": ["cx_th_side_issue"], "remove": ["slow_speeds", "night_peak"] }
+  },
+  "91002": {
+    "path": {
+      "analyzer_site": "bravo2 pppoe",
+      "verdict": "DEGRADED",
+      "hops": [
+        { "name": "bravo2 pppoe", "ip": "10.0.2.1", "level": "ok", "note": "btest 391/372 Mbps, CPU 20%" },
+        { "name": "bravo-agg", "ip": "10.0.2.2", "level": "critical", "note": "btest 38/41 Mbps, CPU 96%" },
+        { "name": "bravo-fiber-edge", "ip": "10.0.2.3", "level": "ok", "note": "btest 402/390 Mbps, CPU 12%" },
+        { "name": "transit-gw", "ip": "198.51.100.1", "level": "ok", "note": "first public hop" }
+      ]
+    },
+    "chat": {
+      "issue": "Degraded path: bravo-agg (10.0.2.2) is saturated",
+      "analysis": "Direct path analysis complete: DEGRADED"
+    }
+  },
+  "91003": {},
+  "91004": {},
+  "91005": {},
+  "91006": {
+    "add_categories": ["outage"],
+    "chat": {
+      "issue": "Outage ticket categorized; no path analysis for outages",
+      "analysis": "N/A (not slow speeds)"
+    }
+  },
+  "91007": {
+    "duplicate_of": 91006
+  },
+  "91008": {
+    "path": {
+      "analyzer_site": "echo1 pppoe",
+      "verdict": "HEALTHY",
+      "hops": [
+        { "name": "echo1 pppoe", "ip": "10.0.3.1", "level": "ok", "note": "btest 366/351 Mbps, CPU 17%" },
+        { "name": "echo-core", "ip": "10.0.3.2", "level": "ok", "note": "btest 371/355 Mbps, CPU 19%" },
+        { "name": "echo-fiber-edge", "ip": "10.0.3.3", "level": "ok", "note": "btest 380/362 Mbps, CPU 14%" },
+        { "name": "transit-gw", "ip": "198.51.100.1", "level": "ok", "note": "first public hop" }
+      ]
+    },
+    "chat": {
+      "issue": "Healthy path but weather keywords present; not auto-bouncing",
+      "reason": "weather_excluded",
+      "analysis": "Direct path analysis complete: HEALTHY"
+    }
+  }
+}

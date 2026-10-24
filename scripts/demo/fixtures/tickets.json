@@ -1,0 +1,110 @@
+{
+  "_comment": "Synthetic demo tickets. Towers are NATO-named, customers are lettered, addresses are documentation ranges. Nothing here refers to a real network.",
+  "tickets": [
+    {
+      "id": 91001,
+      "subject": "[Alpha] alpha1 pppoe - slow tower",
+      "status": "OPEN",
+      "priority": "MEDIUM",
+      "description": "Customer A reports slow downloads and buffering on the Alpha tower.",
+      "ticket_group_id": 41,
+      "ticket_category_ids": [201],
+      "created_at": "2026-03-02T15:04:05Z",
+      "user": { "id": 1, "name": "Demo Dispatcher" },
+      "comments": [
+        { "body": "<p>Tower: Alpha</p>", "user": { "id": 1, "name": "Demo Dispatcher" }, "created_at": "2026-03-02T15:06:00Z" }
+      ]
+    },
+    {
+      "id": 91002,
+      "subject": "[Bravo] bravo2 pppoe - slow tower",
+      "status": "OPEN",
+      "priority": "HIGH",
+      "description": "Customer B sees low throughput all afternoon on the Bravo tower.",
+      "ticket_group_id": 41,
+      "ticket_category_ids": [201],
+      "created_at": "2026-03-02T15:10:00Z",
+      "user": { "id": 1, "name": "Demo Dispatcher" },
+      "comments": [
+        { "body": "<p>Tower: Bravo</p>", "user": { "id": 1, "name": "Demo Dispatcher" }, "created_at": "2026-03-02T15:12:00Z" }
+      ]
+    },
+    {
+      "id": 91003,
+      "subject": "Garbage Collect Datastore 'backups' successful",
+      "status": "OPEN",
+      "priority": "LOW",
+      "description": "Garbage collection on datastore 'backups' finished successfully. Removed 0 chunks.",
+      "ticket_group_id": 41,
+      "ticket_category_ids": [],
+      "created_at": "2026-03-02T15:15:00Z",
+      "user": { "id": 2, "name": "Demo Monitor" },
+      "comments": []
+    },
+    {
+      "id": 91004,
+      "subject": "Scheduled Maintenance: Foxtrot fiber splice window",
+      "status": "OPEN",
+      "priority": "LOW",
+      "description": "Planned maintenance on the Foxtrot fiber ring. No customer action needed.",
+      "ticket_group_id": 41,
+      "ticket_category_ids": [],
+      "created_at": "2026-03-02T15:20:00Z",
+      "user": { "id": 2, "name": "Demo Monitor" },
+      "comments": []
+    },
+    {
+      "id": 91005,
+      "subject": "Automatic reply: Out of Office",
+      "status": "OPEN",
+      "priority": "LOW",
+      "description": "I am currently traveling and will respond as time permits.",
+      "ticket_group_id": 43,
+      "ticket_category_ids": [],
+      "created_at": "2026-03-02T15:25:00Z",
+      "user": { "id": 3, "name": "Demo Mailer" },
+      "comments": []
+    },
+    {
+      "id": 91006,
+      "subject": "[Delta] delta3 pppoe - outage",
+      "status": "OPEN",
+      "priority": "HIGH",
+      "description": "Customer C reports no internet since early morning on the Delta tower.",
+      "ticket_group_id": 41,
+      "ticket_category_ids": [],
+      "created_at": "2026-03-02T15:30:00Z",
+      "user": { "id": 1, "name": "Demo Dispatcher" },
+      "comments": [
+        { "body": "<p>Tower: Delta</p>", "user": { "id": 1, "name": "Demo Dispatcher" }, "created_at": "2026-03-02T15:31:00Z" }
+      ]
+    },
+    {
+      "id": 91007,
+      "subject": "[Delta] delta3 pppoe - outage",
+      "status": "OPEN",
+      "priority": "HIGH",
+      "description": "Customer D also has no internet at the Delta tower.",
+      "ticket_group_id": 41,
+      "ticket_category_ids": [],
+      "created_at": "2026-03-02T15:40:00Z",
+      "user": { "id": 1, "name": "Demo Dispatcher" },
+      "comments": []
+    },
+    {
+      "id": 91008,
+      "subject": "[Echo] echo1 pppoe - slow tower",
+      "status": "OPEN",
+      "priority": "MEDIUM",
+      "description": "Customer E says it has been slow since the storm last night and is still slow this morning.",
+      "ticket_group_id": 41,
+      "ticket_category_ids": [201],
+      "created_at": "2026-03-02T15:45:00Z",
+      "user": { "id": 1, "name": "Demo Dispatcher" },
+      "comments": [
+        { "body": "<p>Tower: Echo</p>", "user": { "id": 1, "name": "Demo Dispatcher" }, "created_at": "2026-03-02T15:46:00Z" },
+        { "body": "<p>Tech tuned the Echo sector for rain fade last week.</p>", "user": { "id": 1, "name": "Demo Dispatcher" }, "created_at": "2026-03-02T15:47:00Z" }
+      ]
+    }
+  ]
+}

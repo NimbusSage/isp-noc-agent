@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.env
+*.log
+config/credentials.json
+config/credentials.enc
+
+# Runtime state (host-key pins, private temp-site snapshots) - never commit
+config/known_hosts.json
+config/known_hosts.json.*.tmp
+state/

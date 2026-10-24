@@ -1,0 +1,118 @@
+{
+  "_comment": "Copy to profile.json and fill in for THIS ISP installation. NEVER commit profile.json — it carries your real infrastructure identifiers. The onboarding wizard creates this with you. New code must read these values (or the env vars already covering most of them) instead of hardcoding org-specific literals.",
+  "org": {
+    "name": "<Company Name>",
+    "web_domain": "<example.com>",
+    "sonar_base_url": "https://<subdomain>.sonar.software",
+    "uisp_host": "uisp.<example.com>",
+    "portability_tokens": [
+      "<your-brand-word>",
+      "<your-domain>",
+      "<your-snmp-community>"
+    ]
+  },
+  "sonar": {
+    "environment_specific_ids_note": "These IDs are per-Sonar-instance. Verify each in your own Sonar admin before relying on them; they are wired into the AGENTS.md workflow steps.",
+    "groups": {
+      "noc": {
+        "name": "<NOC>",
+        "id": 17,
+        "match": [
+          "noc"
+        ]
+      },
+      "cs_level_2": {
+        "name": "<CS Level 2>",
+        "id": 2,
+        "match": [
+          "cs level 2",
+          "cs level2",
+          "customer service level 2"
+        ]
+      },
+      "sys_admin": {
+        "name": "<Sys Admin>",
+        "id": 3,
+        "match": [
+          "sys admin",
+          "sysadmin",
+          "system admin"
+        ]
+      }
+    },
+    "categories": {
+      "slow_speeds": {
+        "id": 16,
+        "match": [
+          "slow speed"
+        ]
+      },
+      "night_peak": {
+        "id": 17,
+        "match": [
+          "night",
+          "peak"
+        ]
+      },
+      "cx_th_side_issue": {
+        "id": 131,
+        "match": [
+          "cx/th",
+          "th-side",
+          "th side"
+        ]
+      },
+      "weather": {
+        "id": 134,
+        "match": [
+          "weather",
+          "rain"
+        ]
+      },
+      "network_fiber": {
+        "names": [
+          "<Network - Fiber Name>",
+          "<Network - X>"
+        ]
+      }
+    },
+    "match_note": "Optional. 'match' lists lowercase name fragments that `python3 scripts/doctor.py --discover-ids` uses to map your Sonar group/category names onto these keys. Ignored by every other script."
+  },
+  "network": {
+    "topology_note": "Live files live in .opencode/skills/*/references/*.json (fiber-map.json, bgp-rr-map.json, fiber-testing-ips.json, fiber-topology.md). For a fresh ISP install, recreate these under site-pack/ and point skills at them — see docs/portability.md.",
+    "edge_router_ips": [
+      "<10.x fiber edge IP>",
+      "..."
+    ],
+    "rds2216_subnet": "<cgnat-lb-subnet e.g. 10.x.x.0/24>",
+    "default_gateway_example": {
+      "tower": "<tower router - pppoe>",
+      "gateway": "<10.x /30 peer>"
+    }
+  },
+  "bgp": {
+    "remote_as": null
+  },
+  "conventions": {
+    "bgp_rr_naming": "<2<towernobgpr>bgprr>",
+    "tower_dns_pattern": "<[tower] pppoe / [tower]N Fiber>",
+    "infrastructure-snmp-community": "<snmp-community>",
+    "snmp": {
+      "community": "<community>",
+      "provider": "<org-name>",
+      "contact": "<contact@email>"
+    }
+  },
+  "dispatch": {
+    "tech_calendars_file": "site-pack/tech_calendars.json",
+    "default_timezone": "America/Chicago"
+  },
+  "sheets": {
+    "tower_directory": {
+      "id": "<your-tower-directory-sheet-id>",
+      "tab": "<tab-name>",
+      "name_column": "<column-with-site-name>",
+      "coords_column": "<column-with-coords>"
+    }
+  }
+}

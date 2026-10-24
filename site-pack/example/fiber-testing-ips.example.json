@@ -1,0 +1,9 @@
+{
+  "_doc": "Schema for site-pack/topology/fiber-testing-ips.json — cp to topology/fiber-testing-ips.json and replace the fictional entries. Key = the 'Network/Fiber' value from a ticket's first note (lowercase). internal = the fiber router loopback to use as the bandwidth-test target (private path); public = the CGNAT/public-path test IP, or 'xxx' when there is none (then skip the private btest and test to the core edge instead); btest_user = only when that router needs a dedicated btest account (its password comes from the operator-supplied BTEST_PASSWORD env var, never from this file); dia_monitored = true when the network rides a monitored DIA/WireGuard tunnel; notes = free text. All values below are fictional.",
+  "alpha": { "internal": "10.0.20.1", "public": "198.51.100.20", "dia_monitored": false, "notes": "" },
+  "bravo": { "internal": "10.0.21.33", "public": "198.51.100.21", "dia_monitored": false, "notes": "" },
+  "charlie": { "internal": "10.0.8.1", "public": "10.0.8.200", "dia_monitored": false, "notes": "public is a CGNAT address" },
+  "romeo": { "internal": "10.0.7.77", "public": "198.51.100.22", "dia_monitored": true, "notes": "DIA over WireGuard: still btest to internal, note the VPN" },
+  "november": { "internal": "10.0.9.3", "public": "198.51.100.23", "dia_monitored": false, "btest_user": "btest", "notes": "dedicated btest account; password from BTEST_PASSWORD" },
+  "foxtrot": { "internal": "10.0.24.1", "public": "xxx", "dia_monitored": false, "notes": "no public test IP: skip the private btest and note a test to the core edge" }
+}

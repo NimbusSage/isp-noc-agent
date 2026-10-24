@@ -1,0 +1,13 @@
+[Unit]
+Description=NOC Agent Weekly Metrics Rollup Schedule (Mon 08:00 CT)
+After=network-online.target
+Wants=network-online.target
+
+[Timer]
+# Monday 08:00 in the system local timezone (assumes box TZ = America/Chicago).
+OnCalendar=Mon *-*-* 08:00:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,13 @@
+{
+  "ticket_id": "91006",
+  "status": "categorized",
+  "tower_site": "Delta",
+  "analyzer_site": null,
+  "bottleneck_analysis": "skipped",
+  "notification_sent": true,
+  "classification": { "category": "outage", "complexity": "low", "priority": "P2" },
+  "confidence": 85,
+  "requires_human_review": false,
+  "escalation_reason": null,
+  "evidence": ["subject:outage", "tower:Tower note in first comment", "dup:none"]
+}

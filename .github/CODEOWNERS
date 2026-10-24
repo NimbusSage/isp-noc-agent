@@ -1,0 +1,65 @@
+# Ownership: protected core contract (see CONTRIBUTING.md "Protected core")
+# These files define the agent's workflow, safety gates, and output contract.
+# Changes require review from the maintainers listed below — edit @NimbusSage
+# if your org forks and wants to name stewardship differently.
+
+# Core operating contract
+AGENTS.md                                      @NimbusSage
+server/batch_prompt_template.md                @NimbusSage
+
+# Deterministic safety gates
+scripts/sonar_bounce.py                        @NimbusSage
+scripts/circuit_breaker.py                     @NimbusSage
+scripts/decision_log.py                        @NimbusSage
+
+# Safety-critical skills (execute network changes)
+.opencode/skills/temp-bgp-peering/             @NimbusSage
+.opencode/skills/temp-site-connection/         @NimbusSage
+.opencode/skills/temp-site-connection-undo/    @NimbusSage
+.opencode/skills/reprogram-device/             @NimbusSage
+.opencode/skills/rename-site/                  @NimbusSage
+
+# Core workflow skills (behavior-defining)
+.opencode/skills/path-analyzer/                @NimbusSage
+.opencode/skills/wireless-health/              @NimbusSage
+.opencode/skills/ticket-context/               @NimbusSage
+.opencode/skills/sonar-api/                    @NimbusSage
+.opencode/skills/duplicate-detection/          @NimbusSage
+.opencode/skills/google-chat/                  @NimbusSage
+.opencode/skills/tracker-sheet/                @NimbusSage
+.opencode/skills/correlated-issues/            @NimbusSage
+.opencode/skills/correlated-auto-return/       @NimbusSage
+.opencode/skills/ihn-auto-return/              @NimbusSage
+.opencode/skills/peak-scheduler/               @NimbusSage
+.opencode/skills/comment-formatting/           @NimbusSage
+.opencode/skills/schedule-field-tech/          @NimbusSage
+.opencode/skills/create-site/                  @NimbusSage
+.opencode/skills/program-new-device/           @NimbusSage
+
+# Leak/secret gates, hooks and CI (weakening any of these re-opens the leak path)
+scripts/secret_scan.py                         @NimbusSage
+scripts/build_denylist.py                      @NimbusSage
+scripts/leak_denylist.sha256                   @NimbusSage
+scripts/doctor.py                              @NimbusSage
+scripts/install.sh                             @NimbusSage
+.githooks/                                     @NimbusSage
+.github/                                       @NimbusSage
+
+# Agent-harness configuration (what the agent may run / which tools it sees)
+.claude/                                       @NimbusSage
+.claude/settings.json                          @NimbusSage
+opencode.json                                  @NimbusSage
+.mcp.json                                      @NimbusSage
+
+# Server entry point and the gated device-write code paths
+server/index.js                                @NimbusSage
+mcp-server/src/commands/                       @NimbusSage
+mcp-server/src/writes/                         @NimbusSage
+mcp-server/src/temp-site/                      @NimbusSage
+mcp-server/src/credentials/                    @NimbusSage
+mcp-server/src/redaction/                      @NimbusSage
+deploy/                                        @NimbusSage
+
+# Legal / disclosure
+LICENSE                                        @NimbusSage
+SECURITY.md                                    @NimbusSage

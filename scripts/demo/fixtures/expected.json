@@ -1,0 +1,186 @@
+{
+  "_comment": "Expected end state per demo ticket, used by `python3 scripts/demo.py` (self-check). `scenarios` overrides apply to a ticket when demo.py runs with --scenario dry-run | kill-switch | breaker-open (the bounce gate does not write, so 91001 stays in NOC).",
+  "tickets": {
+    "91001": {
+      "status": "auto_bounced_ihn",
+      "ticket_status": "OPEN",
+      "group_id": 42,
+      "category_ids": [
+        203
+      ],
+      "mutations": [
+        "updateTicket",
+        "createTicketComment"
+      ],
+      "comment_markers": [
+        "Direct Path Analysis - Alpha",
+        "Automated NOC Review",
+        "HEALTHY"
+      ],
+      "chat": 0,
+      "bounce_logged": true,
+      "escalation_reason": null,
+      "scenarios": {
+        "dry-run": {
+          "status": "needs_human",
+          "group_id": 41,
+          "category_ids": [
+            201
+          ],
+          "mutations": [
+            "createTicketComment"
+          ],
+          "comment_markers": [
+            "Direct Path Analysis - Alpha",
+            "HEALTHY"
+          ],
+          "chat": 1,
+          "bounce_logged": false,
+          "escalation_reason": "dry_run_would_bounce"
+        },
+        "kill-switch": {
+          "status": "needs_human",
+          "group_id": 41,
+          "category_ids": [
+            201
+          ],
+          "mutations": [
+            "createTicketComment"
+          ],
+          "comment_markers": [
+            "Direct Path Analysis - Alpha",
+            "HEALTHY"
+          ],
+          "chat": 1,
+          "bounce_logged": false,
+          "escalation_reason": "kill_switch_off"
+        },
+        "breaker-open": {
+          "status": "needs_human",
+          "group_id": 41,
+          "category_ids": [
+            201
+          ],
+          "mutations": [
+            "createTicketComment"
+          ],
+          "comment_markers": [
+            "Direct Path Analysis - Alpha",
+            "HEALTHY"
+          ],
+          "chat": 1,
+          "bounce_logged": false,
+          "escalation_reason": "circuit_breaker_open"
+        }
+      }
+    },
+    "91002": {
+      "status": "categorized",
+      "ticket_status": "OPEN",
+      "group_id": 41,
+      "category_ids": [
+        201
+      ],
+      "mutations": [
+        "createTicketComment"
+      ],
+      "comment_markers": [
+        "Direct Path Analysis - Bravo",
+        "DEGRADED",
+        "bravo-agg"
+      ],
+      "chat": 1,
+      "escalation_reason": null
+    },
+    "91003": {
+      "status": "auto_closed",
+      "ticket_status": "CLOSED",
+      "group_id": 41,
+      "category_ids": [],
+      "mutations": [
+        "updateTicket"
+      ],
+      "comment_markers": [],
+      "chat": 0,
+      "escalation_reason": null
+    },
+    "91004": {
+      "status": "auto_closed_maintenance",
+      "ticket_status": "CLOSED",
+      "group_id": 41,
+      "category_ids": [],
+      "mutations": [
+        "updateTicket"
+      ],
+      "comment_markers": [],
+      "chat": 0,
+      "escalation_reason": null
+    },
+    "91005": {
+      "status": "auto_closed_ooo",
+      "ticket_status": "CLOSED",
+      "group_id": 43,
+      "category_ids": [],
+      "mutations": [
+        "updateTicket"
+      ],
+      "comment_markers": [],
+      "chat": 0,
+      "escalation_reason": null
+    },
+    "91006": {
+      "status": "categorized",
+      "ticket_status": "OPEN",
+      "group_id": 41,
+      "category_ids": [
+        205
+      ],
+      "mutations": [
+        "updateTicket"
+      ],
+      "comment_markers": [],
+      "chat": 1,
+      "escalation_reason": null
+    },
+    "91007": {
+      "status": "handled_duplicate",
+      "ticket_status": "OPEN",
+      "group_id": 42,
+      "category_ids": [],
+      "mutations": [
+        "createTicketComment",
+        "updateTicket"
+      ],
+      "comment_markers": [
+        "Duplicate Ticket",
+        "91006"
+      ],
+      "chat": 0,
+      "escalation_reason": null
+    },
+    "91008": {
+      "status": "needs_human",
+      "ticket_status": "OPEN",
+      "group_id": 41,
+      "category_ids": [
+        201
+      ],
+      "mutations": [
+        "createTicketComment"
+      ],
+      "comment_markers": [
+        "Direct Path Analysis - Echo",
+        "HEALTHY",
+        "weather"
+      ],
+      "chat": 1,
+      "escalation_reason": "weather_excluded"
+    }
+  },
+  "scenarios": {
+    "default": "live bounce gate against the mock",
+    "dry-run": "bounce gate runs with --dry-run",
+    "kill-switch": "BOUNCE_AUTONOMOUS_ENABLED=false",
+    "breaker-open": "circuit breaker opened through POST /governance/breaker"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "_doc": "Schema for site-pack/topology/bgp-rr-map.json — cp to topology/bgp-rr-map.json and replace the fictional entries with your own BGP route reflectors. One entry per RR: key = the RR router's identity name, ip = its loopback/management IP, network = the fiber network it serves (matched case-insensitively against the --network argument of scripts/temp_bgp_peering.py), verified_on = the IP you confirmed it on. Add new RRs here as you verify them live (/routing/bgp/connection print). All values below are fictional.",
+  "2alphabgprr1": { "ip": "10.0.20.1", "network": "Alpha", "verified_on": "10.0.20.1" },
+  "2bravobgprr": { "ip": "10.0.21.33", "network": "Bravo", "verified_on": "10.0.21.33" },
+  "2charliebgprr": { "ip": "10.0.8.119", "network": "Charlie", "verified_on": "10.0.8.119" },
+  "2deltabgprr": { "ip": "10.0.22.1", "network": "Delta", "verified_on": "10.0.22.1" },
+  "2golfbgprr": { "ip": "10.0.23.1", "network": "Golf", "verified_on": "10.0.23.1" }
+}

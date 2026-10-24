@@ -1,0 +1,13 @@
+{
+  "ticket_id": "91003",
+  "status": "auto_closed",
+  "tower_site": null,
+  "analyzer_site": null,
+  "bottleneck_analysis": "n/a",
+  "notification_sent": false,
+  "classification": { "category": "passthrough_pbs", "complexity": "low", "priority": "P4" },
+  "confidence": 99,
+  "requires_human_review": false,
+  "escalation_reason": null,
+  "evidence": ["pbs:subject_exact_match", "pbs:success_in_subject_and_body"]
+}

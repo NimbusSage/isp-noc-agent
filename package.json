@@ -1,0 +1,21 @@
+{
+  "name": "nocagent",
+  "version": "1.0.0",
+  "description": "AI agent that automates ISP NOC ticket triage and resolution. Receives Sonar tickets via N8N webhook, detects duplicates, categorizes issues, runs bottleneck analysis on slow-tower tickets, posts formatted comments back to Sonar, and alerts Google Chat when human attention is needed.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "node --test scripts/*.test.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "GPL-3.0-only",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "puppeteer-core": "^25.14.0"
+  }
+}

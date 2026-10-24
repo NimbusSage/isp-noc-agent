@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# pre-commit hook: block real identifiers and credentials before they enter history.
+#   Enable once per clone:  git config core.hooksPath .githooks
+# Scans only the lines you are adding (fast). Fails closed: if the scanner or
+# python3 is missing, or the deny-list is empty, the commit is blocked.
+set -u
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "pre-commit: not in a git repo" >&2; exit 1; }
+cd "$root" || exit 1
+
+if ! command -v python3 >/dev/null 2>&1 || [ ! -f scripts/secret_scan.py ]; then
+  echo "pre-commit: blocked - python3 or scripts/secret_scan.py is missing (the scan cannot run)" >&2
+  exit 1
+fi
+
+if ! python3 -B scripts/secret_scan.py --staged; then
+  cat >&2 <<'MSG'
+
+pre-commit: blocked: possible secret/identifier in the staged changes (see list above).
+  - Replace it with a placeholder (<like-this>, $ENV_VAR, or a site-pack/profile.json lookup).
+  - If a literal is truly intended, add a reason-bearing marker on that line:
+        secret-scan:allow(<why this is safe>)
+  - Do NOT use --no-verify: CI runs the same scan and will fail the push.
+MSG
+  exit 1
+fi

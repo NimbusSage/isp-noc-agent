@@ -1,0 +1,574 @@
+{
+  "name": "NOC Agent Ticket Forwarder (template)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "sonartickets",
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 460]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "00000000-0000-4000-8000-000000000003",
+              "leftValue": "={{ $json.body.current.status }}",
+              "rightValue": "CLOSED",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000004",
+      "name": "If - Ticket Open",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [440, 460]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.current.ticket_group_id }}",
+                    "rightValue": "<SYSADMIN_GROUP_ID>",
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "SysAdmin"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "00000000-0000-4000-8000-000000000005",
+                    "leftValue": "={{ $json.body.current.ticket_group_id }}",
+                    "rightValue": "<NOC_GROUP_ID>",
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "NOC"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000006",
+      "name": "Switch - ticket group",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [660, 460]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "00000000-0000-4000-8000-000000000007",
+              "name": "groupName",
+              "value": "NOC",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000008",
+      "name": "Edit Fields - noc group",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [900, 240]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "00000000-0000-4000-8000-000000000007",
+              "name": "groupName",
+              "value": "Sys Admin",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000009",
+      "name": "Edit Fields - sysAdmin",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [900, 100]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.event }}",
+                    "rightValue": "ticket.created",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Ticket Created"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "00000000-0000-4000-8000-000000000010",
+                    "leftValue": "={{ $json.body.event }}",
+                    "rightValue": "ticket.updated",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Ticket Updated"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000011",
+      "name": "Switch - Event Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [1120, 460]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "00000000-0000-4000-8000-000000000012",
+              "name": "ticketCreated",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1340, 320],
+      "id": "00000000-0000-4000-8000-000000000013",
+      "name": "Edit Fields - ticketCreated true"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "00000000-0000-4000-8000-000000000012",
+              "name": "ticketCreated",
+              "value": false,
+              "type": "boolean"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1340, 600],
+      "id": "00000000-0000-4000-8000-000000000014",
+      "name": "Edit Fields - ticketCreated false"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "00000000-0000-4000-8000-000000000015",
+              "leftValue": "={{ $json.body.original.ticket_group_id }}",
+              "rightValue": "={{ $json.body.current.ticket_group_id }}",
+              "operator": {
+                "type": "number",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000016",
+      "name": "If ticket transfered",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1540, 600]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://<AGENT_SERVER_URL>:65333/webhook/ticket",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "ticket_id",
+              "value": "={{ $json.body.current.id }}"
+            },
+            {
+              "name": "subject",
+              "value": "={{ $json.body.current.subject }}"
+            },
+            {
+              "name": "ticket_group_id",
+              "value": "={{ $json.body.current.ticket_group_id }}"
+            },
+            {
+              "name": "ticket_group_name",
+              "value": "={{ $json.groupName }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $json.body.current.status }}"
+            },
+            {
+              "name": "priority",
+              "value": "={{ $json.body.current.priority }}"
+            },
+            {
+              "name": "description",
+              "value": "={{ $json.body.current.description }}"
+            },
+            {
+              "name": "ticket_created",
+              "value": "={{ $json.ticketCreated }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 460],
+      "id": "00000000-0000-4000-8000-000000000017",
+      "name": "HTTP Request - Agent Server Call",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "00000000-0000-4000-8000-000000000018",
+              "leftValue": "={{ $json.ticketCreated }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2020, 600],
+      "id": "00000000-0000-4000-8000-000000000019",
+      "name": "If ticketCreated true"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "<YOUR_CHAT_WEBHOOK_URL>",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=UTF-8"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "=An open ticket has been created in the {{ $json.groupName }} group.\n\nSUBJECT: {{ $json.body.current.subject }}\n\nURL: <YOUR_TICKETING_APP_URL>/tickets/show/{{ $json.body.current.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000020",
+      "name": "HTTP Request - create group alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2220, 480]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "<YOUR_CHAT_WEBHOOK_URL>",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=UTF-8"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "=An open ticket has been transfered to the {{ $json.groupName }} group.\n\nSUBJECT: {{ $json.body.current.subject }}\n\nURL: <YOUR_TICKETING_APP_URL>/tickets/show/{{ $json.body.current.id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "00000000-0000-4000-8000-000000000021",
+      "name": "HTTP Request - transfer group alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2220, 720]
+    }
+  ],
+  "connections": {
+    "If - Ticket Open": {
+      "main": [
+        [
+          {
+            "node": "Switch - ticket group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If ticket transfered": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Agent Server Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "If - Ticket Open",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch - Event Type": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields - ticketCreated true",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields - ticketCreated false",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch - ticket group": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields - sysAdmin",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields - noc group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields - noc group": {
+      "main": [
+        [
+          {
+            "node": "Switch - Event Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields - sysAdmin": {
+      "main": [
+        [
+          {
+            "node": "Switch - Event Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Agent Server Call": {
+      "main": [
+        [],
+        [
+          {
+            "node": "If ticketCreated true",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields - ticketCreated true": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Agent Server Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields - ticketCreated false": {
+      "main": [
+        [
+          {
+            "node": "If ticket transfered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If ticketCreated true": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - create group alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HTTP Request - transfer group alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}

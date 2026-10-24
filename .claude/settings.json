@@ -1,0 +1,70 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(!.env.example)",
+      "Edit(.env)",
+      "Edit(.env.*)",
+      "Edit(!.env.example)",
+      "Read(.secrets/**)",
+      "Edit(.secrets/**)",
+      "Read(~/.secrets/**)",
+      "Read(mcp-server/config/credentials.json)",
+      "Read(mcp-server/config/credentials.enc*)",
+      "Edit(mcp-server/config/credentials.json)",
+      "Edit(mcp-server/config/credentials.enc*)",
+      "Read(backups/**)",
+      "Edit(backups/**)",
+      "Read(gui-backups/**)",
+      "Edit(gui-backups/**)",
+      "Bash(cat .env*)",
+      "Bash(cat *.env)",
+      "Bash(cat *credentials.json*)",
+      "Bash(cat *credentials.enc*)",
+      "Bash(cat *.secrets/*)",
+      "Bash(head .env*)",
+      "Bash(tail .env*)",
+      "Bash(less .env*)",
+      "Bash(more .env*)",
+      "Bash(printenv*)",
+      "Bash(env)",
+      "Bash(export -p*)",
+      "Bash(declare -p*)",
+      "Bash(sshpass -p*)",
+      "Bash(git commit*--no-verify*)",
+      "Bash(git commit -n*)",
+      "Bash(git push*--no-verify*)"
+    ],
+    "ask": [
+      "Read(site-pack/*)",
+      "Read(!site-pack/README.md)",
+      "Read(!site-pack/profile.example.json)",
+      "Read(!site-pack/example/)",
+      "Edit(site-pack/*)",
+      "Edit(!site-pack/README.md)",
+      "Edit(!site-pack/profile.example.json)",
+      "Edit(!site-pack/example/)",
+      "Edit(/.claude/settings.json)",
+      "Edit(/.mcp.json)",
+      "Edit(/scripts/hooks/**)",
+      "Edit(/.githooks/**)",
+      "Edit(/scripts/secret_scan.py)",
+      "Edit(/scripts/leak_denylist.sha256)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/scripts/hooks/claude_guard.py",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "_comment": "Synthetic profile for demo mode only. Every name and ID here is fictional and unrelated to any real Sonar instance.",
+  "org": {
+    "name": "Example ISP (demo)",
+    "web_domain": "example.com",
+    "sonar_base_url": "http://127.0.0.1:0"
+  },
+  "sonar": {
+    "groups": {
+      "noc": { "name": "NOC", "id": 41 },
+      "cs_level_2": { "name": "CS Level 2", "id": 42 },
+      "sys_admin": { "name": "Sys Admin", "id": 43 }
+    },
+    "categories": {
+      "slow_speeds": { "name": "Slow Speeds", "id": 201 },
+      "night_peak": { "name": "Night Checks", "id": 202 },
+      "cx_th_side_issue": { "name": "CX/TH-side Issue", "id": 203 },
+      "weather": { "name": "Rain Fade", "id": 204 },
+      "outage": { "name": "Outage", "id": 205 }
+    }
+  }
+}

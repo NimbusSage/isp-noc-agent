@@ -1,0 +1,94 @@
+# ============ Secrets ============
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*-oauth*.json
+*oauth-secret*.json
+.google_oauth*.json
+
+# Secrets must live OUTSIDE the repo (see scripts/google_user_auth.mjs — mode 0600 files)
+.secrets/
+
+# Sonar / webhook auth tokens pasted into scratch files
+*.token
+*.token.txt
+
+# ============ Logs & runtime artifacts ============
+logs/
+webhook.log
+*.log.bak
+
+# ============ Node ============
+node_modules/
+server/node_modules/
+.opencode/node_modules/
+*.tsbuildinfo
+
+# ============ MCP server credentials ============
+# Keep credentials.example.json tracked; everything real/unencrypted/untracked:
+mcp-server/config/credentials.json
+mcp-server/config/credentials.enc
+mcp-server/config/credentials.enc.bak-*
+mcp-server/config/*.enc.bak
+mcp-server/config/server.local.json
+
+# ============ MCP server build output ============
+mcp-server/dist/
+mcp-server/*.bak
+
+# ============ Python ============
+__pycache__/
+*.pyc
+
+# ============ OpenCode local artifacts ============
+.opencode/node_modules/
+.opencode/package.json
+.opencode/package-lock.json
+.opencode/bun.lock
+
+# ============ Local device/config dumps (never track: sensitive) ============
+backups/
+*.bak-config/
+gui-backups/
+
+# ============ Site pack (real org identifiers never tracked) ============
+# Everything real lives in site-pack/; only READMEs and *.example.* are tracked.
+# Real data: profile.json, devices.md, tech_calendars.json, topology/,
+# rename-site/, ticket-context/, evals/. If you add a real-data subdir here,
+# it is ignored automatically by the site-pack/* rule below.
+site-pack/*
+!site-pack/README.md
+!site-pack/profile.example.json
+!site-pack/example/
+
+# ============ OS editor noise ============
+.DS_Store
+Thumbs.db
+
+# ============ Local archive of historical/internal docs (never tracked) ============
+archive/
+
+# ============ Session-scoped ops scratch (underscore-prefixed helpers) ============
+scripts/_*
+
+# ============ Personal community-skill installs (npx skills add) ============
+.agents/
+skills-lock.json
+
+# ============ Local agent / harness state (never shared) ============
+.freebuff/
+.claude/settings.local.json
+.mcp.local.json
+
+# ============ Per-harness generated files (absolute paths; made by scripts/harness_setup.py) ============
+# .claude/skills is a symlink to .opencode/skills made on demand: OpenCode also scans .claude/skills and
+# would list every skill twice if it were committed.
+.claude/skills
+.codex/
+.gemini/
+.cursor/
+.vscode/mcp.json
+*.bak

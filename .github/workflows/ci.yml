@@ -1,0 +1,105 @@
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# Least privilege by default; jobs that need more declare it themselves.
+permissions:
+  contents: read
+
+jobs:
+  helper-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: node --test scripts/*.test.mjs
+
+  mcp-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+        working-directory: mcp-server
+      - name: typecheck
+        run: npx tsc --noEmit
+        working-directory: mcp-server
+      - run: npm run build
+        working-directory: mcp-server
+      - run: npm test
+        working-directory: mcp-server
+
+  python-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: compile all python scripts + evals
+        run: python3 -B -m py_compile scripts/*.py evals/*.py
+      - name: python unit tests (scanner, mock harness, ...)
+        run: python3 -B -m unittest discover -s scripts -p 'test_*.py'
+      - name: eval regression gate (golden set)
+        run: python3 evals/eval_run.py
+      - name: docs links + index completeness
+        run: python3 scripts/docs_check.py
+
+  # Public-leak gate. Same engine as the pre-commit hook and doctor's portability_scan.
+  secret-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # gitleaks walks the full history
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: tracked-tree scan (hashed deny-list + structural rules; fails if the deny-list is empty)
+        run: python3 -B scripts/secret_scan.py --tracked
+      - name: gitleaks (full history)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # A fresh clone has no .env, no site-pack/profile.json, no topology: the
+  # gate and the doctor must behave on exactly that.
+  clean-clone:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: nothing org-specific is present
+        shell: bash
+        run: |
+          test ! -e .env
+          test ! -e site-pack/profile.json
+          test ! -d site-pack/topology
+      - name: portability_scan on a clean clone
+        run: python3 -B scripts/doctor.py --only portability_scan
+      - name: unknown --only name must exit 2 (never a false green)
+        shell: bash
+        run: |
+          set +e
+          python3 -B scripts/doctor.py --only no_such_check
+          rc=$?
+          if [ "$rc" -ne 2 ]; then
+            echo "expected exit code 2 for an unknown check name, got $rc" >&2
+            exit 1
+          fi

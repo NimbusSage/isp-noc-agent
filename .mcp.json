@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "network-troubleshooter": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${CLAUDE_PROJECT_DIR:-.}/scripts/mcp_launch.mjs"
+      ],
+      "env": {
+        "NOC_MCP_PASSPHRASE": "${NOC_MCP_PASSPHRASE:-}",
+        "LIBRENMS_TOKEN": "${LIBRENMS_TOKEN:-}",
+        "LIBRENMS_URL": "${LIBRENMS_URL:-}"
+      }
+    }
+  }
+}

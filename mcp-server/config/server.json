@@ -1,0 +1,21 @@
+{
+  "credentialStore": {
+    "path": "./config/credentials.enc",
+    "passphraseEnvVar": "NOC_MCP_PASSPHRASE"
+  },
+  "auditLog": {
+    "path": "./logs/audit.log",
+    "maxFileSizeMb": 10,
+    "maxFiles": 5
+  },
+  "limits": {
+    "maxConcurrentDevices": 5,
+    "commandTimeoutMs": 60000,
+    "maxOutputBytes": 65536
+  },
+  "redaction": {
+    "enabled": true,
+    "preserveInternalIps": [],
+    "preserveHostnames": []
+  }
+}

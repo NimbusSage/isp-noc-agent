@@ -1,0 +1,13 @@
+{
+  "ticket_id": "91004",
+  "status": "auto_closed_maintenance",
+  "tower_site": null,
+  "analyzer_site": null,
+  "bottleneck_analysis": "n/a",
+  "notification_sent": false,
+  "classification": { "category": "passthrough_maintenance", "complexity": "low", "priority": "P4" },
+  "confidence": 90,
+  "requires_human_review": false,
+  "escalation_reason": null,
+  "evidence": ["subject:scheduled maintenance"]
+}

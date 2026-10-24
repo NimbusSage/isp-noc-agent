@@ -1,0 +1,14 @@
+{
+  "ticket_id": "91007",
+  "status": "handled_duplicate",
+  "tower_site": "Delta",
+  "analyzer_site": null,
+  "bottleneck_analysis": "skipped",
+  "notification_sent": false,
+  "classification": { "category": "duplicate", "complexity": "low", "priority": "P3" },
+  "confidence": 96,
+  "requires_human_review": false,
+  "escalation_reason": null,
+  "evidence": ["dup:91006:96%", "same_site:Delta", "same_issue:outage"],
+  "upstream_id": "91006"
+}

@@ -1,0 +1,13 @@
+{
+  "ticket_id": "91001",
+  "status": "auto_bounced_ihn",
+  "tower_site": "Alpha",
+  "analyzer_site": "alpha1 pppoe",
+  "bottleneck_analysis": "completed",
+  "notification_sent": false,
+  "classification": { "category": "slow_speeds", "complexity": "medium", "priority": "P3" },
+  "confidence": 92,
+  "requires_human_review": false,
+  "escalation_reason": null,
+  "evidence": ["tower:Tower note in first comment", "hops:5", "path:HEALTHY"]
+}

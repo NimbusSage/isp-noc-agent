@@ -1,0 +1,13 @@
+{
+  "ticket_id": "91005",
+  "status": "auto_closed_ooo",
+  "tower_site": null,
+  "analyzer_site": null,
+  "bottleneck_analysis": "n/a",
+  "notification_sent": false,
+  "classification": { "category": "passthrough_ooo", "complexity": "low", "priority": "P4" },
+  "confidence": 97,
+  "requires_human_review": false,
+  "escalation_reason": null,
+  "evidence": ["group:sys_admin", "subject:out of office", "body:currently traveling"]
+}

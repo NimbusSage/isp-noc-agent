@@ -1,0 +1,85 @@
+{
+  "built_at": null,
+  "source": "hand",
+  "count": 6,
+  "tickets": [
+    {
+      "ticket_id": "100001",
+      "subject": "Improving my speeds please",
+      "description_snippet": "Internet feels slower than usual - check it",
+      "sonar_status": "OPEN",
+      "sonar_categories": {},
+      "expected": {
+        "classification_category": "slow_speeds",
+        "expected_status": "categorized",
+        "derived_from": "hand",
+        "notes": "hand example"
+      }
+    },
+    {
+      "ticket_id": "100002",
+      "subject": "My service is down",
+      "description_snippet": "No internet at all since this morning",
+      "sonar_status": "OPEN",
+      "sonar_categories": {},
+      "expected": {
+        "classification_category": "outage",
+        "expected_status": "categorized",
+        "derived_from": "hand",
+        "notes": "hand example"
+      }
+    },
+    {
+      "ticket_id": "100003",
+      "subject": "It goes bad during rain",
+      "description_snippet": "Related to a rain event",
+      "sonar_status": "OPEN",
+      "sonar_categories": {},
+      "expected": {
+        "classification_category": "rain_fade",
+        "expected_status": "needs_human",
+        "derived_from": "hand",
+        "notes": "hand example"
+      }
+    },
+    {
+      "ticket_id": "100004",
+      "subject": "It always gets worse in the evening",
+      "description_snippet": "Evening speeds drop at the peak, fine during the day",
+      "sonar_status": "OPEN",
+      "sonar_categories": {},
+      "expected": {
+        "classification_category": "peak_congestion",
+        "expected_status": "queued_for_peak",
+        "derived_from": "hand",
+        "notes": "hand example (keyword-aligned phrasing)"
+      }
+    },
+    {
+      "ticket_id": "100005",
+      "subject": "Scheduled Maintenance",
+      "description_snippet": "A maintenance visit is scheduled for the connection",
+      "sonar_status": "OPEN",
+      "sonar_categories": {},
+      "expected": {
+        "classification_category": "passthrough",
+        "expected_status": "auto_closed_maintenance",
+        "derived_from": "hand",
+        "notes": "hand example"
+      }
+    },
+    {
+      "ticket_id": "100006",
+      "subject": "Is my router too old?",
+      "description_snippet": "Wondering if equipment at my house could be causing issues",
+      "sonar_status": "OPEN",
+      "sonar_categories": {},
+      "expected": {
+        "classification_category": "other",
+        "expected_status": "categorized",
+        "derived_from": "hand",
+        "notes": "hand example (no classification keywords, stays 'other')"
+      }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=NocAgent Runtime Secrets Snapshot Schedule (daily 03:17 local)
+
+[Timer]
+# Daily 03:17 local (off-peak; shifted off :00 to avoid dedicated-minute loads).
+OnCalendar=*-*-* 03:17:00
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

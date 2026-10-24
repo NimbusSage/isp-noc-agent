@@ -1,0 +1,21 @@
+[Unit]
+Description=NocAgent Runtime Secrets Snapshot (daily night backup)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory={{INSTALL_DIR}}
+# Script self-reads .env (which it also archives) — no EnvironmentFile, so the
+# unit still runs on an install where .env was deleted mid-recovery.
+ExecStart=/usr/bin/python3 {{INSTALL_DIR}}/scripts/backup_runtime_config.py
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=600
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes

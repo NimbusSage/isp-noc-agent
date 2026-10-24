@@ -1,0 +1,13 @@
+{
+  "ticket_id": "91008",
+  "status": "needs_human",
+  "tower_site": "Echo",
+  "analyzer_site": "echo1 pppoe",
+  "bottleneck_analysis": "completed",
+  "notification_sent": true,
+  "classification": { "category": "rain_fade", "complexity": "medium", "priority": "P3" },
+  "confidence": 90,
+  "requires_human_review": true,
+  "escalation_reason": "weather_excluded",
+  "evidence": ["weather:storm", "weather:rain fade", "path:HEALTHY", "bounce:blocked_by_weather_policy"]
+}

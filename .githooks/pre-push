@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# pre-push hook: nothing lands until the offline gates pass locally.
+#   Enable once per clone:  git config core.hooksPath .githooks
+#   Skip deliberately:      git push --no-verify  (audit with care; CI runs the same gates)
+set -u
+root="$(git rev-parse --show-toplevel 2>/dev/null)" || { echo "pre-push: not in a git repo" >&2; exit 1; }
+cd "$root" || exit 1
+
+log="$(mktemp "${TMPDIR:-/tmp}/nocagent-pre-push.XXXXXX")" || { echo "pre-push: mktemp failed" >&2; exit 1; }
+trap 'rm -f "$log"' EXIT
+fail() { echo "pre-push: $1 blocked" >&2; exit 1; }
+run_logged() { # run_logged <label> <cmd...>: show the tail of the log only when the command fails
+  local label="$1"; shift
+  "$@" >"$log" 2>&1 || { tail -30 "$log"; fail "$label"; }
+}
+
+echo "[pre-push] secret/identifier scan (tracked files)"
+python3 -B scripts/secret_scan.py --tracked || fail "secret scan"
+
+echo "[pre-push] helper tests (node --test)"
+run_logged "helper tests" node --test scripts/*.test.mjs
+
+echo "[pre-push] python compile"
+python3 -B -m py_compile scripts/*.py evals/*.py || fail "python compile"
+
+echo "[pre-push] python unit tests"
+run_logged "python unit tests" python3 -B -m unittest discover -s scripts -p 'test_*.py'
+
+echo "[pre-push] docs links + index completeness"
+python3 -B scripts/docs_check.py || fail "docs check"
+
+if [ -d mcp-server/node_modules ]; then
+  echo "[pre-push] mcp-server tests"
+  run_logged "mcp-server tests" npm --prefix mcp-server test
+else
+  echo "[pre-push] mcp-server tests skipped (mcp-server/node_modules not installed)"
+fi
+
+echo "[pre-push] ALL GATES PASSED"

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode/big-pickle",
+  "mcp": {
+    "network-troubleshooter": {
+      "type": "local",
+      "command": ["node", "/root/NocAgent/mcp-server/dist/index.js"],
+      "cwd": "/root/NocAgent/mcp-server",
+      "enabled": true,
+      "environment": {
+        "NOC_MCP_PASSPHRASE": "{env:NOC_MCP_PASSPHRASE}",
+        "LIBRENMS_TOKEN": "{env:LIBRENMS_TOKEN}",
+        "LIBRENMS_URL": "{env:LIBRENMS_URL}",
+        "TEMP_SITE_WPA_KEYS": "{env:TEMP_SITE_WPA_KEYS}",
+        "TEMP_SITE_WRITE_ENABLED": "{env:TEMP_SITE_WRITE_ENABLED}",
+        "TEMP_SITE_AIROS_TRANSPORT": "{env:TEMP_SITE_AIROS_TRANSPORT}",
+        "TEMP_SITE_ROUTEROS_TRANSPORT": "{env:TEMP_SITE_ROUTEROS_TRANSPORT}",
+        "TEMP_SITE_MT_TRANSPORT": "{env:TEMP_SITE_MT_TRANSPORT}",
+        "TEMP_SITE_ALLOWED_HOSTS": "{env:TEMP_SITE_ALLOWED_HOSTS}"
+      }
+    }
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "_doc": "Schema for site-pack/tech_calendars.json (override map for scripts/schedule_dispatch.mjs; path set by CALENDAR_TECH_MAP_FILE). Key = the tech's plain display name (matched case/whitespace-insensitively after the calendarList decorations are stripped). calendar_id = the calendar to write the appointment to; attendee = the email that receives the invite when the event has to go on the fallback calendar. Only needed when the calendarList name differs from the name operators use, or the guest email differs from the calendar id. All values below are fictional.",
+  "Tech One": { "calendar_id": "techone@example.com", "attendee": "techone@example.com" },
+  "Tech Two": { "calendar_id": "c_0000000000000000@group.calendar.google.com", "attendee": "techtwo@example.com" }
+}

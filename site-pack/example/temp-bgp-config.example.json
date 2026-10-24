@@ -1,0 +1,16 @@
+{
+  "_doc": "Schema for site-pack/topology/temp-bgp-config.json — cp this to topology/temp-bgp-config.json and fill in REAL values for your network (RR IPs, RR passwords, peer prefixes, oxidized URL). Neutral placeholder values here: the peering scripts fail closed when they detect them. This file is the tracked schema example; the real config is org-specific and untracked.",
+  "oxidized_base_url": "http://oxidized.example.invalid:8888",
+  "networks": {
+    "example-fiber": { "rr_ips": ["10.0.20.1"] }
+  },
+  "default_rrs": ["10.0.20.1", "10.0.21.33"],
+  "peer_prefixes": { "example-fiber": "10.0.200." },
+  "example_subnets": { "example-fiber": ["10.0.60.14/32"] },
+  "test_rr": "10.0.20.1",
+  "rr_credentials": [
+    { "ip": "10.0.20.1", "password": "<rr-password-1>", "fiber_loopback": "10.0.0.33" },
+    { "ip": "10.0.21.33", "password": "<rr-password-2>", "fiber_loopback": "10.0.0.34" }
+  ],
+  "default_rr": "10.0.20.1"
+}

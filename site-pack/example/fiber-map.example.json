@@ -1,0 +1,12 @@
+{
+  "_doc": "Schema for site-pack/topology/fiber-map.json — cp to topology/fiber-map.json and replace the fictional entries. edge_routers = your internet edge router(s) (the last 10.x hop before the first public hop in a traceroute); rds2216_subnet = the optional LibreQoS/CGNAT hop that sits between the fiber router and the edge (skip it when walking back); networks = one entry per fiber network: the fiber router's name and IP as it appears in traceroutes and the edge it reaches. Used as a static fallback when the ticket's Network/Fiber field is missing; live discovery (traceroute walk) is preferred. All values below are fictional.",
+  "edge_routers": { "edge-2216-a": "10.0.6.1", "edge-2216-b": "10.0.6.2" },
+  "rds2216_subnet": "10.0.30.0/24",
+  "public_hop_example": "198.51.100.42",
+  "networks": {
+    "alpha":   { "fiber_router_name": "Alpha Fiber",   "fiber_router_ip": "10.0.20.5",  "edge": "edge-2216-a" },
+    "bravo":   { "fiber_router_name": "Bravo Fiber",   "fiber_router_ip": "10.0.21.13", "edge": "edge-2216-a" },
+    "charlie": { "fiber_router_name": "Charlie Fiber", "fiber_router_ip": "10.0.8.3",   "edge": "edge-2216-b" },
+    "eta":     { "fiber_router_name": "Eta Fiber",     "fiber_router_ip": "10.0.5.1",   "edge": "edge-2216-a" }
+  }
+}

@@ -1,0 +1,10 @@
+- [ ] Hooks enabled: ran `python3 scripts/harness_setup.py --hooks` after this clone
+- [ ] No real IPs, passwords, tokens, or org identifiers in tracked files; placeholders used throughout
+- [ ] Commits signed with `git commit -s`
+- [ ] `node --test scripts/*.test.mjs` passes
+- [ ] `cd mcp-server && npm test` passes
+- [ ] `python3 -B -m unittest discover -s scripts -p 'test_*.py'` passes
+- [ ] `python3 scripts/docs_check.py` passes
+- [ ] `python3 scripts/skills_lint.py` passes
+- [ ] `python3 scripts/secret_scan.py --tracked` passes
+- [ ] If this change affects how an operator runs the tool, docs and `.env.example` are updated

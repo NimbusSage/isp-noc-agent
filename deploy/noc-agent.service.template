@@ -1,0 +1,49 @@
+[Unit]
+Description=NOC Ticket Processing Agent
+After=network.target
+# Crash-loop guard: at most 10 starts per 5 minutes, then systemd stops retrying.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+# The shipped default stays root ON PURPOSE: the agent reads root-owned files (.env, mcp-server/config/,
+# site-pack/) and per-user state under ~/.config and ~/.local (opencode / Google OAuth / MCP cache), and
+# existing installs would break if the user changed underneath them. To run unprivileged: create a system
+# user, chown the repo + that state to it, move the OAuth/opencode files into its home, then uncomment the
+# next two lines (and re-run scripts/install.sh so the units are re-rendered).
+User=root
+#User=nocagent
+#Group=nocagent
+WorkingDirectory={{INSTALL_DIR}}/server
+ExecStart={{NODE_BIN}} index.js
+Restart=always
+RestartSec=5
+# Exit status 2 = refused to start on invalid configuration (see: node server/index.js --check-config).
+# Do not restart-loop on it; fix .env, then `systemctl restart noc-agent`.
+RestartPreventExitStatus=2
+# The server drains: stops listening, SIGTERMs the agent process group, alerts on dropped tickets.
+TimeoutStopSec=60
+StandardOutput=journal
+StandardError=journal
+EnvironmentFile={{INSTALL_DIR}}/.env
+Environment=XDG_RUNTIME_DIR=/run/user/0
+Environment=NODE_ENV=production
+
+# --- Hardening that is safe for the root-run install (no path or /tmp behavior changes) ---
+# Deliberately NOT set: PrivateTmp (the server falls back to /tmp/noc-result-* and temp-site snapshots live in
+# /tmp), ProtectHome (opencode/OAuth caches under $HOME are written at runtime), ProtectSystem=strict
+# (the agent writes to logs/, the workspace, mcp-server/config and site-pack; list them in ReadWritePaths
+# first if you want to tighten this), MemoryDenyWriteExecute (breaks the Node JIT).
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+
+[Install]
+WantedBy=multi-user.target

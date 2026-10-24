@@ -1,0 +1,13 @@
+{
+  "ticket_id": "91002",
+  "status": "categorized",
+  "tower_site": "Bravo",
+  "analyzer_site": "bravo2 pppoe",
+  "bottleneck_analysis": "completed",
+  "notification_sent": true,
+  "classification": { "category": "slow_speeds", "complexity": "medium", "priority": "P2" },
+  "confidence": 78,
+  "requires_human_review": false,
+  "escalation_reason": null,
+  "evidence": ["tower:Tower note in first comment", "path:DEGRADED", "critical_hop:bravo-agg 10.0.2.2", "correlated:none"]
+}

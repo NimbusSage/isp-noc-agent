@@ -1,0 +1,73 @@
+# Names scripts/docs_check.py does not require in .env.example, and does not
+# warn about when .env.example lists them but the code never reads them.
+# Format: NAME  # reason     (NAME may be an fnmatch glob: NOC_*_USER)
+#         file:PATH  # reason   (skip scanning one file, repo-relative path)
+# Every entry needs a `# reason`; a bare entry fails the check.
+
+# --- system / derived (set by the OS, systemd, CI or a shell, never in .env) ---
+PATH  # system executable search path
+HOME  # system home directory
+USER  # system login name
+LANG  # system locale, read to force C locale in demo.py
+TZ  # system time zone
+PWD  # shell working directory
+SHELL  # login shell
+TMPDIR  # system temp directory
+EUID  # shell effective user id, read by install.sh
+CI  # set by CI runners
+NODE_ENV  # set to production by the systemd unit template
+XDG_RUNTIME_DIR  # systemd user runtime dir in the unit template
+XDG_CACHE_HOME  # standard XDG variable used to place the known_hosts cache
+NO_COLOR  # standard terminal convention
+PYTHONDONTWRITEBYTECODE  # set by the demo stub for its child processes
+HTTP_PROXY  # standard proxy variable, passed through to the agent
+HTTPS_PROXY  # standard proxy variable, passed through to the agent
+ALL_PROXY  # standard proxy variable, passed through to the agent
+NO_PROXY  # standard proxy variable, passed through to the agent
+CURL_CA_BUNDLE  # standard TLS variable, passed through to the agent
+REQUESTS_CA_BUNDLE  # standard TLS variable, passed through to the agent
+NODE_EXTRA_CA_CERTS  # standard TLS variable, passed through to the agent
+NODE_TLS_REJECT_UNAUTHORIZED  # standard Node variable, passed through to the agent
+IS_SANDBOX  # Claude Code sandbox marker, passed through to the agent
+CLAUDE_PROJECT_DIR  # set by Claude Code when it runs a hook
+O_NOFOLLOW  # os module flag, not an env var
+INPUT_OBJECT  # GraphQL type kind string in sonar_schema_check.py
+
+# --- internal handoffs between our own processes ---
+NOC_PROMPT  # exported by the server to a shell-mode agent command; never set by hand
+DEMO_CHAT_URL  # handed from scripts/demo.py to its stub agent via AGENT_ENV_PASSTHROUGH=DEMO_*; not set by hand
+NOC_SSH_WARNED  # once-per-process guard exported by ssh_opts.sh
+NO_PASSPHRASE  # status string in cred_store.mjs, not an env var
+
+# --- status and enum strings that look like env names ---
+API_ERROR  # status string in sonar_bounce.py
+BLOCKED_ANTI_LOOP  # status string in sonar_bounce.py
+PENDING_INTERNAL  # Sonar ticket status
+PENDING_EXTERNAL  # Sonar ticket status
+USER_ENTERED  # Google Sheets valueInputOption
+TO_DIR  # shell/python local variable name in backup_runtime_config.py
+AUTH_FAILED  # status string in mk.sh
+
+# --- install-time arguments and shell locals, not .env settings ---
+file:scripts/install.sh  # installer flags (WITH_GUI, NODE_BIN, NO_START, ...) are install-time arguments
+file:scripts/mk.sh  # helper shell script; its variables are locals
+file:scripts/temp_bgp_rollback.sh  # operator-run shell script; its variables are locals except the NOC_ ones listed in .env.example
+
+# --- dynamic names built at run time ---
+NOC_*_USER  # credstore.py builds NOC_<TYPE>_USER from the device type
+NOC_*_PASSWORD  # credstore.py builds NOC_<TYPE>_PASSWORD from the device type
+NOC_*_API_TOKEN  # credstore.py builds NOC_<TYPE>_API_TOKEN from the device type
+AGENT_*_ARGS  # server/index.js builds AGENT_<HARNESS>_ARGS from AGENT_HARNESS
+TEMP_BGP_RR1_PASSWORD  # example of a user-chosen password_env name in a temp-bgp config file
+
+# --- tunables read by the agent from AGENTS.md and skills, not by code ---
+DUPLICATE_HIGH_THRESHOLD  # agent-prompt tunable (duplicate-detection skill)
+DUPLICATE_MED_THRESHOLD  # agent-prompt tunable (duplicate-detection skill)
+EDGE_ROUTER_IPS  # agent-prompt tunable (path-analyzer skill)
+RDS2216_SUBNET  # agent-prompt tunable (path-analyzer skill)
+PATH_TRIAGE_MODE  # agent-prompt tunable (path-analyzer skill)
+PATH_TOWER_THRESHOLD  # agent-prompt tunable (path-analyzer skill)
+BTEST_*  # agent-prompt tunables (path-analyzer skill)
+
+# --- legacy aliases still read for backward compatibility ---
+BOUNCE_CATEGORY_ID  # legacy name read only by evals/build_golden_set.py; the documented name is IHN_BOUNCE_CATEGORY_ID

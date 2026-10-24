@@ -1,0 +1,21 @@
+[Unit]
+Description=NOC Agent Weekly Metrics Rollup (decision log -> rates -> Google Chat)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory={{INSTALL_DIR}}
+EnvironmentFile={{INSTALL_DIR}}/.env
+ExecStart=/usr/bin/python3 {{INSTALL_DIR}}/scripts/metrics_rollup.py
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=1800
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
