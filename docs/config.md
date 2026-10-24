@@ -16,7 +16,7 @@ All secrets live in `.env` at the repo root. This file is gitignored and never c
 | `NOC_TICKETS_GOOGLE_CHAT_WEBHOOK_URL` | Yes | — | Google Chat incoming webhook URL for NOC ticket alerts |
 | `TICKET_WEBHOOK_AUTH_TOKEN` | Yes | — | Basic auth token for the webhook server (username is `OCAGENT`) |
 | `WEBHOOK_PORT` | No | `65333` | Port for the webhook server |
-| `OPENCODE_PATH` | No | `/root/.opencode/bin/opencode` | Path to the OpenCode CLI binary |
+| `OPENCODE_PATH` | No | `~/.opencode/bin/opencode` | Path to the OpenCode CLI binary |
 | `AGENT_WORKSPACE` (or legacy `OPENCODE_WORKSPACE`) | No | install root | Workspace path passed to the agent harness via spawn `cwd` |
 | `AGENT_HARNESS` | No | `opencode` | Which CLI launches the agent: `opencode` (default), `claude`, `codex`, `gemini`, or `command`. `codex` and `gemini` are experimental. |
 | `CLAUDE_PATH` | No | `claude` | Claude Code CLI binary (only when `AGENT_HARNESS=claude`) |
@@ -58,7 +58,7 @@ All secrets live in `.env` at the repo root. This file is gitignored and never c
 | `CALENDAR_OAUTH_FILE` | Only for schedule-field-tech | falls back to `TRACKER_OAUTH_FILE` | Owner-only user-OAuth secret outside the repo (`client_id`, `client_secret`, `refresh_token`); grant must cover BOTH calendar and Sheets scopes (use `oauth-url --scope all` when re-consenting the shared file) |
 | `CALENDAR_AUTH_MODE` | No | `user-oauth` | Only `user-oauth` supported (Tower Dispatch consented account) |
 | `CALENDAR_WRITE_ENABLED` | Only for created appointments | unset | Kill switch: must equal `true` in addition to CLI `--confirm-create true` |
-| `CALENDAR_FALLBACK_CALENDAR_ID` | No | `towerdispatch@example.com` | Blanket Tower Dispatch calendar that fallback events are created UNDER (organizer = `towerdispatch@…`, guests get TD invites); the consenting account needs writer access to it |
+| `CALENDAR_FALLBACK_CALENDAR_ID` | No | `primary` | Blanket Tower Dispatch calendar that fallback events are created UNDER (organizer = `towerdispatch@…`, guests get TD invites); the consenting account needs writer access to it |
 | `CALENDAR_TECH_MAP_FILE` | No | `site-pack/tech_calendars.json` | Optional tech→calendar_id/attendee override map |
 | `DISPATCH_TIMEZONE` / `DISPATCH_DEFAULT_START_HOUR` / `DISPATCH_DEFAULT_DURATION_MINUTES` | No | `America/Chicago` / `8` / `60` | Default appointment window when the operator gives no time (next business weekday) |
 | `DISPATCH_NOTIFY` | No | `all` | Google Calendar `sendUpdates` for guests; `all` per operator rule — invites always go out unless a run is explicitly a quiet test |

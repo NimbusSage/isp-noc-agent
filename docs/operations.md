@@ -71,10 +71,10 @@ The webhook log is JSON-lines format — each entry has `timestamp`, `message`, 
 4. Verify OpenCode CLI works: `opencode run "echo hello"`
 5. Check `OPENCODE_PATH` in `.env` points to the real binary
 
-**Authentication errors (401/403):**
+**Authentication errors (401):**
 1. Verify `TICKET_WEBHOOK_AUTH_TOKEN` in `.env` matches what N8N sends
 2. Verify Base64 encoding: `echo -n "OCAGENT:<token>" | base64`
-3. Test with curl directly (see [Quickstart](#5-quickstart))
+3. Test with curl directly
 
 **Timeout / agent killed:**
 1. Increase `BATCH_TIMEOUT_MS` in `.env` (default 2700000ms / 45 min)
@@ -83,12 +83,12 @@ The webhook log is JSON-lines format — each entry has `timestamp`, `message`, 
 4. Check `journalctl -u noc-agent` + `logs/webhook.log` for the failure point
 
 **Context length / prompt too large (256k):**
-- `OPENCODE_MODEL` pinned to `opencode/big-pickle` (`opencode.json` + `server/index.js:19`); prior floating default used `cohere/north-mini-code:free` (256k) and failed at ~245k input (`server/batch_prompt_template.md` reduces prompt to <30k, `MAX_BATCH_SIZE=3` chunks bursts)
-- Guard: `server/index.js:629` logs `Prompt token guard triggered` at >180k est.; check `logs/webhook.log` `approx_tokens`
-- `server/index.js:437` now reads `logs/result_<jobId>.json` (file-authoritative) before stdout scan
+- `OPENCODE_MODEL` pinned to `opencode/big-pickle` (`opencode.json` + `server/index.js`); prior floating default used `cohere/north-mini-code:free` (256k) and failed at ~245k input (`server/batch_prompt_template.md` reduces prompt to <30k, `MAX_BATCH_SIZE=3` chunks bursts)
+- Guard: `server/index.js` logs `Prompt token guard triggered` at >180k est.; check `logs/webhook.log` `approx_tokens`
+- `server/index.js` now reads `logs/result_<jobId>.json` (file-authoritative) before stdout scan
 
 **Parse fallback (silent loss) — now noisy:**
-- `parseBatchResults` no longer returns silent `status:processed`; returns `needs_human` + `bottleneck_analysis:parse_failed` and `sendFallbackNotification` fires (`server/index.js:913`)
+- `parseBatchResults` no longer returns silent `status:processed`; returns `needs_human` + `bottleneck_analysis:parse_failed` and `sendFallbackNotification` fires (`server/index.js`)
 - Check `logs/webhook.log` `Failed to parse batch results JSON` + `Batch had parse failures`
 
 ### Governance incidents
@@ -111,7 +111,7 @@ printf 'header = "Authorization: Bearer %s"\n' "$TICKET_WEBHOOK_AUTH_TOKEN" | cu
 
 **OpenCode process fails:**
 - The webhook server sends a **fallback notification** to Google Chat listing all affected tickets so they're not silently dropped
-- Check `webhook.log` for the error details (`model` + `approx_tokens` logged at `Spawning OpenCode` `server/index.js:631`)
+- Check `webhook.log` for the error details (`model` + `approx_tokens` logged at `Spawning agent` `server/index.js`)
 
 **Graceful shutdown:**
 - On SIGTERM/SIGINT, the server clears the batch timer and logs any dropped queued tickets. If tickets are still queued/in-flight it fires a Google Chat alert and clears `logs/pending_tickets.json`. In-flight OpenCode processes are terminated.
@@ -167,7 +167,7 @@ Set `WINDOW_DURATION_MS` in `.env` (default 60000ms) or edit `server/index.js`. 
 | Change agent process timeout | `.env` -> `BATCH_TIMEOUT_MS` |
 | Change OpenCode binary path | `.env` -> `OPENCODE_PATH` |
 | Change pinned model | `.env` -> `OPENCODE_MODEL` (`opencode.json` `model`) — was floating `cohere/north-mini` |
-| Change max batch size | `.env` -> `MAX_BATCH_SIZE` (`server/index.js:20`) |
+| Change max batch size | `.env` -> `MAX_BATCH_SIZE` (`server/index.js`) |
 | Modify systemd service | `deploy/noc-agent.service.template` |
 | Add device credentials (MCP) | `mcp-server/config/credentials.json` (then re-encrypt) |
 | Modify N8N workflow | `docs/n8n-integration.md` + N8N UI |

@@ -152,7 +152,7 @@ The supplied `deviceId` and `host` are caller inputs, not authenticated inventor
 
 ### `temp-ospf-plan`
 
-Read-only Temp OSPF planner for the `temp-site-connection` workflow. Validates incident ID, interface, `/30` host-within-network, private space, cost is exactly `1000` (same fiber drain) or `10000` (cross-drain, anything else rejected), and ROS6/ROS7 command shape, then returns tagged apply/rollback RouterOS commands plus a preflight checklist. **Never connects to devices and never executes writes.** Live writes stay operator-run one step at a time until the gated executor is reviewed and enabled.
+Read-only Temp OSPF planner for the `temp-site-connection` workflow. Validates incident ID, interface, `/30` host-within-network, private space, cost is exactly `1000` (same fiber drain) or `10000` (cross-drain, anything else rejected), and ROS6/ROS7 command shape, then returns tagged apply/rollback RouterOS commands plus a preflight checklist. **Never connects to devices and never executes writes.** 
 
 ### `temp-radio-plan`
 
@@ -160,7 +160,7 @@ Read-only typed planner for UBNT station-flip / frequency / reboot ops. Validate
 
 ### `temp-radio-apply`
 
-Gated executor (airOS SSH: anchored sed on allowlisted `/tmp/system.cfg` keys, re-read verify, operator-verified `/usr/etc/rc.d/rc.softrestart save`, snapshot + rollback). Requires ALL of: `execute:true`, `TEMP_SITE_WRITE_ENABLED=true`, `TEMP_SITE_AIROS_TRANSPORT=verified`, host in `TEMP_SITE_ALLOWED_HOSTS`, and exactly one exact-device credential binding for the ID+host (type-wide credentials are never used for writes). Snapshots persist owner-only for `temp-radio-rollback` (the safe-mode counterpart on a missed confirm deadline). Full cycle still needs the customer-free safe-area test before any live use.
+Gated executor (airOS SSH: anchored sed on allowlisted `/tmp/system.cfg` keys, re-read verify, operator-verified `/usr/etc/rc.d/rc.softrestart save`, snapshot + rollback). Requires ALL of: `execute:true`, `TEMP_SITE_WRITE_ENABLED=true`, `TEMP_SITE_AIROS_TRANSPORT=verified`, host in `TEMP_SITE_ALLOWED_HOSTS`, and exactly one exact-device credential binding for the ID+host (type-wide credentials are never used for writes). Snapshots persist owner-only for `temp-radio-rollback` (the safe-mode counterpart on a missed confirm deadline). 
 
 ### `temp-radio-rollback`
 

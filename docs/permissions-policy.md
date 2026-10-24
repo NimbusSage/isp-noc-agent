@@ -89,5 +89,5 @@ Agent acts, but a human must confirm outcome; these always notify.
 ## Change Review
 
 Threshold changes (`IHN_TOWER_THRESHOLD`, `CORRELATED_CONFIDENCE_THRESHOLD`,
-`BREAKER_MAX_ERROR_RATE`, etc.) are policy changes: update this file + README env table in
+`BREAKER_MAX_ERROR_RATE`, etc.) are policy changes: update this file + `docs/config.md` env table in
 the same commit, and note the change in the weekly metrics report window.

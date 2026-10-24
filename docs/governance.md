@@ -4,7 +4,7 @@
 
 ## 16. Governance, Metrics & Evals
 
-The agent's autonomy is bounded by deterministic code, not prompt discipline. Ticket handling uses gated scripts. Temporary site recovery has an explicit operator authorization scope for necessary temporary radio-role, addressing, and OSPF operations—including a temporary customer interruption on the selected donor infrastructure AP—but remains technically unavailable until its typed device executor is implemented and enabled (see `temp-site-connection` and [permissions-policy.md](../docs/permissions-policy.md); the historical implementation plan was archived locally with the other org-internal docs). Curated address pairs can avoid Sheet access, not live conflict checks. Repository-local skill loading was unavailable in the current agent session and still needs target-runtime validation.
+The agent's autonomy is bounded by deterministic code, not prompt discipline. Ticket handling uses gated scripts. Temporary site recovery has an explicit operator authorization scope for necessary temporary radio-role, addressing, and OSPF operations—including a temporary customer interruption on the selected donor infrastructure AP—but remains technically unavailable until its typed device executor is implemented and enabled (see `temp-site-connection` and [permissions-policy.md](../docs/permissions-policy.md); the historical implementation plan was archived locally with the other org-internal docs). Curated address pairs can avoid Sheet access, not live conflict checks. 
 
 ### 16.1 Decision Log (audit trail)
 

@@ -11,7 +11,7 @@ test case (§8) before you close the incident.
 
 ## 1. Circuit Breaker Tripped (auto)
 
-**Signal:** Google Chat alert "🔴 Circuit Breaker OPENED — Auto-Bounces Suspended"
+**Signal:** Google Chat alert "❌ Circuit Breaker OPENED - Auto-Bounces Suspended"
 or `GET /governance` shows `"breaker_open": true`.
 
 **Meaning:** auto-action failure rate (`analysis_failed` + `bounce_reverted`) exceeded
@@ -85,7 +85,7 @@ trips it. That is by design.
 
 ## 4. Agent Failed to Parse / Silent Ticket
 
-**Signal:** Chat card "⚠️ Agent Processing Failed" or a ticket with no status in
+**Signal:** Chat card "🚨 Agent Processing Failed" or a ticket with no status in
 `logs/webhook.log`.
 
 ```bash

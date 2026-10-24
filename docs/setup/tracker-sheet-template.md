@@ -58,15 +58,15 @@ index-based):
 | T | `Send to Auto Tracker` | helper always writes FALSE (human path) |
 | U | `Send Count` | yes — increment to trigger the N8N auto-tracker watcher |
 
-Columns V–AU (the worked deployment uses 46 columns ≈ `A1:AT`) carry
+Columns V–AT (the worked deployment uses 46 columns ≈ `A1:AT`) carry
 template formulas and human-only helpers (`Tower1 Coords` / `Tower2 Coords`
 lookups, dispatch decor column `Tech Who Reached Out to TH` used by the
 dispatch flow, `Send Count` watchers, etc.). The helper only reads the
-header row as far as its signature and appends into A–U; T onward is
+header row as far as its signature and appends into A–U; V onward is
 pass-through. If you make V+ columns, replicate whatever your ticket
 automation needs — nothing in this repo depends on exact names there.
 
-> Customizing: keep the 11 anchor columns from `HEADER_SIGNATURE`
+> Customizing: keep the 12 anchor columns from `HEADER_SIGNATURE`
 > (`Status`, `Tower 1 (AP)`, `Tower 2 (ST)`, `Distance (miles)`,
 > `Town Name, and problem device`, `Ticket #`, `Issue`,
 > `Tech Who Reached Out to TH`, `Notes`, `Create Ticket`, `Priority`,

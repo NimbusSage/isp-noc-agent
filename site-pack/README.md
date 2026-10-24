@@ -26,7 +26,7 @@ ISP's configuration.
 3. **Shared infrastructure details stay private.**
 4. **Nothing in the core layer should reference a person's personal
    calendar, email, or machine paths.** Runtime paths come from `.env`
-   (`OPENCODE_WORKSPACE`, systemd units) — never hardcode `/root/...` in new
+   (`AGENT_WORKSPACE`, systemd units) — never hardcode `/root/...` in new
    code; use `scripts/install.sh` which templates the unit files.
 
 ## Fresh-ISP checklist (what the onboarding wizard automates)
