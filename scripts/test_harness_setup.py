@@ -426,7 +426,14 @@ class TestUnreadablePaths(unittest.TestCase):
                 raise PermissionError(13, "Permission denied")
             return real_exists(self_path, *a, **k)
 
-        with mock.patch.object(Path, "exists", deny):
+        real_is_dir = Path.is_dir
+
+        def deny_dir(self_path, *a, **k):
+            if str(self_path).startswith("/nonexistent-home"):
+                raise PermissionError(13, "Permission denied")
+            return real_is_dir(self_path, *a, **k)
+
+        with mock.patch.object(Path, "exists", deny), mock.patch.object(Path, "is_dir", deny_dir):
             checks = hs.check_harness(repo, "opencode", False)      # must not raise
         mcp = [c for c in checks if c["name"] == "mcp"]
         self.assertTrue(mcp and mcp[0]["status"] == "fail", checks)

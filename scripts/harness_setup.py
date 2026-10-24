@@ -220,6 +220,14 @@ def path_exists(path: Path) -> bool:
         return False
 
 
+def path_is_dir(path: Path) -> bool:
+    """Path.is_dir() that treats an unreadable location as not a directory."""
+    try:
+        return Path(path).is_dir()
+    except OSError:
+        return False
+
+
 def read_text(path: Path) -> Optional[str]:
     try:
         return path.read_text(encoding="utf-8")
@@ -654,7 +662,7 @@ def check_mcp_json(repo: Path, rel: str, keys: List[str], strict: bool, harness:
     cwd = entry.get("cwd")
     if isinstance(cwd, str):
         cwd_path = Path(expand_placeholders(cwd, repo))
-        if cwd_path.is_absolute() and not cwd_path.is_dir():
+        if cwd_path.is_absolute() and not path_is_dir(cwd_path):
             out.append(_c("mcp-cwd", "fail", "cwd %s does not exist" % cwd_path))
     return out
 
