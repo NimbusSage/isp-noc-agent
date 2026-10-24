@@ -28,6 +28,7 @@ SCRIPTS = Path(__file__).resolve().parent
 REPO = SCRIPTS.parent
 sys.path.insert(0, str(SCRIPTS))
 
+import hermetic_env  # noqa: F401,E402  (drops GIT_* variables a git hook exports)
 import doctor  # noqa: E402
 import mock_sonar  # noqa: E402
 

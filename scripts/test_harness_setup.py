@@ -16,6 +16,7 @@ from unittest import mock
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import hermetic_env  # noqa: F401,E402  (drops GIT_* variables a git hook exports)
 import harness_setup as hs  # noqa: E402
 
 REAL_REPO = Path(__file__).resolve().parent.parent

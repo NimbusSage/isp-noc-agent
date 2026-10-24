@@ -16,6 +16,8 @@ from typing import Any, Dict, List, Optional
 sys.dont_write_bytecode = True
 
 SCRIPTS = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPTS))
+import hermetic_env  # noqa: F401,E402  (drops GIT_* variables a git hook exports)
 GUARD_SRC = SCRIPTS / "hooks" / "claude_guard.py"
 REAL_SCANNER = SCRIPTS / "secret_scan.py"
 

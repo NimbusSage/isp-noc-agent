@@ -22,6 +22,7 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 
 import build_denylist  # noqa: E402
+import hermetic_env  # noqa: F401,E402  (drops GIT_* variables a git hook exports)
 import secret_scan  # noqa: E402
 
 PY = sys.executable
