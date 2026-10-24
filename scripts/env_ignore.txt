@@ -73,3 +73,4 @@ BTEST_*  # agent-prompt tunables (path-analyzer skill)
 BOUNCE_CATEGORY_ID  # legacy name read only by evals/build_golden_set.py; the documented name is IHN_BOUNCE_CATEGORY_ID
 
 AGENT_SERVER_URL  # n8n-side workflow variable (set in n8n, not in this repo's .env); named in docs/n8n-template.md
+GIT_*  # git's own repository variables (the test helper hermetic_env.py removes them); not settings of this project
