@@ -371,7 +371,12 @@ class TestTempBgpPeering(Sandbox):
     def setUp(self):
         super().setUp()
         import importlib
-        os.environ.update({"NOC_STATE_DIR": str(self.tmp / "state")})
+        # Same isolation as the other classes: an in-process call must never see this machine's real
+        # .env or credential store (NOC_DOTENV points at a missing file in self.env).
+        self._old = dict(os.environ)
+        os.environ.clear()
+        os.environ.update(self.env)
+        self.addCleanup(lambda: (os.environ.clear(), os.environ.update(self._old)))
         self.mod = importlib.import_module("temp_bgp_peering")
         self.addCleanup(lambda: setattr(self.mod, "_CREDS", None))
 
