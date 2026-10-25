@@ -20,8 +20,9 @@ export class UBNTUispClient implements DeviceClient {
   async connect(): Promise<void> {
     // UISP uses stateless HTTP — no persistent connection needed
     // Verify connectivity with a simple request
+    // (fetch needs an absolute URL: a relative path throws 'Failed to parse URL')
     try {
-      await this.request('/nms/api/v2.1/nms/info');
+      await this.request(this.buildUrl('/nms/api/v2.1/nms/info'));
     } catch (err) {
       throw new Error(`UISP connection failed: ${err instanceof Error ? err.message : 'unknown'}`);
     }

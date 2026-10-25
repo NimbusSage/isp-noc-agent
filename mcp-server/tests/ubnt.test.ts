@@ -29,6 +29,15 @@ describe('UBNTUispClient', () => {
     expect(url).toBe('https://10.0.0.2:443/nms/api/v2.1/devices');
   });
 
+  it('connect() requests an absolute URL, not a relative path', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ version: '1' }) });
+    await client.connect();
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://10.0.0.2:443/nms/api/v2.1/nms/info',
+      expect.any(Object)
+    );
+  });
+
   it('includes auth header', () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
