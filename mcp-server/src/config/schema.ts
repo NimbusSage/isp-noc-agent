@@ -1,4 +1,5 @@
 import { z } from 'zod/v3';
+import { registeredUrl } from './resources.js';
 
 export const LIBRENMS_UNCONFIGURED_URL = 'http://librenms.example.invalid';
 
@@ -24,10 +25,10 @@ export const ServerConfigSchema = z.object({
   }).default({}),
   inventory: z.object({
     enabled: z.boolean().default(true),
-    // No shipped host: LIBRENMS_URL (same env var the skills/doctor use) or the
-    // inventory.libreNmsBaseUrl override. The .invalid placeholder never
+    // No shipped host: the registered LibreNMS URL (LIBRENMS_URL or the site-pack
+    // profile, see config/resources.ts) or the inventory.libreNmsBaseUrl override. The .invalid placeholder never
     // resolves, so an unconfigured install fails closed instead of calling out.
-    libreNmsBaseUrl: z.string().url().default(() => process.env.LIBRENMS_URL?.trim() || LIBRENMS_UNCONFIGURED_URL),
+    libreNmsBaseUrl: z.string().url().default(() => registeredUrl('librenms') || LIBRENMS_UNCONFIGURED_URL),
     libreNmsTokenEnvVar: z.string().min(1).default('LIBRENMS_TOKEN'),
     lookupTimeoutMs: z.number().int().min(1000).max(30000).default(10000),
     staleAfterSeconds: z.number().int().min(60).max(86400).default(900),

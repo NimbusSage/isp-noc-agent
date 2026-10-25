@@ -100,8 +100,8 @@ export class NocMcpServer {
   }
 
   /** Read-host policy (NOC_READ_ALLOWED_HOSTS) for every tool that opens a connection. */
-  private hostBlocked(args: Record<string, unknown>, host: string, command: string): ToolResult | null {
-    const check = checkReadHost(host);
+  private hostBlocked(args: Record<string, unknown>, host: string, command: string, deviceType?: string): ToolResult | null {
+    const check = checkReadHost(host, process.env, deviceType);
     if (check.ok) return null;
     this.auditWith(args, { timestamp: new Date().toISOString(), device: stripControl(host).slice(0, 64), command, category: 'policy', outcome: 'blocked', redactions: 0, durationMs: 0, metadata: { reason: check.error } });
     return { content: [{ type: 'text', text: `Blocked: ${check.error}` }], isError: true };
@@ -606,7 +606,7 @@ export class NocMcpServer {
 
     const { host, deviceType, command, params } = parsed.data;
 
-    const hostPolicy = this.hostBlocked(args, host, command);
+    const hostPolicy = this.hostBlocked(args, host, command, deviceType);
     if (hostPolicy) return hostPolicy;
 
     // Validate parameters BEFORE touching the credential store: an invalid or

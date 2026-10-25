@@ -16,6 +16,7 @@
  *    attacker-controlled public host.
  */
 import { isIPv6 } from 'node:net';
+import { registeredHostsForDeviceType } from '../config/resources.js';
 
 export const IPV4_OCTET = '(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)';
 /** Canonical dotted quad: no leading zeros, no whitespace, no short forms. */
@@ -192,8 +193,13 @@ export type HostCheck = { ok: true } | { ok: false; error: string };
  * hostnames) REPLACES the default when set. Unset/empty = private, loopback and
  * link-local ranges only. Hostnames are never resolved: they are allowed only
  * when listed verbatim, so a DNS answer can never widen scope.
+ *
+ * One addition, for the device type that talks to a registered service: the host of that
+ * service (site-pack/profile.json "resources", see scripts/resources.py) is allowed for that
+ * device type only, so a UISP host name needs no list entry but can never receive router
+ * credentials.
  */
-export function checkReadHost(host: string, env: NodeJS.ProcessEnv = process.env): HostCheck {
+export function checkReadHost(host: string, env: NodeJS.ProcessEnv = process.env, deviceType?: string): HostCheck {
   const syntax = hostSyntaxError(host);
   if (syntax) return { ok: false, error: `Host rejected: ${syntax}` };
   const configured = env.NOC_READ_ALLOWED_HOSTS?.trim();
@@ -208,13 +214,13 @@ export function checkReadHost(host: string, env: NodeJS.ProcessEnv = process.env
   } catch (e) {
     return { ok: false, error: `NOC_READ_ALLOWED_HOSTS is malformed (${e instanceof Error ? e.message : 'invalid'}); all connections are blocked until it is fixed` };
   }
-  if (!hostMatches(entries, host)) {
-    return {
-      ok: false,
-      error: `Host ${host} is not permitted by NOC_READ_ALLOWED_HOSTS (default when unset: private, loopback and link-local ranges only)`,
-    };
-  }
-  return { ok: true };
+  if (hostMatches(entries, host)) return { ok: true };
+  if (deviceType && registeredHostsForDeviceType(deviceType, env).includes(host.toLowerCase())) return { ok: true };
+  return {
+    ok: false,
+    error: `Host ${host} is not permitted by NOC_READ_ALLOWED_HOSTS (default when unset: private, loopback and link-local ranges only)`
+      + (deviceType ? `; a ${deviceType} service host must be registered first: python3 scripts/resources.py set <name> <url>` : ''),
+  };
 }
 
 /** Startup self-check: human-readable problems with the host-list env vars. */
