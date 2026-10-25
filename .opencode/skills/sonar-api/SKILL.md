@@ -13,19 +13,15 @@ description: Use when making read or write API calls to Sonar — querying custo
 
 ### SONAR_TOKEN
 
-Always available in `.env` at the repo root. Source it before API calls:
+The token lives in `.env` (or the environment). The scripts read it in-process; never put it on a command line, where `ps` and shell history show it. To run a query, give it on stdin to the repo's client, which also takes the base URL from `site-pack/profile.json`:
 
 ```bash
-export $(grep SONAR_TOKEN .env | xargs)
+python3 scripts/gql_client.py --vars '{"id": 12345}' <<'GQL'
+query($id: Int64Bit!) { tickets(search: { string_fields: [{ attribute: "id", search_value: $id, match: true }] }) { entities { id subject status } } }
+GQL
 ```
 
-Or in Python:
-
-```python
-import subprocess
-result = subprocess.run(['bash', '-c', 'source .env && echo $SONAR_TOKEN'], capture_output=True, text=True)
-token = result.stdout.strip()
-```
+It prints the `data` object as JSON, exits 2 on a Sonar or transport error, and refuses a mutation (writes go through `scripts/sonar_comment.py` and `scripts/sonar_bounce.py`). In your own Python, `import gql_client` from `scripts/` and call `gql_client.execute(query, variables)`.
 
 ## Key IDs (org-specific — resolve from the site pack, never hardcode here)
 
@@ -357,15 +353,6 @@ mutation {
 }
 ```
 
-## curl Template
-
-```bash
-curl -s -X POST 'https://your-org.sonar.software/api/graphql' \
-  -H "Authorization: Bearer $SONAR_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"query":"<graphql query>"}'
-```
-
 ## Posting Comments — Use the Helper (Required)
 
 **Canonical:** `scripts/sonar_comment.py` — handles escaping and verification. See `comment-formatting` for the `BODYPLACEHOLDER` rule.
@@ -382,24 +369,5 @@ python3 scripts/sonar_comment.py 12345 /tmp/comment.html --verify
 **Forbidden:** Never use a `BODYPLACEHOLDER` template + `replace('"BODYPLACEHOLDER"', json.dumps(html))` hack — it fails because `json.dumps` escapes to `\\"BODYPLACEHOLDER\\"`.
 
 **Verification (required):** After posting, fetch back `ticket_comments` and assert body contains expected marker and not `BODYPLACEHOLDER` (helper does this with `--verify`).
-
-### Legacy Methods (Deprecated)
-
-**Method 1 - Single-quoted outer JSON (fragile, keep for reference only):**
-```bash
--d '{"query":"mutation { createTicketComment(input: { ticket_id: 12345, body: \"<p><span style=\\\"color:red\\\">text</span></p>\" }) { id } }"}'
-```
-
-**Method 2 - Inline Python with `&quot;` (use helper instead):**
-```python
-import json, subprocess, os
-token = subprocess.run(['bash', '-c', 'source .env && echo $SONAR_TOKEN'], capture_output=True, text=True).stdout.strip()
-html = '<p><span style=&quot;color:green&quot;>→ ✓ ARM RB4011, healthy</span></p>'
-mutation = f'mutation {{ createTicketComment(input: {{ ticket_id: 12345, body: "{html}" }}) {{ id }} }}'
-query = json.dumps({"query": mutation})
-result = subprocess.run(['curl', '-s', '-X', 'POST', 'https://your-org.sonar.software/api/graphql',
-    '-H', f'Authorization: Bearer {token}', '-H', 'Content-Type: application/json', '-d', query],
-    capture_output=True, text=True)
-```
 
 **If the colored spans don't render in Sonar**, the escaping is wrong. Fetch the posted comment back and check if `style="color:..."` is intact vs `style=\\\"color:...\\\"` (double-escaped = broken).

@@ -158,25 +158,6 @@ HTMLEOF
 python3 scripts/sonar_comment.py 12345 /tmp/comment.html --verify
 ```
 
-### Legacy Methods (Deprecated)
-
-**Method 1 — Single-Quoted Outer JSON (fragile):**
-```bash
--d '{"query":"mutation { createTicketComment(input: { ticket_id: 12345, body: \"<p><span style=\\\"color:red\\\">text</span></p>\" }) { id } }"}'
-```
-
-**Method 2 — Inline Python with `&quot;` (use helper instead):**
-```python
-import json, subprocess, os
-token = subprocess.run(['bash', '-c', 'source .env && echo $SONAR_TOKEN'], capture_output=True, text=True).stdout.strip()
-html = '<p><span style=&quot;color:green&quot;>→ ✓ ARM RB4011, healthy</span></p>'
-mutation = f'mutation {{ createTicketComment(input: {{ ticket_id: 12345, body: "{html}" }}) {{ id }} }}'
-query = json.dumps({"query": mutation})
-result = subprocess.run(['curl', '-s', '-X', 'POST', 'https://your-org.sonar.software/api/graphql',
-    '-H', f'Authorization: Bearer {token}', '-H', 'Content-Type: application/json', '-d', query],
-    capture_output=True, text=True)
-```
-
 ## Example: Full Workflow
 
 **Current ticket**: `[Alpha] bravo pppoe - slow tower` (ID: <ticket-id-1>)

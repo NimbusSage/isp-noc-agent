@@ -149,7 +149,7 @@ Full walkthrough with the credentials layout: `references/tier1-devices.md`.
      the value is never printed; the operator should copy it from `.env` into a
      password manager with their editor, because losing it loses the store).
    - The operator runs, in their own terminal from the repo root:
-     `export $(grep '^NOC_MCP_PASSPHRASE=' .env | xargs)`, then
+     `set -a; . <(grep '^NOC_MCP_PASSPHRASE=' .env); set +a`, then
      `cd mcp-server && npm run encrypt -- config/credentials.json`.
    - `encrypt` does NOT delete the plaintext. The operator removes it
      (`shred -u config/credentials.json`, or `rm` where shred is missing). Confirm

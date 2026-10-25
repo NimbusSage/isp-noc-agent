@@ -46,7 +46,7 @@ New MCP templates for these are in `path-analyzer` allowlist additions (`wireles
 ### 3. LibreNMS ports
 
 ```bash
-curl -s -H "X-Auth-Token: $LIBRENMS_TOKEN" "$LIBRENMS_URL/api/v0/devices/<ip>/ports" 2>/dev/null
+printf 'header = "X-Auth-Token: %s"\n' "$LIBRENMS_TOKEN" | curl -s -K - "$LIBRENMS_URL/api/v0/devices/<ip>/ports" 2>/dev/null
 # port alerts: ifInErrors/ifOutErrors, ifInDiscards rising
 ```
 

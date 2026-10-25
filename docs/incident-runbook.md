@@ -142,7 +142,6 @@ journalctl -u noc-metrics.service --since "-7 days" --no-pager | tail -20
 
 ```bash
 # Option A: full golden-set entry (has expected classification)
-export $(grep SONAR_TOKEN .env | xargs)
 python3 evals/build_golden_set.py --add-incident <ticket_id>
 
 # Option B: pending stub (fill expected fields later)

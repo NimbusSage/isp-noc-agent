@@ -46,8 +46,6 @@ Two format hard rules the helper already follows:
 ## Canonical Sender: scripts/chat_alert.py
 
 ```bash
-export $(grep SONAR_TOKEN .env | xargs) 2>/dev/null   # not required, webhook is read directly
-
 # Ticket alert (the normal case)
 python3 scripts/chat_alert.py ticket \
   --ticket-id "$TICKET_ID" \
@@ -135,7 +133,7 @@ Rules for any hand-built card (avoid unless the helper truly can't express somet
 ```bash
 python3 scripts/chat_alert.py ticket --ticket-id 1 --dry-run      # inspect payload
 python3 scripts/chat_alert.py --selftest                          # offline build test
-curl -X POST "$NOC_TICKETS_GOOGLE_CHAT_WEBHOOK_URL" \
+printf 'url = "%s"\n' "$NOC_TICKETS_GOOGLE_CHAT_WEBHOOK_URL" | curl -sS -K - -X POST \
   -H 'Content-Type: application/json' \
   -d '{"text":"NocAgent connectivity test"}'                      # raw connectivity only
 ```

@@ -238,18 +238,9 @@ mutation {
 }
 ```
 
-## curl Template
+## Running a Query
 
-```bash
-# Source the token
-export $(grep SONAR_TOKEN .env | xargs)
-
-# Search for existing tickets
-curl -s -X POST 'https://your-org.sonar.software/api/graphql' \
-  -H "Authorization: Bearer $SONAR_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"query":"<graphql query>"}'
-```
+Run read queries with `scripts/gql_client.py` (query on stdin, token read in-process, never on a command line); see `sonar-api` for the form.
 
 ## Posting Comments — Use the Helper (Required)
 
@@ -260,31 +251,6 @@ HTMLEOF
 python3 scripts/sonar_comment.py 12345 /tmp/comment.html --verify
 ```
 See the `comment-formatting` skill — use `&quot;` for all href/style quotes, never `BODYPLACEHOLDER` replace hacks. Helper verifies stored body.
-
-## Legacy Templates (Deprecated — use helper instead)
-
-```python
-import json, subprocess, os
-token = subprocess.run(
-    ['bash', '-c', 'source .env && echo $SONAR_TOKEN'],
-    capture_output=True, text=True
-).stdout.strip()
-html = '<p><strong>Duplicate Ticket Detected</strong></p>'
-mutation = f'mutation {{ createTicketComment(input: {{ ticket_id: {ticket_id}, body: "{html}" }}) {{ id }} }}'
-query = json.dumps({"query": mutation})
-```
-
-## JSON Escaping for HTML (Deprecated)
-
-**Method 1 — Single-Quoted Outer JSON (fragile):**
-```bash
--d '{"query":"mutation { createTicketComment(input: { ticket_id: 12345, body: \"<p>Duplicate of <a href=\\\"https://your-org.sonar.software/app#/tickets/show/12344\\\">#12344</a></p>\" }) { id } }"}'
-```
-
-**Method 2 — Use helper with `&quot;` (required):**
-```python
-html = '<p>Duplicate of <a href=&quot;https://your-org.sonar.software/app#/tickets/show/12344&quot;>#12344</p>'
-```
 
 ## Edge Cases
 

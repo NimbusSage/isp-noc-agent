@@ -21,13 +21,13 @@ MyMate (mymate.network) is the operator's network monitor (a modern replacement 
 Login is a Sanctum SPA session. The login endpoint is `POST /login` (not `/api/login`):
 
 ```bash
-export $(grep -E '^MYMATE' .env | xargs)
+set -a; . <(grep -E '^MYMATE' .env); set +a
 JAR=/tmp/mymate.jar; rm -f $JAR
 curl -s -k -c $JAR "$MYMATE_URL/sanctum/csrf-cookie" -o /dev/null
 XSRF=$(grep XSRF-TOKEN $JAR | awk '{print $NF}' | python3 -c "import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))")
 curl -s -k -b $JAR -c $JAR -X POST "$MYMATE_URL/login" \
   -H 'Content-Type: application/json' -H "X-XSRF-TOKEN: $XSRF" -H 'Accept: application/json' \
-  -d "{\"email\":\"$MYMATE_USER\",\"password\":\"$MYMATE_PASS\"}"
+  --data-binary @- < <(python3 -c 'import json,os; print(json.dumps({"email": os.environ["MYMATE_USER"], "password": os.environ["MYMATE_PASS"]}))')
 # IMPORTANT: login rotates the session and re-encrypts the cookie — re-read XSRF from the JAR now:
 XSRF=$(grep XSRF-TOKEN $JAR | awk '{print $NF}' | python3 -c "import sys,urllib.parse;print(urllib.parse.unquote(sys.stdin.read().strip()))")
 ```
@@ -42,7 +42,7 @@ XSRF=$(grep XSRF-TOKEN $JAR | awk '{print $NF}' | python3 -c "import sys,urllib.
 Helper:
 
 ```bash
-export $(grep -E '^MYMATE' .env | xargs)
+set -a; . <(grep -E '^MYMATE' .env); set +a
 JAR=/tmp/mymate.jar
 H=(-H "Accept: application/json" -H "Origin: $MYMATE_URL" -H "Referer: $MYMATE_URL/")
 # GET:   curl -s -k -b $JAR "${H[@]}" "$MYMATE_URL/api/..."

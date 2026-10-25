@@ -34,7 +34,7 @@ Operator steps (the agent never opens either file):
    password manager. Lose it and the store cannot be opened.
 3. Encrypt, in the operator's own terminal from the repo root:
    ```bash
-   export $(grep '^NOC_MCP_PASSPHRASE=' .env | xargs)
+   set -a; . <(grep '^NOC_MCP_PASSPHRASE=' .env); set +a
    cd mcp-server && npm run encrypt -- config/credentials.json
    ```
    Output: `Encrypted credentials written to config/credentials.enc`. The script

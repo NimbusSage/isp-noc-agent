@@ -3,7 +3,7 @@
 ## Credential rules
 
 - Never write secrets, passwords, tokens, API keys, SNMP community strings or real organization hostnames and addresses into any tracked file, skill, doc, test, commit message, log or chat. Refer to a secret by its environment-variable name or a `<PLACEHOLDER>`.
-- Never read `.env`, `.env.*` (except `.env.example`), `.secrets/`, `mcp-server/config/credentials*` or `backups/` unless the owner explicitly asks. Loading one variable into the shell for an API call, as AGENTS.md shows, is fine; never print its value.
+- Never read `.env`, `.env.*` (except `.env.example`), `.secrets/`, `mcp-server/config/credentials*` or `backups/` unless the owner explicitly asks. The scripts read `.env` themselves, so do not load it into your shell. If a tool needs one variable, load only that one, as AGENTS.md shows, and never print its value.
 - Never put a secret on a command line. Use the environment or stdin.
 - Never run `git commit --no-verify` or any other way around the hooks. Pre-commit runs `python3 scripts/secret_scan.py --staged`.
 - Device and API credentials reach tools only through the encrypted store and the MCP tools (or `node mcp-server/dist/tool-cli.js`). Do not copy values out of the store.

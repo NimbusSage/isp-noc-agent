@@ -250,10 +250,10 @@ evidence, never an escalation on its own).
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `LIBRENMS_URL` | `http://10.0.0.5` | LibreNMS base |
+| `LIBRENMS_URL` | unset (example `http://10.0.0.5`) | LibreNMS base |
 | `LIBRENMS_TOKEN` | — | `X-Auth-Token` (source `.env`, never hardcoded) |
-| `EDGE_ROUTER_IPS` | `10.0.6.1` | Edge 2216 router(s) (+ the second edge when known) |
-| `RDS2216_SUBNET` | `10.0.30.0/24` | LibreQoS CGNAT range (tune) |
+| `EDGE_ROUTER_IPS` | unset (example `10.0.6.1`) | Edge 2216 router(s) (+ the second edge when known) |
+| `RDS2216_SUBNET` | unset (example `10.0.30.0/24`) | LibreQoS CGNAT range (tune) |
 | `FIBER_MAP_FILE` | `site-pack/topology/fiber-map.json` | Fiber network → router IP |
 | `BGP_RR_MAP_FILE` | `site-pack/topology/bgp-rr-map.json` | RR name → IP |
 | `PATH_TOWER_THRESHOLD` | `75` | Tower confidence floor |

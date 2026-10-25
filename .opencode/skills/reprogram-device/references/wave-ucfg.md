@@ -48,7 +48,7 @@ via the API:
    *"Unsupported URL format - it should start with /api/vx.y/"*).
 3. Enable SSH:
    ```bash
-   curl -sk -X PUT -H "x-auth-token: $TOK" -H "Content-Type: application/json" \
+   printf 'header = "x-auth-token: %s"\n' "$TOK" | curl -sk -K - -X PUT -H "Content-Type: application/json" \
      -d '{"sshServer":{"enabled":true,"sshPort":22,"passwordAuthentication":true}}' \
      "https://<relay_host>:<port>/api/v1.0/services"
    ```
