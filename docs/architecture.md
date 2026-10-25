@@ -137,6 +137,7 @@ NocAgent/
 │   │   │   └── validator.ts
 │   │   ├── config/                           # Server settings schema and repo-root .env fallback loader
 │   │   │   ├── repo-env.ts                   # Repo-root .env fallback loader
+│   │   │   ├── resources.ts                  # Where this organization's own services live (the TypeScript side of scripts/resources.py)
 │   │   │   └── schema.ts
 │   │   ├── credentials/                      # Credential store formats, encrypted store and exact-device resolution
 │   │   │   ├── resolver.ts
@@ -173,7 +174,7 @@ NocAgent/
 │   │   ├── tool-cli.ts                       # Universal tool CLI — harness-independent access to the MCP executor
 │   │   └── tool-schemas.ts                   # Single source of truth for every tool's INPUT schema
 │   ├── state/                                # Rollback snapshots written by the temporary-site tools
-│   ├── tests/                                # 29 files
+│   ├── tests/                                # 30 files
 │   ├── .gitignore
 │   ├── package-lock.json
 │   ├── package.json
@@ -200,6 +201,7 @@ NocAgent/
 │   ├── docs_commands_check.py                # Check that what the docs and agent instructions tell people to run actually exists
 │   ├── doctor.py                             # Verify a NocAgent installation
 │   ├── env_ignore.txt
+│   ├── env_load.mjs                          # Let a Node helper read ONLY the .env settings it needs, so nobody has to `source` the whole file
 │   ├── env_set.py                            # Put a secret into .env without pasting it into a chat or onto a command line
 │   ├── envfile.py                            # Tiny, side-effect-free `.env` reader shared by the ops scripts
 │   ├── fleet_bind_sweep.mjs                  # One-time (or periodic) sweep: pin already-configured pool credentials to exact device ID+host bindings…
@@ -223,6 +225,9 @@ NocAgent/
 │   ├── provision_exact_binding.mjs           # Provision (or remove) an exact-device credential binding in the encrypted MCP store by pinning an…
 │   ├── rain_fade_model.py                    # Predict the rain rate that kills a fading-prone link
 │   ├── rain_fade_readiness.py                # One-command rain-fade readiness for a Wave (WaveOS gen3) 60 GHz link
+│   ├── resource_catalog.json
+│   ├── resources.mjs                         # Node side of the resource registry (see scripts/resources.py for the full description)
+│   ├── resources.py                          # Where this organization's own services live: one registry, one lookup rule (stdlib only)
 │   ├── rssi_drop_graph.py                    # RSSI drop evidence chart for turned/misaligned wireless links (tracker-sheet SOP)
 │   ├── schedule_dispatch.mjs                 # Field-tech dispatch scheduler — Sonar ticket ➜ Google Calendar appointment
 │   ├── secret_scan.py                        # The one leak/secret scanner (stdlib only, no network)
@@ -241,7 +246,7 @@ NocAgent/
 │   ├── tracker_sheet.mjs                     # Tracker Sheet helper — NOC Ticket Tracker 2.1 append-only writer
 │   ├── wave_gui.mjs                          # Wave radio web UI driver (puppeteer-core + system Chrome)
 │   ├── wave_rename.py                        # WaveOS rename executor: jq-filter SSID/hostname edits with snapshot/verify/rollback
-│   └── (34 test files)                       # matching *.test.mjs, test_*.py
+│   └── (37 test files)                       # matching *.test.mjs, test_*.py
 ├── server/                                   # Node.js/Express webhook server and its batch prompt template
 │   ├── batch_prompt_template.md
 │   ├── index.js

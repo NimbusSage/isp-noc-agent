@@ -37,10 +37,11 @@ All secrets live in `.env` at the repo root. This file is gitignored and never c
 | `PEAK_SCHEDULER_ENABLED` | No | `true` | Disable peak scheduler with `false` |
 | `NOC_MCP_PASSPHRASE` | Only if using MCP | — | Passphrase for AES-256-GCM credential encryption |
 | `NOC_MCP_CONFIG` | No | `mcp-server/config/server.json` | MCP server config path |
-| `MYMATE_URL` | Only if using MyMate | — | MyMate network monitor base URL (`https://10.0.0.7`) |
+| `UISP_BASE_URL` | Only if using UISP | — | UISP controller base URL; usually registered with `python3 scripts/resources.py set uisp <url>` instead |
+| `MYMATE_URL` | Only if using MyMate | — | MyMate network monitor base URL; usually registered with `python3 scripts/resources.py set mymate <url>` instead |
 | `MYMATE_USER` | Only if using MyMate | — | Read-only MyMate operator account (email) |
 | `MYMATE_PASS` | Only if using MyMate | — | Password for the MyMate operator account |
-| `LIBRENMS_URL` | Only if using LibreNMS | — | LibreNMS base URL, e.g. `http://10.0.0.5` (sysName/hardware/geolocation corroboration — not site truth) |
+| `LIBRENMS_URL` | Only if using LibreNMS | — | LibreNMS base URL; usually registered with `python3 scripts/resources.py set librenms <url>` instead (sysName/hardware/geolocation corroboration, not site truth) |
 | `LIBRENMS_TOKEN` | Only if using LibreNMS | — | LibreNMS `X-Auth-Token` for `<LIBRENMS_URL>/api/v0` (https://docs.librenms.org/API/) |
 | `LIBRENMS_WEB_USER` | Only for authentic LibreNMS renders (`--librenms-render`) | — | Dedicated non-admin LibreNMS account. Used as the `X-Forwarded-Email` SSO header identity (`username`; header name set by `CHART_EMAIL_HEADER`); NO password check happens from a trusted source, so keep the LibreNMS `sso.trusted_proxies` list tight (the SSO proxy IP + the NocAgent NAT egress IP) and never share this value |
 | `TEMP_OSPF_SPREADSHEET_ID` | Only for Temp OSPF helper | — | Google spreadsheet ID from its URL; share file with service-account email (service-account mode) |
@@ -74,8 +75,8 @@ All secrets live in `.env` at the repo root. This file is gitignored and never c
 | `TEMP_SITE_WRITE_ENABLED` | Only for agent-driven temp writes | unset | Must equal `true` — runtime kill switch for all temp-site executors (forward + undo). Forwarded to the batch agent's MCP server via `server/index.js` spawn env. |
 | `TEMP_SITE_AIROS_TRANSPORT` / `TEMP_SITE_ROUTEROS_TRANSPORT` / `TEMP_SITE_MT_TRANSPORT` | Only for agent-driven temp writes | unset | Each must equal `verified` — per-transport safe-area proof flags. |
 | `TEMP_SITE_ALLOWED_HOSTS` | Only for agent-driven temp writes | unset | Scope allowlist: comma-separated exact IPv4 and/or CIDR ranges (e.g. `10.0.0.0/8`). Says *which networks*; exact-device bindings say *which devices*. Forwarded to the batch agent's MCP server via `server/index.js` spawn env. |
-| `EDGE_ROUTER_IPS` | No | — | Comma-separated edge 2216 router addresses, e.g. `10.0.6.1`; path-analyzer uses these as a hint to find the fiber router in a traceroute |
-| `RDS2216_SUBNET` | No | — | LibreQoS RDS2216 subnet, e.g. `10.0.30.0/24`; the fiber walk uses it to recognise and skip the optional RDS2216 hop (real range in `site-pack/topology/fiber-topology.md`) |
+| `EDGE_ROUTER_IPS` | No | — | Comma-separated edge 2216 router addresses; path-analyzer uses these as a hint to find the fiber router in a traceroute (real values in `site-pack/topology/` or this setting) |
+| `RDS2216_SUBNET` | No | — | LibreQoS RDS2216 subnet; the fiber walk uses it to recognise and skip the optional RDS2216 hop (real range in `site-pack/topology/fiber-topology.md`) |
 | `PATH_TOWER_THRESHOLD` | No | `75` | Tower confidence floor for path-analyzer |
 | `BTEST_DURATION` | No | `10` | btest duration seconds (baseline 10, direct /30 5) |
 | `BTEST_PROTOCOL` | No | `tcp` | btest protocol |
@@ -107,10 +108,30 @@ PEAK_WINDOW_END=21:00
 # Only if using the MCP server:
 # NOC_MCP_PASSPHRASE=<your_secure_passphrase>
 # Only if using the MyMate monitor:
-# MYMATE_URL=https://10.0.0.7
+# MYMATE_URL=<url>
 # MYMATE_USER=nocagent@example.com
 # MYMATE_PASS=<your_my_mate_password>
 ```
+
+### Org resources
+
+The registry holds the addresses of this organization's own services. Values live in `site-pack/profile.json` under the key `resources`. The registry holds no secrets.
+
+URL names: `uisp`, `librenms`, `mymate`, `oxidized`, `sonar`. Spreadsheet names (Google spreadsheet IDs): `tower_directory`, `ip_network`, `tracker`. Additional names can be registered with `set` (see `scripts/resource_catalog.json`).
+
+```bash
+python3 scripts/resources.py list             # every resource, its value, and where it came from
+python3 scripts/resources.py get <name>       # print one resource
+python3 scripts/resources.py set <name> <url> # register a resource
+python3 scripts/resources.py migrate          # show what .env and older settings already hold
+python3 scripts/resources.py migrate --write  # register those values
+python3 scripts/resources.py check            # validate the registry
+python3 scripts/resources.py check --probe    # validate and try each URL without credentials
+```
+
+Lookup order: environment variable (real environment first, then `.env`), then the `resources` block in `site-pack/profile.json`, then an older location (`org.uisp_host`, `org.sonar_base_url`, and `oxidized_base_url` in `site-pack/topology/temp-bgp-config.json`). When two sources disagree the first wins; `list` and `check` report the conflict.
+
+A resource that is not registered is unavailable: `get` exits with status 3, and the agent stops and asks the operator instead of taking an address from an example, another system's device list, or DNS. `set` refuses example and placeholder values: an `example.com` host, a value in angle brackets, or a documentation address range. `set` and `migrate --write` refuse to run for batch agents, because the webhook server sets `NOC_UNATTENDED=1` for them; this is a guard against an agent registering an address on its own, not a security boundary. The MCP server allows the registered UISP host name for the `ubnt-uisp` device type without an entry in `NOC_READ_ALLOWED_HOSTS`, and for no other device type.
 
 ### Temp OSPF Google Sheet Helper
 

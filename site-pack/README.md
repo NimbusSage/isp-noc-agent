@@ -22,7 +22,7 @@ ISP's configuration.
    (gitignored) or secret files outside the repo (OAuth — enforced by
    `scripts/google_user_auth.mjs`). Device creds live encrypted in
    `mcp-server/config/credentials.enc` (gitignored, passphrase in `.env`).
-2. **Org identity goes in `site-pack/profile.json`.**
+2. **Org identity goes in `site-pack/profile.json`.** The same file holds the `resources` block, which registers this organization's service addresses (UISP, LibreNMS, MyMate, Oxidized, Sonar, and its spreadsheets) with `python3 scripts/resources.py set` (see `site-pack/profile.example.json`).
 3. **Shared infrastructure details stay private.**
 4. **Nothing in the core layer should reference a person's personal
    calendar, email, or machine paths.** Runtime paths come from `.env`
@@ -33,6 +33,7 @@ ISP's configuration.
 
 - [ ] `cp site-pack/profile.example.json site-pack/profile.json` and fill in
 - [ ] `.env` from `.env.example` (wizard walks every group)
+- [ ] Service addresses registered: run `python3 scripts/resources.py migrate` to see what `.env` already holds, then `set` for the rest, then `python3 scripts/resources.py check` to validate
 - [ ] `mcp-server/config/credentials.json` from example → encrypted store
 - [ ] Recreate `site-pack/topology/*.json` topology for your network
 - [ ] Sonar group/category IDs verified against your instance

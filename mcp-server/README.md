@@ -132,7 +132,7 @@ Two binding classes share one format (`deviceType` + stable `deviceId` + `host` 
 ```bash
 cd mcp-server && npm run build
 npm run tool -- --list
-npm run tool -- temp-radio-plan '{"op":"set-mode","incidentId":"INC-F-01","host":"10.0.208.10","deviceId":"alpha5e","mode":"managed","ssid":"bravo5w"}'
+node dist/tool-cli.js temp-radio-plan '{"op":"set-mode","incidentId":"<incidentId>","host":"<host>","deviceId":"<deviceId>","mode":"managed","ssid":"<ssid>"}'
 node dist/tool-cli.js temp-ospf-plan --args-file /tmp/ospf-args.json
  echo '{"incidentId":"INC-F-01",...}' | node dist/tool-cli.js temp-ospf-plan --stdin
 ```

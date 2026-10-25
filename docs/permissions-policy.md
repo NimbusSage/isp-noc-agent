@@ -58,6 +58,7 @@ Agent acts, but a human must confirm outcome; these always notify.
 | Run a customer-CPE scan whose effect on its live wireless association is unknown | May interrupt a paying customer's service; exact-device credentials do not authorize an unverified survey |
 | Clear/trip the circuit breaker from agent context | breaker is operator-only (`POST /governance/breaker` or CLI) |
 | Bypass `sonar_bounce.py` / `sonar_comment.py` with hand-rolled mutations | governance bypass |
+| Register or change a service address (`resources.py set`, `migrate --write`) as a batch agent; or send a credential to an address that is not registered | batch agents refused (NOC_UNATTENDED=1); MCP read-host policy enforces the host name restriction |
 
 ## Kill Switches (operator controls)
 

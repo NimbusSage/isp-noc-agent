@@ -34,7 +34,7 @@ whatever your ticketing source is.
      These must match the group IDs the agent expects (config.js `NOC_GROUP_ID`
      and the Sys Admin group that gets passthrough handling).
    - `<AGENT_SERVER_URL>` — host running `server/index.js`, port
-     `WEBHOOK_PORT` (default 65333), e.g. `http://10.0.0.5:65333/webhook/ticket`.
+     `WEBHOOK_PORT` (default 65333), e.g. `http://<AGENT_SERVER_HOST>:<WEBHOOK_PORT>/webhook/ticket`.
    - `<YOUR_CHAT_WEBHOOK_URL>` — Google Chat space incoming webhook.
    - `<YOUR_TICKETING_APP_URL>` — base URL of your ticketing app, used only
      for the "open ticket" link in chat alerts.
