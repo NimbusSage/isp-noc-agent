@@ -2,7 +2,7 @@
 
 > Operator manual index lives in the repo root [README](../README.md).
 
-## 8. Webhook API Reference
+## Webhook API Reference
 
 ### `POST /webhook/ticket`
 
@@ -85,7 +85,7 @@ Limits:
 
 Tickets received within a **60-second collection window** (`WINDOW_DURATION_MS`, default 60000 ms) are collected and passed to `flushTicketQueue`, which splits any batch above `MAX_BATCH_SIZE` (default 3) into separate queued jobs. This includes all ticket types (NOC, Sys Admin, PBS). Benefits: fewer agent spawns, better duplicate detection across related tickets, lower system load.
 
-**Serial processing:** Batches run **one at a time** through a FIFO queue. A new batch starts only when the previous one settles (success, failure, or timeout). Tickets that arrive while the queue is busy still get `202 Accepted` immediately and wait their turn. Only an OpenCode failure stops the pipeline — genuine failures send a fallback notification and the queue advances to the next batch.
+**Serial processing:** Batches run **one at a time** through a FIFO queue. A new batch starts only when the previous one settles (success, failure, or timeout). Tickets that arrive while the queue is busy still get `202 Accepted` immediately and wait their turn. A batch fails when the agent process exits with an error, runs longer than BATCH_TIMEOUT_MS, or leaves no valid result; on failure the server sends a fallback notification, returns those tickets as `needs_human`, and starts the next batch.
 
 **Restart safety:** Every ticket ID that is queued or in-flight is mirrored in `logs/pending_tickets.json`. On graceful shutdown with tickets still pending, a Google Chat alert lists them and the file is cleared. On startup, any leftover IDs from an unclean shutdown trigger the same alert, so a crash never silently drops a ticket. Alerts are best-effort; there is no automatic queue replay.
 
@@ -96,7 +96,7 @@ Tickets received within a **60-second collection window** (`WINDOW_DURATION_MS`,
 
 ---
 
-## 10. N8N Integration
+## N8N Integration
 
 The N8N workflow sends tickets to the webhook server with a 5-second timeout. If the agent doesn't respond, N8N falls back to a direct Google Chat notification.
 
@@ -118,7 +118,7 @@ printf 'header = "Authorization: Bearer %s"\n' "$TICKET_WEBHOOK_AUTH_TOKEN" | cu
 
 ## Send a test ticket (Mode B end-to-end check)
 
-(From the original README quickstart; run on the box where `noc-agent.service` runs.)
+(Run on the box where `noc-agent.service` runs.)
 
 ```bash
 source .env

@@ -1,5 +1,7 @@
 # N8N Workflow Modification Guidelines
 
+For the step-by-step workflow build and importable JSON, see [docs/n8n-template.md](n8n-template.md).
+
 ## Overview
 
 This document explains how to modify your existing N8N workflows to integrate with the NOC Agent webhook server, with fallback to Google Chat.
@@ -111,89 +113,6 @@ Add another HTTP Request node for Google Chat:
   }
   ```
 
-## Example Workflow JSON
-
-```json
-{
-  "nodes": [
-    {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "noc-ticket-webhook",
-        "responseMode": "responseNode"
-      },
-      "name": "Webhook Trigger",
-      "type": "n8n-nodes-base.webhook",
-      "position": [250, 300]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://your-server-ip:65333/webhook/ticket",
-        "authentication": "basicAuth",
-        "basicAuth": "nocAgent",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "ticket_id",
-              "value": "={{ $json.ticket_id }}"
-            },
-            {
-              "name": "event_type",
-              "value": "={{ $json.event_type }}"
-            }
-          ]
-        },
-        "options": {
-          "timeout": 5000
-        }
-      },
-      "name": "Call NOC Agent",
-      "type": "n8n-nodes-base.httpRequest",
-      "position": [450, 300],
-      "credentials": {
-        "basicAuth": "NOC Agent Auth"
-      }
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "number": [
-            {
-              "value1": "={{ $json.statusCode }}",
-              "operation": "equal",
-              "value2": 202
-            }
-          ]
-        }
-      },
-      "name": "Agent Responded?",
-      "type": "n8n-nodes-base.if",
-      "position": [650, 300]
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://chat.googleapis.com/v1/spaces/<YOUR_SPACE>/messages?key=<YOUR_KEY>&token=<YOUR_TOKEN>",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "text",
-              "value": "NOC Ticket #{{ $json.ticket_id }} - Agent did not respond"
-            }
-          ]
-        }
-      },
-      "name": "Google Chat Fallback",
-      "type": "n8n-nodes-base.httpRequest",
-      "position": [850, 400]
-    }
-  ]
-}
-```
-
 ## Testing the Integration
 
 ### Test Agent Directly
@@ -265,9 +184,9 @@ sudo systemctl status noc-agent
 
 ### Timeout Issues
 
-1. Increase HTTP Request timeout in N8N (default: 5000ms)
+1. Raise the HTTP Request node timeout above the 5000 ms this guide sets
 2. Check agent processing time in logs
-3. Verify OpenCode CLI is working: `opencode run "test"`
+3. Run `python3 scripts/doctor.py --only harness` to verify the agent CLI is on PATH and sees the instructions, skills and MCP registration (prints PASS or FAIL)
 
 ## Security Notes
 

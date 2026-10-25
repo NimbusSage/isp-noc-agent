@@ -2,11 +2,11 @@
 
 > Operator manual index lives in the repo root [README](../README.md).
 
-## 16. Governance, Metrics & Evals
+## Governance, Metrics & Evals
 
 The agent's autonomy is bounded by deterministic code, not prompt discipline. Ticket handling uses gated scripts. Temporary site recovery has an explicit operator authorization scope for necessary temporary radio-role, addressing, and OSPF operations—including a temporary customer interruption on the selected donor infrastructure AP; the typed device executors are implemented and registered (`temp-*` tools, `mcp-server/src/tool-schemas.ts`), gated by kill-switch env flags, transport flags, host allowlist, exact-device bindings, and `execute:true` (see `temp-site-connection` and [permissions-policy.md](../docs/permissions-policy.md)). Curated address pairs can avoid Sheet access, not live conflict checks.
 
-### 16.1 Decision Log (audit trail)
+### Decision Log (audit trail)
 
 Every settled ticket gets one JSONL record in `logs/decisions/<YYYY-MM>.jsonl`: `ts`, `kind`,
 `ticket_id`, `status`, `confidence`, `classification`, `requires_human_review`,
@@ -18,7 +18,7 @@ python3 scripts/decision_log.py query --since <date> --format count
 python3 scripts/decision_log.py query --ticket <ticket-id>
 ```
 
-### 16.2 Circuit Breaker (deterministic auto-action guard)
+### Circuit Breaker (deterministic auto-action guard)
 
 The server feeds every outcome to `scripts/circuit_breaker.py`. Failure classes:
 `analysis_failed` (path analysis failed) and `bounce_reverted` (a bounced ticket was moved
@@ -38,7 +38,7 @@ printf 'header = "Authorization: Bearer %s"\n' "$TICKET_WEBHOOK_AUTH_TOKEN" | cu
   -d '{"action":"open","reason":"investigating <ticket-id> revert"}'   # or action:"clear"
 ```
 
-### 16.3 Gated Bounce Execution
+### Gated Bounce Execution
 
 IHN + correlated bounces (the two autonomy tiers that move tickets between groups) only
 execute through `scripts/sonar_bounce.py`, which enforces in order: breaker assert (exit 3),
@@ -46,7 +46,7 @@ execute through `scripts/sonar_bounce.py`, which enforces in order: breaker asse
 comments (exit 5), then the `updateTicket` write, then a decision-log record. The agent is
 instructed (AGENTS.md + batch template) to never hand-write the mutation.
 
-### 16.4 Weekly Metrics + Eval Loop (the improvement cadence)
+### Weekly Metrics + Eval Loop (the improvement cadence)
 
 | Job | When | What |
 |-----|------|------|
@@ -56,7 +56,6 @@ instructed (AGENTS.md + batch template) to never hand-write the mutation.
 **Build the golden set** (once, then maintain):
 
 ```bash
-export $(grep SONAR_TOKEN .env | xargs)
 python3 evals/build_golden_set.py --limit 100   # outcome-derived labels from Sonar history
 # review a sample, hand-fix mislabels in evals/golden/golden_set.json
 ```

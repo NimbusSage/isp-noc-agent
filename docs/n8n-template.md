@@ -1,5 +1,7 @@
 # N8N Ticket Workflow Template
 
+For node settings, the fallback branch, monitoring and troubleshooting, see [docs/n8n-integration.md](n8n-integration.md).
+
 This is a scrubbed, importable version of the N8N workflow that feeds tickets
 into the webhook server (`POST /webhook/ticket`). The live deployment used
 Sonar's webhook → N8N → agent-server chain; yours needs the same three pieces,

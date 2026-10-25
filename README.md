@@ -60,7 +60,7 @@ If you build something genuinely useful for NOC work with this: *the widely-usef
 | [docs/architecture.md](docs/architecture.md) | System architecture, repository layout |
 | [docs/config.md](docs/config.md) | Every env var, credential handling, MCP store setup |
 | [docs/operations.md](docs/operations.md) | Running modes, logs, troubleshooting, development, file reference |
-| [docs/ticket-pipeline.md](docs/ticket-pipeline.md) | Ticket workflow end-to-end + historical worked examples |
+| [docs/ticket-pipeline.md](docs/ticket-pipeline.md) | Ticket workflow end-to-end |
 | [docs/webhook-api.md](docs/webhook-api.md) | Webhook API reference + N8N setup |
 | [docs/n8n-template.md](docs/n8n-template.md) | Step-by-step N8N workflow build + importable scrubbed JSON template |
 | [docs/n8n-integration.md](docs/n8n-integration.md) | N8N workflow setup (HTTP node config, fallback logic, example JSON) |

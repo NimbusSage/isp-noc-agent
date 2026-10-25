@@ -2,14 +2,14 @@
 
 > Operator manual index lives in the repo root [README](../README.md).
 
-## 17. Portability & Reinstalling
+## Portability & Reinstalling
 
 This repo is built to move: clone it anywhere, rename the org, reinstall on a
 new box. The repo is **public**; org-specific reality lives entirely outside the
 tracked tree (`.env`, `site-pack/`, OAuth files — all gitignored).
 Your own fork can be private if you prefer, but the upstream must stay clean.
 
-### 17.1 Moving / reinstalling
+### Moving / reinstalling
 
 ```bash
 git clone <repo-url> /any/new/path   # any path works
@@ -25,7 +25,7 @@ actual install path substituted at install time. Old units are overwritten,
 so a reinstall on a new path replaces the old one cleanly (disable the old
 service if moving, not cloning).
 
-### 17.2 Credential inventory (where every secret lives)
+### Credential inventory (where every secret lives)
 
 **Backup these before trusting any single box:** every secret below lives
 ONLY on this machine (gitignored by design). `python3 scripts/backup_runtime_config.py`
@@ -46,7 +46,7 @@ Set `BACKUP_PASSPHRASE` or `BACKUP_PASSPHRASE_FILE` to encrypt the archive with 
 | Device credentials (MCP) | `mcp-server/config/credentials.enc` + passphrase in `.env` | never (both gitignored) |
 | Org identity | `site-pack/profile.json` (Sonar IDs, org name/domains) | never (profile.json gitignored; profile.example.json tracked) |
 
-### 17.3 Verification = `scripts/doctor.py`
+### Verification = `scripts/doctor.py`
 
 Read-only checks per credential: Sonar GraphQL, Google Chat webhook, webhook
 server health, MyMate session login, LibreNMS, each OAuth token refresh, MCP
@@ -54,7 +54,7 @@ store decryption, site profile, systemd unit. `--json` for machines, `--only` /
 `--skip` for single checks (exit 2 on unknown names); pass `--notify` to post ONE labeled test message to the
 NOC chat space (`--skip chat` to stay silent). Exit 0 only when nothing fails.
 
-### 17.4 The onboarding wizard
+### The onboarding wizard
 
 Open the agent in the repo directory and say **`onboard me`**. The
 `onboarding-wizard` skill walks: tour of abilities → `.env` baseline → Sonar →
@@ -64,7 +64,7 @@ systemd install → site-pack profile → topology references → final all-gree
 gate, recording state in `logs/onboarding_state.json`. Optional phases can be
 skipped; required phases fail closed (no fake "done").
 
-### 17.5 What NOT to share (contributor rules)
+### What NOT to share (contributor rules)
 
 The upstream repo is public and must STAY clean:
 

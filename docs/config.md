@@ -4,9 +4,9 @@
 
 `.env.example` lists every variable the code reads, with its default and the tier that needs it; `python3 scripts/docs_check.py` fails if the code reads a variable that `.env.example` does not list.
 
-## 6. Configuration
+## Configuration
 
-### 6.1 Environment Variables (`.env`)
+### Environment Variables (`.env`)
 
 All secrets live in `.env` at the repo root. This file is gitignored and never committed.
 
@@ -22,7 +22,7 @@ All secrets live in `.env` at the repo root. This file is gitignored and never c
 | `AGENT_HARNESS` | No | `opencode` | Which CLI launches the agent: `opencode` (default), `claude`, `codex`, `gemini`, or `command`. `codex` and `gemini` are experimental. |
 | `CLAUDE_PATH` | No | `claude` | Claude Code CLI binary (only when `AGENT_HARNESS=claude`) |
 | `AGENT_COMMAND_TEMPLATE` | No | — | Split into arguments and run without a shell. Must contain `{prompt}` or `{prompt_file}`; `{workspace}` and `{model}` are also available. `{prompt_file}` is a private temporary file removed after the run. Shell syntax such as pipes or `&&` is refused unless `AGENT_COMMAND_SHELL=1`, which passes the prompt in the `NOC_PROMPT` environment variable instead of pasting it into the command. |
-| `BATCH_TIMEOUT_MS` | No | `2700000` (45 min) | Per-batch OpenCode process timeout. Batches run one at a time, so a long run delays the queue rather than failing. |
+| `BATCH_TIMEOUT_MS` | No | `2700000` (45 min) | Per-batch agent process timeout. Batches run one at a time, so a long run delays the queue rather than failing. |
 | `WINDOW_DURATION_MS` | No | `60000` | Ticket collection window; mainly useful for testing (shorten to speed up batch turnaround). |
 | `NOC_AGENT_LOG_DIR` | No | `<repo>/logs` | Fallback log dir when `NOC_LOG_DIR` is unset; webhook.log is written here; pending_tickets.json goes to `NOC_STATE_DIR` (defaults to log dir) |
 | `IHN_TOWER_THRESHOLD` | No | `80` | Tower-correctness confidence threshold for IHN auto-return bounce (`ihn-auto-return`, +40 exact literal) |
@@ -40,8 +40,8 @@ All secrets live in `.env` at the repo root. This file is gitignored and never c
 | `MYMATE_URL` | Only if using MyMate | — | MyMate network monitor base URL (`https://10.0.0.7`) |
 | `MYMATE_USER` | Only if using MyMate | — | Read-only MyMate operator account (email) |
 | `MYMATE_PASS` | Only if using MyMate | — | Password for the MyMate operator account |
-| `LIBRENMS_URL` | Only if using LibreNMS | `http://10.0.0.5` | LibreNMS base URL (sysName/hardware/geolocation corroboration — not site truth) |
-| `LIBRENMS_TOKEN` | Only if using LibreNMS | — | LibreNMS `X-Auth-Token` for `http://10.0.0.5/api/v0` (https://docs.librenms.org/API/) |
+| `LIBRENMS_URL` | Only if using LibreNMS | — | LibreNMS base URL, e.g. `http://10.0.0.5` (sysName/hardware/geolocation corroboration — not site truth) |
+| `LIBRENMS_TOKEN` | Only if using LibreNMS | — | LibreNMS `X-Auth-Token` for `<LIBRENMS_URL>/api/v0` (https://docs.librenms.org/API/) |
 | `LIBRENMS_WEB_USER` | Only for authentic LibreNMS renders (`--librenms-render`) | — | Dedicated non-admin LibreNMS account. Used as the `X-Forwarded-Email` SSO header identity (`username`; header name set by `CHART_EMAIL_HEADER`); NO password check happens from a trusted source, so keep the LibreNMS `sso.trusted_proxies` list tight (the SSO proxy IP + the NocAgent NAT egress IP) and never share this value |
 | `TEMP_OSPF_SPREADSHEET_ID` | Only for Temp OSPF helper | — | Google spreadsheet ID from its URL; share file with service-account email (service-account mode) |
 | `TEMP_OSPF_AUTH_MODE` | No | `service-account` | `service-account` or `user-oauth`; use `user-oauth` when the sheet lives outside the company domain and can't share to the robot email |
@@ -74,8 +74,8 @@ All secrets live in `.env` at the repo root. This file is gitignored and never c
 | `TEMP_SITE_WRITE_ENABLED` | Only for agent-driven temp writes | unset | Must equal `true` — runtime kill switch for all temp-site executors (forward + undo). Forwarded to the batch agent's MCP server via `server/index.js` spawn env. |
 | `TEMP_SITE_AIROS_TRANSPORT` / `TEMP_SITE_ROUTEROS_TRANSPORT` / `TEMP_SITE_MT_TRANSPORT` | Only for agent-driven temp writes | unset | Each must equal `verified` — per-transport safe-area proof flags. |
 | `TEMP_SITE_ALLOWED_HOSTS` | Only for agent-driven temp writes | unset | Scope allowlist: comma-separated exact IPv4 and/or CIDR ranges (e.g. `10.0.0.0/8`). Says *which networks*; exact-device bindings say *which devices*. Forwarded to the batch agent's MCP server via `server/index.js` spawn env. |
-| `EDGE_ROUTER_IPS` | No | `10.0.6.1` | Comma-separated edge 2216 IPs (edge-2216-a + edge-2216-b when known) for fiber walk |
-| `RDS2216_SUBNET` | No | `10.0.30.0/24` | LibreQoS CGNAT RDS2216 subnet (tuned in `site-pack/topology/fiber-topology.md`) |
+| `EDGE_ROUTER_IPS` | No | — | Comma-separated edge 2216 router addresses, e.g. `10.0.6.1`; path-analyzer uses these as a hint to find the fiber router in a traceroute |
+| `RDS2216_SUBNET` | No | — | LibreQoS RDS2216 subnet, e.g. `10.0.30.0/24`; the fiber walk uses it to recognise and skip the optional RDS2216 hop (real range in `site-pack/topology/fiber-topology.md`) |
 | `PATH_TOWER_THRESHOLD` | No | `75` | Tower confidence floor for path-analyzer |
 | `BTEST_DURATION` | No | `10` | btest duration seconds (baseline 10, direct /30 5) |
 | `BTEST_PROTOCOL` | No | `tcp` | btest protocol |
@@ -83,7 +83,7 @@ All secrets live in `.env` at the repo root. This file is gitignored and never c
 | `BTEST_PASSWORD` | Only for a dedicated btest account | — | Operator-supplied at runtime; password of the dedicated btest account some fiber routers use (`path-analyzer`). Never stored in the repo |
 | `PATH_TRIAGE_MODE` | No | `direct` | Triage mode `direct` (live) vs `analyzer` rollback |
 | `AGENT_MODEL` | No | `opencode/big-pickle` | Model for agent runs; `OPENCODE_MODEL` is the legacy alias, read when `AGENT_MODEL` is unset |
-| `MAX_BATCH_SIZE` | No | `3` | Max tickets per agent batch; larger bursts chunked to keep prompt < 50k |
+| `MAX_BATCH_SIZE` | No | `3` | Max tickets per agent batch; larger bursts split into sequential jobs. Server refuses prompts estimated above 180,000 tokens (characters divided by 4); default model context window is 250,000 tokens |
 | `BOUNCE_AUTONOMOUS_ENABLED` | No | `false` | Master kill switch: `false` blocks ALL autonomous bounces (`sonar_bounce.py` exit 4) |
 | `BREAKER_WINDOW_SEC` | No | `604800` | Circuit breaker rolling window (7 days) |
 | `BREAKER_MIN_RUNS` | No | `10` | Min runs in window before breaker rate is evaluated |
@@ -112,7 +112,7 @@ PEAK_WINDOW_END=21:00
 # MYMATE_PASS=<your_my_mate_password>
 ```
 
-### 6.2 Temp OSPF Google Sheet Helper
+### Temp OSPF Google Sheet Helper
 
 The helper is invoked on demand by the `temp-site-connection` skill or directly from the repository. It uses read-only OAuth scope unless write mode is deliberately enabled.
 
@@ -141,7 +141,7 @@ node scripts/temp_ospf_sheet.mjs mark-in-use \
 
 The writer rejects duplicate/missing/non-consecutive host rows, occupied pairs, header-signature drift, and unexpected row changes. It batches site × 2 + checkbox × 2 + incident reason × 2, reads both rows back, verifies all values, and records an audit event. The checked value is boolean `true` (the target cell must have checkbox validation). Never retry an unknown outcome until checking the Sheet. This helper does not check network address conflicts or permit device writes. Disable row writes by unsetting `TEMP_OSPF_WRITE_ENABLED` or setting it to anything other than `true`.
 
-### 6.3 Encrypted Credentials (MCP Server)
+### Encrypted Credentials (MCP Server)
 
 The MCP server stores device credentials (MikroTik, UBNT, plus isolated customer pools) in an AES-256-GCM encrypted file. The passphrase lives only in the `NOC_MCP_PASSPHRASE` env var — never in the repo. Existing `run-diagnostics` keeps its type-wide bounded behavior for tower/router analysis; rename-site CPE reads use the separate `customer-airos` / `customer-mt` pools (same read-only commands, isolated credential lists — never mix customer secrets into infra pools). A separate exact-device airOS read path uses one encrypted device+host binding with no fallback. It is not operationally safe for production CPE until trusted ID↔host resolution and process isolation exist; no customer bindings are configured. See [mcp-server/README.md](../mcp-server/README.md).
 
@@ -158,7 +158,7 @@ NOC_MCP_PASSPHRASE="<your_passphrase>" npm run encrypt --prefix mcp-server -- mc
 
 See [mcp-server/README.md](../mcp-server/README.md) for the full credential store format, available commands, and security features.
 
-### 6.4 Security Notes
+### Security Notes
 
 - `.env` is gitignored at the repo root — never commit it.
 - `mcp-server/config/credentials.json` is gitignored; only `credentials.example.json` is tracked.

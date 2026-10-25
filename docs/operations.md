@@ -2,9 +2,9 @@
 
 > Operator manual index lives in the repo root [README](../README.md).
 
-## 7. Running the Agent
+## Running the Agent
 
-### 7.1 Systemd (production)
+### Systemd (production)
 
 ```bash
 # Install (renders deploy/*.template into /etc/systemd/system/)
@@ -23,21 +23,21 @@ sudo journalctl -u noc-agent -f
 
 The unit sets `Environment=XDG_RUNTIME_DIR=/run/user/0` so headless `opencode run` processes spawned by the webhook can reach the user's runtime socket directory. If it moves, update this variable to match.
 
-### 7.2 Manual (foreground)
+### Manual (foreground)
 
 ```bash
 cd server
 node index.js
 ```
 
-### 7.3 Health Check
+### Health Check
 
 ```bash
 curl http://localhost:65333/health
 # {"status":"ok","timestamp":"...","service":"noc-agent-webhook","version":"1.0.0"}
 ```
 
-### 7.4 Weekly Metrics & Eval Timers
+### Weekly Metrics & Eval Timers
 
 ```bash
 # units/timers are installed by scripts/install.sh (deploy/*.template)
@@ -51,7 +51,7 @@ sudo systemctl start noc-evals.service     # deterministic golden-set eval
 
 ---
 
-## 13. Monitoring & Troubleshooting
+## Monitoring & Troubleshooting
 
 ### Logs
 
@@ -69,8 +69,8 @@ The webhook log is JSON-lines format — each entry has `timestamp`, `message`, 
 1. Check service: `sudo systemctl status noc-agent`
 2. Check logs: `journalctl -u noc-agent -n 50`
 3. Test health: `curl http://localhost:65333/health`
-4. Verify OpenCode CLI works: `opencode run "echo hello"`
-5. Check `OPENCODE_PATH` in `.env` points to the real binary
+4. Run `python3 scripts/doctor.py --only harness` to verify the agent CLI is on PATH and sees the instructions, skills and MCP registration (prints PASS or FAIL)
+5. Check the harness binary path in `.env`: `OPENCODE_PATH` for opencode, or `CLAUDE_PATH`, `CODEX_PATH`, `GEMINI_PATH` for the others; `AGENT_HARNESS` selects the active harness
 
 **Authentication errors (401):**
 1. Verify `TICKET_WEBHOOK_AUTH_TOKEN` in `.env` matches what N8N sends
@@ -84,7 +84,7 @@ The webhook log is JSON-lines format — each entry has `timestamp`, `message`, 
 4. Check `journalctl -u noc-agent` + `logs/webhook.log` for the failure point
 
 **Context length / prompt too large (256k):**
-- `AGENT_MODEL` → `OPENCODE_MODEL` → `opencode/big-pickle` model resolution (`server/index.js`); prior floating default used `cohere/north-mini-code:free` (256k) and failed at ~245k input (`server/batch_prompt_template.md` reduces prompt to <30k, `MAX_BATCH_SIZE=3` chunks bursts)
+- `AGENT_MODEL` → `OPENCODE_MODEL` → `opencode/big-pickle` model resolution; `opencode/big-pickle` has a context window of at most 250,000 tokens; the server rejects prompts estimated above 180,000 tokens (characters divided by 4); `MAX_BATCH_SIZE` defaults to 3 and larger bursts are split into serial jobs; `Spawning agent` logs `model` and `approx_tokens`
 - Guard: `server/index.js` logs `Prompt token guard triggered` at >180k est.; check `logs/webhook.log` `approx_tokens`
 - `server/index.js` now reads `logs/result_<jobId>.json` (file-authoritative) before stdout scan
 
@@ -110,7 +110,7 @@ python3 scripts/metrics_rollup.py --no-chat               # rates + revert re-ch
 printf 'header = "Authorization: Bearer %s"\n' "$TICKET_WEBHOOK_AUTH_TOKEN" | curl -sS -K /dev/stdin http://127.0.0.1:65333/governance
 ```
 
-**OpenCode process fails:**
+**Agent process fails:**
 - The webhook server sends a **fallback notification** to Google Chat listing all affected tickets so they're not silently dropped
 - Check `webhook.log` for the error details (`model` + `approx_tokens` logged at `Spawning agent` `server/index.js`)
 
@@ -119,7 +119,7 @@ printf 'header = "Authorization: Bearer %s"\n' "$TICKET_WEBHOOK_AUTH_TOKEN" | cu
 
 ---
 
-## 14. Development
+## Development
 
 ### Where things live
 
@@ -131,10 +131,6 @@ printf 'header = "Authorization: Bearer %s"\n' "$TICKET_WEBHOOK_AUTH_TOKEN" | cu
 | MCP server code | `mcp-server/src/` |
 | N8N setup guide | [docs/n8n-integration.md](../docs/n8n-integration.md) |
 
-### Custom agents
-
-When a set of skills consistently serves one role, define a custom agent in `.opencode/agents/` with a focused system prompt. This directory is reserved for future use.
-
 ### Testing
 
 - Temp OSPF Sheet helper (offline mock tests): `node --test scripts/temp_ospf_sheet.test.mjs`
@@ -144,7 +140,7 @@ When a set of skills consistently serves one role, define a custom agent in `.op
 - `server/`: `node --check server/index.js` + manual `curl` batch test; `MAX_BATCH_SIZE=3` keeps prompts small, check `logs/webhook.log` for `model` pin
 - Governance scripts: `python3 scripts/circuit_breaker.py status` · `python3 scripts/sonar_bounce.py check <id>` (gates only, no write)
 - Evals: `python3 evals/eval_run.py` (deterministic, always safe) · `DRY_RUN=1 python3 evals/eval_run.py --replay` (agent replay, no writes)
-- Skills: test interactively via `opencode` TUI, or send a test ticket via curl
+- Skills: load by name in your agent harness to test, or send a test ticket to the webhook
 
 ### Modifying the batch window
 
@@ -152,12 +148,12 @@ Set `WINDOW_DURATION_MS` in `.env` (default 60000ms) or edit `server/index.js`. 
 
 ---
 
-## 15. File Quick Reference
+## File Quick Reference
 
 | Task | Edit this file |
 |------|----------------|
 | Change the ticket workflow | `AGENTS.md` |
-| Add a new skill | `.opencode/skills/<name>/SKILL.md` + add to `AGENTS.md` Skills list |
+| Add a new skill | `python3 scripts/new_skill.py` — creates `.opencode/skills/<name>/SKILL.md` and adds it to the Skills index in `AGENTS.md` |
 | Update an existing skill | `.opencode/skills/<name>/SKILL.md` |
 | Change webhook port | `.env` -> `WEBHOOK_PORT` |
 | Change webhook auth token | `.env` -> `TICKET_WEBHOOK_AUTH_TOKEN` |
@@ -166,8 +162,8 @@ Set `WINDOW_DURATION_MS` in `.env` (default 60000ms) or edit `server/index.js`. 
 | Change breaker sensitivity | `.env` -> `BREAKER_MAX_ERROR_RATE` / `BREAKER_MIN_RUNS` / `BREAKER_WINDOW_SEC` |
 | Change what the agent may do autonomously | [docs/permissions-policy.md](../docs/permissions-policy.md) + this table |
 | Change agent process timeout | `.env` -> `BATCH_TIMEOUT_MS` |
-| Change OpenCode binary path | `.env` -> `OPENCODE_PATH` |
-| Change pinned model | `.env` -> `OPENCODE_MODEL` (`opencode.json` `model`) — was floating `cohere/north-mini` |
+| Change OpenCode binary path | `.env`: `OPENCODE_PATH` (opencode), `CLAUDE_PATH`, `CODEX_PATH` or `GEMINI_PATH` |
+| Change pinned model | `.env` → `AGENT_MODEL` (or legacy `OPENCODE_MODEL`); `opencode.json` `model` entry also applies |
 | Change max batch size | `.env` -> `MAX_BATCH_SIZE` (`server/index.js`) |
 | Modify systemd service | `deploy/noc-agent.service.template` |
 | Add device credentials (MCP) | `mcp-server/config/credentials.json` (then re-encrypt) |
