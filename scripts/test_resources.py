@@ -174,6 +174,12 @@ class Commands(Base):
         self.assertEqual(code, 1)
         self.assertEqual(out.count("[FAIL]"), 2)
 
+    def test_check_stops_asking_to_migrate_once_the_profile_holds_the_value(self):
+        with mock.patch.dict(os.environ, {"LIBRENMS_URL": "http://10.1.2.3"}):  # secret-scan:allow(fictional private address used as test input)
+            self.assertIn("not in the profile yet", self.run_cli("check")[1])
+            self.run_cli("migrate", "--write")
+            self.assertNotIn("not in the profile yet", self.run_cli("check")[1])
+
     def test_check_passes_when_everything_registered_is_sound(self):
         self.write_profile({"resources": {"uisp": {"url": "https://uisp.corp-net.org"}}})
         self.assertEqual(self.run_cli("check")[0], 0)

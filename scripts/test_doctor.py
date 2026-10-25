@@ -434,6 +434,11 @@ class ResourcesCheckTests(DoctorCase):
         self.assertEqual(row["status"], "warn")
         self.assertIn("migrate --write", row["hint"])
 
+    def test_env_value_also_in_the_profile_is_not_drift(self):
+        self.profile({"resources": {"librenms": {"url": "http://10.1.2.3"}}})  # secret-scan:allow(fictional private address used as test input)
+        self.write_env(LIBRENMS_URL="http://10.1.2.3")  # secret-scan:allow(fictional private address used as test input)
+        self.assertEqual(self.status()["status"], "pass")
+
     def test_credentials_without_an_address_fail(self):
         self.write_env(LIBRENMS_TOKEN="tok-abcdef123456")
         row = self.status()

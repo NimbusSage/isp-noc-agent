@@ -5,61 +5,119 @@
     "sonar": {
       "kind": "url",
       "purpose": "Sonar GraphQL: tickets, accounts, sites",
-      "env": ["SONAR_BASE_URL", "ORG_SONAR_BASE_URL"],
-      "legacy": [{"profile": ["org", "sonar_base_url"]}],
-      "credential": ["SONAR_TOKEN"]
+      "env": [
+        "SONAR_BASE_URL",
+        "ORG_SONAR_BASE_URL"
+      ],
+      "legacy": [
+        {
+          "profile": [
+            "org",
+            "sonar_base_url"
+          ]
+        }
+      ],
+      "credential": [
+        "SONAR_TOKEN"
+      ]
     },
     "uisp": {
       "kind": "url",
       "purpose": "UISP controller: devices, sites, config backups",
-      "env": ["UISP_BASE_URL"],
-      "legacy": [{"profile": ["org", "uisp_host"]}],
-      "credential": ["NOC_UBNT_UISP_API_TOKEN"],
+      "env": [
+        "UISP_BASE_URL"
+      ],
+      "legacy": [
+        {
+          "profile": [
+            "org",
+            "uisp_host"
+          ]
+        }
+      ],
+      "credential": [],
       "mcp_device_type": "ubnt-uisp",
-      "hint_names": ["uisp"]
+      "hint_names": [
+        "uisp"
+      ],
+      "credential_note": "apiToken in the MCP store (ubnt-uisp), or NOC_UBNT_UISP_API_TOKEN"
     },
     "librenms": {
       "kind": "url",
       "purpose": "LibreNMS: sysName, hardware and location corroboration (not site truth)",
-      "env": ["LIBRENMS_URL"],
+      "env": [
+        "LIBRENMS_URL"
+      ],
       "legacy": [],
-      "credential": ["LIBRENMS_TOKEN"],
-      "hint_names": ["librenms"]
+      "credential": [
+        "LIBRENMS_TOKEN"
+      ],
+      "hint_names": [
+        "librenms"
+      ]
     },
     "mymate": {
       "kind": "url",
       "purpose": "MyMate network monitor: device status, outages, ping history",
-      "env": ["MYMATE_URL"],
+      "env": [
+        "MYMATE_URL"
+      ],
       "legacy": [],
-      "credential": ["MYMATE_USER", "MYMATE_PASS"],
-      "hint_names": ["mymate"]
+      "credential": [
+        "MYMATE_USER",
+        "MYMATE_PASS"
+      ],
+      "hint_names": [
+        "mymate"
+      ]
     },
     "oxidized": {
       "kind": "url",
       "purpose": "Oxidized: device configuration backups",
-      "env": ["OXIDIZED_BASE_URL"],
-      "legacy": [{"file": "topology/temp-bgp-config.json", "key": "oxidized_base_url"}],
+      "env": [
+        "OXIDIZED_BASE_URL"
+      ],
+      "legacy": [
+        {
+          "file": "topology/temp-bgp-config.json",
+          "key": "oxidized_base_url"
+        }
+      ],
       "credential": [],
-      "hint_names": ["oxidized"]
+      "hint_names": [
+        "oxidized"
+      ]
     },
     "tower_directory": {
       "kind": "sheet",
       "purpose": "Google Sheet: Tower Directory (master tower list)",
       "env": [],
-      "legacy": [{"profile": ["sheets", "tower_directory", "id"]}],
+      "legacy": [
+        {
+          "profile": [
+            "sheets",
+            "tower_directory",
+            "id"
+          ]
+        }
+      ],
       "credential": []
     },
     "ip_network": {
       "kind": "sheet",
       "purpose": "Google Sheet: IP Network sheetbook and Temp OSPF tabs",
-      "env": ["TEMP_OSPF_SPREADSHEET_ID"],
+      "env": [
+        "TEMP_OSPF_SPREADSHEET_ID"
+      ],
       "legacy": [],
       "credential": []
     },
     "tracker": {
       "kind": "sheet",
       "purpose": "Google Sheet: NOC Ticket Tracker",
-      "env": ["TRACKER_SPREADSHEET_ID"],
+      "env": [
+        "TRACKER_SPREADSHEET_ID"
+      ],
       "legacy": [],
       "credential": []
     }

@@ -33,6 +33,7 @@ import json
 import os
 import re
 import shutil
+import ssl
 import sys
 import tempfile
 import urllib.error
@@ -135,6 +136,8 @@ class Resolved:
     problems: List[str] = field(default_factory=list)
     credentials: Dict[str, bool] = field(default_factory=dict)
     mcp_device_type: str = ""
+    in_profile: bool = False           # the profile's own resources block holds a usable value
+    note: str = ""                     # where the credential lives when it is not an environment variable
 
     @property
     def conflict(self) -> bool:
@@ -175,7 +178,7 @@ def resolve(name: str, profile: Optional[dict] = None, getenv: Optional[Callable
     kind = entry.get("kind", "url")
     res = Resolved(name=name, kind=kind, purpose=entry.get("purpose", ""),
                    credentials={c: bool(getenv(c)) for c in entry.get("credential") or []},
-                   mcp_device_type=entry.get("mcp_device_type", ""))
+                   mcp_device_type=entry.get("mcp_device_type", ""), note=entry.get("credential_note", ""))
     raw: List[Tuple[str, str]] = []
     for var in entry.get("env") or []:
         v = getenv(var)
@@ -192,6 +195,7 @@ def resolve(name: str, profile: Optional[dict] = None, getenv: Optional[Callable
             seen.append((src, normalize(v, kind)))
         except ResourceError as e:
             res.problems.append("%s: %s" % (src, e))
+    res.in_profile = any(src == "profile" for src, _v in seen)
     if seen:
         res.source, res.value = seen[0]
         res.others = [(s, v) for s, v in seen[1:] if v != res.value]
@@ -290,14 +294,14 @@ def cmd_list(args: argparse.Namespace) -> int:
     if args.json:
         print(json.dumps([{"name": r.name, "kind": r.kind, "value": r.value or None, "source": r.source or None,
                            "conflict": [{"source": s, "value": v} for s, v in r.others],
-                           "credentials": r.credentials, "problems": r.problems} for r in rows], indent=2))
+                           "in_profile": r.in_profile, "credentials": r.credentials, "problems": r.problems} for r in rows], indent=2))
         return 0
     width = max(len(r.name) for r in rows)
     vwidth = max([len(r.value) for r in rows if r.value] + [14])
     swidth = max([len(r.source) for r in rows] + [6])
     print("%-*s  %-*s  %-*s  %s" % (width, "NAME", vwidth, "VALUE", swidth, "SOURCE", "CREDENTIAL (presence only)"))
     for r in rows:
-        creds = ", ".join("%s: %s" % (k, "set" if v else "missing") for k, v in r.credentials.items()) or "-"
+        creds = ", ".join("%s: %s" % (k, "set" if v else "missing") for k, v in r.credentials.items()) or r.note or "-"
         print("%-*s  %-*s  %-*s  %s" % (width, r.name, vwidth, r.value or "NOT REGISTERED", swidth, r.source or "-", creds))
         for src, val in r.others:
             print("%-*s  ^ also %s says %s (ignored; run `check`)" % (width, "", src, val))
@@ -388,13 +392,22 @@ def cmd_migrate(args: argparse.Namespace) -> int:
 
 def _probe(url: str) -> str:
     req = urllib.request.Request(url, method="GET", headers={"User-Agent": "NocAgent-resources/1"})
-    try:
-        with urllib.request.urlopen(req, timeout=5) as resp:   # no credentials are ever sent
-            return "reachable (HTTP %d)" % resp.status
-    except urllib.error.HTTPError as e:
-        return "reachable (HTTP %d)" % e.code
-    except (urllib.error.URLError, OSError, ValueError) as e:
-        return "NOT reachable: %s" % getattr(e, "reason", e)
+    def attempt(context):
+        try:
+            with urllib.request.urlopen(req, timeout=5, context=context) as resp:   # no credentials are ever sent
+                return "reachable (HTTP %d)" % resp.status
+        except urllib.error.HTTPError as e:
+            return "reachable (HTTP %d)" % e.code
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            return e
+    first = attempt(None)
+    if isinstance(first, str):
+        return first
+    if isinstance(getattr(first, "reason", first), ssl.SSLError):     # self-signed certificates are common on monitors
+        second = attempt(ssl._create_unverified_context())
+        if isinstance(second, str):
+            return second.replace(")", ", certificate not trusted)")
+    return "NOT reachable: %s" % getattr(first, "reason", first)
 
 
 def cmd_check(args: argparse.Namespace) -> int:
@@ -413,7 +426,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         if r.conflict:
             status = "FAIL"
             notes += ["%s says %s" % (s, v) for s, v in r.others]
-        if r.value and r.source.startswith(("env", "legacy")):
+        if r.value and not r.in_profile:
             notes.append("not in the profile yet: run `migrate --write`")
         if args.probe and r.value and r.kind == "url" and status != "FAIL":
             notes.append(_probe(r.value))

@@ -71,12 +71,13 @@ unless you opt in to the optional server in T2."
    Code), `codex`, `gemini`, `cursor`, `vscode`, or `generic`. Not sure: `generic`.
 2. **Prerequisites.** Run `python3 --version`, `node --version`, `git --version`.
    Needs python3 3.9+, node 20+ (18 still runs but is end-of-life), git. `sshpass` is
-   optional (only the reprogram and bring-up skills use it). Missing pieces: install
-   hints in `references/phase0-environment.md`.
+   optional (only the reprogram and bring-up skills use it). Install the server's
+   dependencies once, because the demo check in step 6 needs them: `cd server && npm ci`.
+   Missing pieces: install hints in `references/phase0-environment.md`.
 3. **Register the harness.**
    ```bash
    python3 scripts/harness_setup.py --list
-   python3 scripts/harness_setup.py --harness <h> --dry-run
+   python3 scripts/harness_setup.py --harness <h> --write --dry-run
    python3 scripts/harness_setup.py --harness <h> --write
    python3 scripts/harness_setup.py --check --harness <h>
    ```

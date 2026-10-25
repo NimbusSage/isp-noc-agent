@@ -574,7 +574,7 @@ def check_resources(env):
             problems.append(f"{r.name} disagrees between " + " and ".join([r.source] + [s for s, _v in r.others]))
         if not r.value and any(r.credentials.values()):
             problems.append(f"{r.name} has credentials but no address")
-    drift = [r.name for r in have if r.source != "profile" and not r.others]
+    drift = [r.name for r in have if not r.in_profile]
     if problems:
         add("resources", "fail", "; ".join(problems),
             "python3 scripts/resources.py check shows each one; register the right value with: python3 scripts/resources.py set <name> <url>")
