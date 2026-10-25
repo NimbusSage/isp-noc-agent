@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Temp OSPF sheet: read-only inspector and gated row reservation for the temporary-site workflow.
 import { createHash, createSign } from 'node:crypto';
 import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, realpathSync, statSync, unlinkSync } from 'node:fs';
 import { dirname, relative, resolve, sep } from 'node:path';

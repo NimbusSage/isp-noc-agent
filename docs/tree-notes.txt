@@ -1,0 +1,54 @@
+# path :: description. A leading + marks something that exists on your machine but is not in git.
+# Read by scripts/gen_tree.py to annotate the tree in docs/architecture.md.
+.claude/ :: Claude Code rules denying credential reads and blocking secret edits
+.env.example :: All settings the code reads, grouped by tier, with defaults
+.githooks/ :: Pre-commit secret scan and pre-push offline test hooks
+.github/ :: CI workflow, issue templates, pull request template and CODEOWNERS
+.github/ISSUE_TEMPLATE/ :: Bug report and feature request issue templates
+.github/workflows/ :: CI workflow definition
+.gitignore :: Excludes .env, logs, credentials and real site-pack data from git
+.gitleaks.toml :: Gitleaks CI scan config; test file fake credentials are allowed
+.mcp.json :: Registers the MCP server for Claude Code
+.opencode/ :: Parent directory for the skills folder
+.opencode/skills/ :: One folder per skill; agent loads each on demand from SKILL.md
+AGENTS.md :: Agent instructions: ticket workflow gates, thresholds, exit codes and credential rules
+CLAUDE.md :: Imports AGENTS.md for Claude Code and states credential rules
+CONTRIBUTING.md :: Contribution guide: protected files, skill tiers, sign-off, hooks and secrets
+LICENSE :: GPL-3.0
+README.md :: Entry point: two run modes, prerequisites and documentation index
+SECURITY.md :: How to report a vulnerability or a leaked secret
+deploy/ :: systemd templates for the webhook service and backup, evals and metrics timers
+docs/ :: Operator manual pages
+docs/n8n/ :: Importable n8n workflow JSON
+docs/setup/ :: NOC ticket tracker Google Sheet template
+evals/ :: Regression evaluation of the ticket classifier against a golden set
+mcp-server/ :: TypeScript MCP server: allowlisted device diagnostics, gated write tools, encrypted credentials
+mcp-server/config/ :: Credential template and server settings file
+mcp-server/scripts/ :: Script that encrypts credentials.json into credentials.enc
+mcp-server/src/ :: TypeScript source of the MCP server
+mcp-server/src/audit/ :: Audit log writer: one record per tool call, allowed or blocked
+mcp-server/src/commands/ :: Per-device-type command allowlist, parameter checks and read-only validator
+mcp-server/src/config/ :: Server settings schema and repo-root .env fallback loader
+mcp-server/src/credentials/ :: Credential store formats, encrypted store and exact-device resolution
+mcp-server/src/devices/ :: Device clients for MikroTik, UISP, airOS and Wave
+mcp-server/src/inventory/ :: Exact-IP device lookup in LibreNMS inventory
+mcp-server/src/redaction/ :: Redacts secrets from command output before it is returned
+mcp-server/src/security/ :: SSH host-key pinning, host rules and command-value allowlists
+mcp-server/src/temp-site/ :: Gated executors for temporary-site tools: airOS radio, RouterOS OSPF, snapshots
+mcp-server/src/writes/ :: Gated RouterOS write executor: PoE and interface operations
+opencode.json :: Registers the MCP server for OpenCode
+package-lock.json :: Lockfile for the root package.json
+package.json :: Root dependency for scripts/wave_gui.mjs (puppeteer-core)
+scripts/ :: Deterministic ops scripts in Python, Node and shell, plus their tests
+scripts/demo/ :: Fixtures and files for the zero-credential demo
+scripts/hooks/ :: Claude Code hook that blocks edits writing secrets
+server/ :: Node.js/Express webhook server and its batch prompt template
+site-pack/ :: Your organization's own data; only the README and examples are tracked
+site-pack/example/ :: Fictional example data files to copy and fill in
++.env :: Your settings and secrets; created from .env.example, never committed
++logs/ :: Runtime logs and state files; never committed
++mcp-server/dist/ :: MCP server build output from npm run build
++mcp-server/config/credentials.json :: Plaintext device credentials; delete after encrypting
++mcp-server/config/credentials.enc :: Encrypted device credential store
++mcp-server/state/ :: Rollback snapshots written by the temporary-site tools
++site-pack/profile.json :: Your organization's profile: Sonar IDs, names and settings

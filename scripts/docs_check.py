@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """docs_check.py - verify the operator manual wiring.
 
-Four gates:
+Six gates:
 1. Links: every local markdown link target in README.md and docs/**/*.md
    (including docs/setup/ and docs/n8n/) must resolve on disk (anchors and
    queries stripped; external schemes ignored; fenced code blocks ignored).
@@ -17,6 +17,12 @@ Four gates:
    `# NAME=` line). Undocumented = failure. Documented but never read = a
    warning only. System/derived/internal names live in scripts/env_ignore.txt,
    each with a reason (`NAME  # reason`, `NAME_*` globs, `file:PATH  # reason`).
+
+5. Skills: every .opencode/skills/<name>/ folder must be named in docs/skills.md.
+
+6. Tree: the layout in docs/architecture.md must match `git ls-files` and every
+   directory must have a line in docs/tree-notes.txt (scripts/gen_tree.py --write
+   refreshes it).
 
 Exit 0 = clean, 1 = anything broken. Run in CI and before doc-heavy commits.
 """
@@ -190,6 +196,32 @@ def check_env(root: Path):
     return undocumented, unread, errors
 
 
+def check_skills_index(root: Path):
+    """Skill folders that docs/skills.md never names."""
+    skills_doc = root / "docs" / "skills.md"
+    text = read(skills_doc) if skills_doc.exists() else ""
+    folder = root / ".opencode" / "skills"
+    if not folder.is_dir():
+        return []
+    return sorted(d.name for d in folder.iterdir()
+                  if d.is_dir() and (d / "SKILL.md").exists() and f"skills/{d.name}/" not in text)
+
+
+def check_tree():
+    """Problems with the generated layout in docs/architecture.md (empty when current)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import gen_tree
+    files, notes = gen_tree.tracked(), gen_tree.load_notes()
+    issues = gen_tree.problems(files, notes)
+    doc = gen_tree.DOC.read_text() if gen_tree.DOC.exists() else ""
+    if gen_tree.START not in doc or gen_tree.END not in doc:
+        issues.append(f"docs/architecture.md has no {gen_tree.START} ... {gen_tree.END} markers")
+    elif doc[doc.index(gen_tree.START): doc.index(gen_tree.END) + len(gen_tree.END)] != gen_tree.block(
+            gen_tree.render(gen_tree.build(files, notes), notes)):
+        issues.append("docs/architecture.md tree is stale: run python3 scripts/gen_tree.py --write")
+    return issues
+
+
 def main() -> int:
     md_files = [README] if README.exists() else []
     md_files += sorted(DOCS.rglob("*.md")) if DOCS.is_dir() else []
@@ -241,6 +273,17 @@ def main() -> int:
         for n, fs in sorted(env_undoc.items()):
             print(f"  {n}  ({', '.join(fs[:3])}{', ...' if len(fs) > 3 else ''})")
 
+    skills_missing = check_skills_index(ROOT)
+    if skills_missing:
+        print("SKILLS NOT LISTED IN docs/skills.md:")
+        for n in skills_missing:
+            print("  " + n)
+    tree_issues = check_tree()
+    if tree_issues:
+        print("LAYOUT TREE:")
+        for t in tree_issues:
+            print("  " + t)
+
     if missing_index:
         print("README INDEX ENTRIES WITH NO FILE:")
         for b in missing_index:
@@ -253,9 +296,9 @@ def main() -> int:
         print("UNREFERENCED DOCS:")
         for o in orphans:
             print("  " + o)
-    if not (broken or missing_index or orphans or env_undoc or env_errors):
+    if not (broken or missing_index or orphans or env_undoc or env_errors or skills_missing or tree_issues):
         print(f"docs check OK - {len(md_files)} files link-checked (README + docs/**), "
-              "all local links resolve, every docs file indexed or referenced; "
+              "all local links resolve, every docs file indexed or referenced, every skill listed, layout tree current; "
               f"every env var the code reads is in .env.example ({len(env_unread)} warning(s))")
         return 0
     return 1
