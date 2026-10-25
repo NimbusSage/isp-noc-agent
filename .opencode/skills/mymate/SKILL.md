@@ -7,11 +7,11 @@ description: Use when querying your org's MyMate network monitor (`<mymate-base-
 
 ## Overview
 
-MyMate (mymate.network) is the operator's network monitor (a modern replacement for MikroTik The Dude). It pings every device for up/down, tracks outages and alert events, draws a live topology map, and exposes a REST JSON API. Deployed at `https://10.0.0.7`, version **1.7.2** (this skill was written against 1.4.0; the sonar-tickets section was verified on 1.7.2). This skill documents how the NOC agent reads monitored state through that API using the read-only `nocagent` operator account.
+MyMate (mymate.network) is the operator's network monitor (a modern replacement for MikroTik The Dude). It pings every device for up/down, tracks outages and alert events, draws a live topology map, and exposes a REST JSON API. Its address is printed by `python3 scripts/resources.py get mymate`; version **1.7.2** (this skill was written against 1.4.0; the sonar-tickets section was verified on 1.7.2). This skill documents how the NOC agent reads monitored state through that API using the read-only `nocagent` operator account.
 
 ## Auth (session login)
 
-- **Base URL:** `https://10.0.0.7` — self-signed TLS, so every request needs `-k`
+- **Base URL:** `python3 scripts/resources.py get mymate` (the `MYMATE_URL` setting) — self-signed TLS, so every request needs `-k`
 - **Credentials in `.env`:** `MYMATE_URL`, `MYMATE_USER`, `MYMATE_PASS`
 - **The `nocagent` account is admin** (verified: `is_admin:true`,
   same-value `PATCH /api/devices/<device-id>` returned 200). Writes technically work —

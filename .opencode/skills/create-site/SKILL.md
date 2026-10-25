@@ -97,11 +97,14 @@ landed between `Hmike` and `Hotel WT North (Upper)`).
 
 ## UISP site (verified working)
 
+Address: `UISP=$(python3 scripts/resources.py get uisp)`. If it is not registered, stop and ask
+the operator; do not take a UISP address from another system. For the MCP `ubnt-uisp` tool the
+host is `python3 scripts/resources.py get uisp --field host`.
 Token: the `ubnt-uisp` credential field **`apiToken`** from the MCP
 encrypted store (header `x-auth-token`).
 
 ```bash
-POST /nms/api/v2.1/sites  -d '{"name":"Hotel Fiber Cabinet","type":"site"}'
+POST $UISP/nms/api/v2.1/sites  -d '{"name":"Hotel Fiber Cabinet","type":"site"}'
 ```
 - FLAT payload — no `{"data":{...}}` wrapper ("name is required" 400 otherwise).
 - **`geoposition` is NOT accepted** on create or update; there is no geolink

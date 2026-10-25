@@ -271,5 +271,39 @@ class TestCommittedTree(unittest.TestCase):
         self.assertEqual(verdict["violations"], [])
 
 
+class LookalikeLiteralTests(LintCase):
+    def skill(self, body, files=None):
+        text = GOOD.replace("```bash\necho hello\n```\n", body)
+        write_skill(self.repo, "demo", text, files)
+        return rules(self.repo)
+
+    def test_private_ip_in_a_shell_command_is_flagged(self):
+        self.assertIn("command-literal", self.skill("```bash\nssh admin@10.9.8.7 '/system identity print'\n```\n"))  # secret-scan:allow(fictional address used as lint test input)
+
+    def test_example_host_in_a_shell_command_is_flagged(self):
+        self.assertIn("command-literal", self.skill('```bash\ncurl -sS "https://uisp.example.com/nms/api"\n```\n'))
+
+    def test_placeholders_comments_and_192_168_are_fine(self):
+        body = "```bash\n# ssh admin@10.9.8.7\nssh admin@<router_ip> '/ip address add address=192.168.1.1/24'\n```\n"  # secret-scan:allow(fictional address used as lint test input)
+        self.assertNotIn("command-literal", self.skill(body))
+
+    def test_an_example_tagged_fence_and_output_fences_are_exempt(self):
+        body = "```bash example\nssh admin@10.9.8.7\n```\n\n```\n1 10.9.8.1\n```\n"  # secret-scan:allow(fictional address used as lint test input)
+        self.assertNotIn("command-literal", self.skill(body))
+
+    def test_inline_url_command_is_flagged_but_plain_prose_address_is_not(self):
+        self.assertIn("command-literal", self.skill("Use `GET http://10.9.8.7:8888/node/fetch/<ip>`.\n"))  # secret-scan:allow(fictional address used as lint test input)
+        self.assertNotIn("command-literal", self.skill("The tower router is `10.9.8.7` in this example.\n"))  # secret-scan:allow(fictional address used as lint test input)
+
+    def test_references_are_checked_too(self):
+        self.assertIn("command-literal", self.skill("text\n", {"references/a.md": "```bash\nping 10.9.8.7\n```\n"}))  # secret-scan:allow(fictional address used as lint test input)
+
+    def test_three_lookalikes_need_the_notice(self):
+        body = "Hops 10.1.1.1, 10.1.1.2 and 10.1.1.3 are examples.\n"  # secret-scan:allow(fictional address used as lint test input)
+        self.assertIn("example-notice", self.skill(body))
+        self.assertNotIn("example-notice", self.skill(body + sl.EXAMPLE_NOTICE + "\n"))
+        self.assertNotIn("example-notice", self.skill("Hops 10.1.1.1 and 10.1.1.2.\n"))  # secret-scan:allow(fictional address used as lint test input)
+
+
 if __name__ == "__main__":
     unittest.main()

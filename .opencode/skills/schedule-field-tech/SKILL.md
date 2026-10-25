@@ -65,7 +65,6 @@ calendar exists only where that account holds owner/writer access.
 ## Helper contract
 
 ```bash
-set -a; . ./.env; set +a
 node scripts/schedule_dispatch.mjs oauth-url                       # one-time consent (calendar scopes)
 node scripts/schedule_dispatch.mjs oauth-bootstrap --code <CODE>   # one-time token storage (0600 file)
 node scripts/schedule_dispatch.mjs resolve --ticket <ticket-id> --tech "Tech One"   # read-only plan

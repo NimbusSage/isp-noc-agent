@@ -5,6 +5,8 @@ description: Use when an operator asks to undo, remove, or roll back a temporary
 
 # Temporary Site Connection — Undo
 
+> **Examples:** addresses and names in this skill belong to a fictional network. This organization's real ones come from `python3 scripts/resources.py list` and `site-pack/`; never reuse an example.
+
 Reverses exactly one temp connection built under `temp-site-connection`. The trigger is an explicit operator request naming the incident (e.g. `undo the Papa temp connection`, incident `INC-EX-01`). The incident ID is the key to everything: radio snapshots, OSPF tags, and the sheet row are all bound to it.
 
 ## Authority and gates (same as forward — no new permissions)

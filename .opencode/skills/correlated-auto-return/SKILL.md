@@ -5,6 +5,8 @@ description: Use when a DEGRADED bottleneck analysis has correlated downstream t
 
 # Correlated Auto-Return — DEGRADED Downstream → CS Level 2
 
+> **Examples:** addresses and names in this skill belong to a fictional network. This organization's real ones come from `python3 scripts/resources.py list` and `site-pack/`; never reuse an example.
+
 When a tower’s network path is DEGRADED and another active ticket is downstream of the same critical device, the downstream will not clear until the upstream is fixed. Bounce the downstream to CS with a link to the upstream.
 
 ## When to Run

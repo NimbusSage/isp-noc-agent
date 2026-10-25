@@ -12,15 +12,15 @@ for pw in "${PW_POOL[@]}"; do SSHPASS="$pw" sshpass -e ssh admin@$RR '...' && br
 
 ## Live Template Fetch
 
-**RR side** (existing peer): `ssh admin@10.0.20.1 '/routing/bgp/connection print detail where remote.address=10.0.200.30'` (xray) →
+**RR side** (existing peer): `ssh admin@<rr_ip> '/routing/bgp/connection print detail where remote.address=<tower_ip>'` (an existing peer) →
 ```
-remote.address=10.0.200.30 .as=<REMOTE_AS> local.address=10.0.20.1 .role=ibgp-rr routing-table=main templates=default as=<REMOTE_AS> multihop=yes cisco-vpls-nlri-len-fmt=auto-bits output.network=bgp-networks
+remote.address=<tower_ip> .as=<REMOTE_AS> local.address=<rr_ip> .role=ibgp-rr routing-table=main templates=default as=<REMOTE_AS> multihop=yes cisco-vpls-nlri-len-fmt=auto-bits output.network=bgp-networks
 ```
 Copy `remote.as`, `templates`, `multihop`, `output.network`, `cisco-vpls-nlri-len-fmt`, `output.filter-chain` if present, `local.role`.
 
-**Tower side** (existing delta peer): `ssh admin@10.0.200.31 '/routing/bgp/connection print detail where name~delta'` →
+**Tower side** (existing delta peer): `ssh admin@<tower_ip> '/routing/bgp/connection print detail where name~<peer_name>'` →
 ```
-remote.address=10.0.22.1/32 .as=<REMOTE_AS> local.address=10.0.200.31 .role=ibgp ... output.network=bgp-networks
+remote.address=<rr_ip>/32 .as=<REMOTE_AS> local.address=<tower_ip> .role=ibgp ... output.network=bgp-networks
 ```
 If `instance=bgp-instance-1` present (e.g. `Whiskey 10.0.200.31` on RouterOS `7.22.3`), include it — RouterOS `missing value instance` error otherwise. Detect via `system resource print version` or via `connection print detail` containing `instance=`.
 

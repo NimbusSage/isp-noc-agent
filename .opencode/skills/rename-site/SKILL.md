@@ -5,6 +5,8 @@ description: Use when an operator asks to rename a site after a tower-host or ow
 
 # Rename Site
 
+> **Examples:** addresses and names in this skill belong to a fictional network. This organization's real ones come from `python3 scripts/resources.py list` and `site-pack/`; never reuse an example.
+
 Rename every network object carrying a site's prefix after a tower-host change. Two modes: full `Rename site <OLD> to <NEW>` (identities + radios + SSIDs + Netonix + MyMate) and SSID-only `Rename SSIDs at <SITE> from <OLD> to <NEW>` (SSID fast path).
 
 **Execution model v2: agent-driven.** The agent plans from read-only discovery, confirms the rename table with the operator, then executes end to end via `scripts/airos_rename.py` (airOS: snapshot → anchored single-key set → re-read verify → `softrestart save` → post-verify → snapshot restore on any miss) or `scripts/wave_rename.py` (WaveOS: `ucfg show` snapshot → `ucfg edit` filter → re-read verify → `ucfg commit` → post-verify + `apstats -R` → key restore on any miss), one device at a time with readback between steps. Infra pools (`ubnt-airos`, `ubnt-wave`) for APs/backhauls, separate customer pool (`customer-airos`/`customer-mt`) for CPEs — never mixed. Direct SSH happens only inside those scripts (stored creds, priority order, password never printed); never ad-hoc SSH or model-generated config text.

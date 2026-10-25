@@ -5,6 +5,8 @@ description: Use when posting bottleneck analyzer results as Sonar ticket commen
 
 # Comment Formatting — Bottleneck Analyzer Results
 
+> **Examples:** addresses and names in this skill belong to a fictional network. This organization's real ones come from `python3 scripts/resources.py list` and `site-pack/`; never reuse an example.
+
 ## Do Not Post Failed Results
 
 **IMPORTANT:** If the analyzer test fails (e.g., site not found, API error, timeout, connection refused), do NOT post a comment to the ticket. A failed analysis result is not useful to anyone — it just creates noise. Log the error and move on.

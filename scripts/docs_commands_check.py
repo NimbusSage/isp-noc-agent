@@ -7,7 +7,11 @@ mcp-server/README.md, site-pack/README.md and .opencode/skills/**/*.md, and fail
   1. a `scripts/<name>.<ext>` file is referenced but does not exist;
   2. a `--flag` written on the same command as `python3 scripts/x.py`, `node scripts/x.mjs`
      or `bash scripts/x.sh` is not mentioned anywhere in that script's source;
-  3. an UPPER_SNAKE variable that carries a known settings prefix (NOC_, AGENT_, WEBHOOK_,
+  3. an address that looks like a real resource (10.x, 172.16-31.x, *.example.com) is the target of a
+     command in a docs page: a model or a reader takes it for the real one. Use a <placeholder>, or
+     tag the fence `bash example` for a deliberate fictional sample. (Skills get the same rule from
+     skills_lint.py.)
+  4. an UPPER_SNAKE variable that carries a known settings prefix (NOC_, AGENT_, WEBHOOK_,
      BOUNCE_, PEAK_, NOTIFY_ ...) is named in a doc but is neither read by the code,
      nor listed in .env.example, nor ignored in scripts/env_ignore.txt. This is what catches
      a renamed or mangled variable name.
@@ -24,6 +28,7 @@ from typing import Dict, Iterable, List, Set, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import docs_check  # noqa: E402
+import skills_lint  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -74,6 +79,11 @@ def check(root: Path = ROOT) -> List[Tuple[str, int, str]]:
     for f in doc_files(root):
         rel = f.relative_to(root).as_posix()
         text = f.read_text(errors="ignore")
+        if not rel.startswith(".opencode/skills/"):
+            doc_lines = text.splitlines()
+            doc_blocks, _open = skills_lint.scan_fences(doc_lines)
+            for hit in skills_lint.literal_findings("docs", rel, doc_lines, doc_blocks):
+                findings.append((rel, hit["line"], hit["message"].split(": ", 1)[1]))
         for n, line in enumerate(text.splitlines(), 1):
             for m in SCRIPT_REF.finditer(line):
                 ref = m.group(1)

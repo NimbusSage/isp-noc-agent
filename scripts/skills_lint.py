@@ -23,6 +23,12 @@ Rules (rule id: meaning)
                        "the skill tool", "question tool")
   midword-placeholder  `<x>` glued to a word, such as tower<N>s
   secret-literal       literal secret in a shell block (via secret_scan)
+  command-literal      a lookalike address (10.x, 172.16-31.x, *.example.com, *.invalid) used as the
+                       target of a command: in a bash/sh fence, or in inline code that is a command or
+                       URL. Use a <placeholder> or `python3 scripts/resources.py get <name>`; tag a fence
+                       `bash example` to mark a deliberate fictional sample
+  example-notice       a skill with 3 or more lookalike addresses lacks the standard notice that they
+                       belong to a fictional network (see EXAMPLE_NOTICE)
   agents-size          AGENTS.md above 30 KB (Codex reads only 32 KiB by default)
 
 Ratchet: scripts/skills_lint.baseline.json records today's counts. The default
@@ -79,6 +85,17 @@ PATH_RE = re.compile(
     r"(?<![\w/.\-<{$])((?:references|scripts|docs|evals|server|mcp-server)/[A-Za-z0-9_.\-/]+"
     r"\.(?:json|jsonl|md|py|mjs|js|ts|sh|yml|yaml|txt|toml)(?![A-Za-z0-9_]))"
 )
+# Addresses that look like a real resource. 192.168.x is left out on purpose: skills use it for device
+# factory defaults and temporary procedure subnets, which are constants of the procedure.
+LOOKALIKE_RE = re.compile(
+    r"(?<![\w.])(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(?![\d.]*\d)"
+    r"|[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.(?:example\.(?:com|net|org)|invalid)\b")
+INLINE_CODE_RE = re.compile(r"`([^`\n]+)`")
+COMMAND_HINT_RE = re.compile(r"^(?:ssh|curl|ping|telnet|nc|wget|scp|sshpass|node|python3|GET|POST|PUT|PATCH|DELETE)\b|https?://|@\d")
+COMMAND_FENCES = {"sh", "bash", "shell", "console", "zsh", "terminal"}
+NOTICE_MIN_LITERALS = 3
+EXAMPLE_NOTICE = ("> **Examples:** addresses and names in this skill belong to a fictional network. This organization's "
+                  "real ones come from `python3 scripts/resources.py list` and `site-pack/`; never reuse an example.")
 FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})\s*([A-Za-z0-9_+-]*)")
 
 Finding = Dict[str, Any]
@@ -216,6 +233,35 @@ def load_secret_scan(repo: Path) -> Any:
         return None
 
 
+def literal_findings(skill: str, label: str, lines: List[str], blocks: List[Tuple[int, int, str]]) -> List[Finding]:
+    """command-literal: a lookalike address used as a command target (see the rule list above)."""
+    out: List[Finding] = []
+    spans = [(a, b, lang) for a, b, lang in blocks]
+    for number, line in enumerate(lines, start=1):
+        span = next(((a, lang) for a, b, lang in spans if a <= number <= b), None)
+        if span is not None:
+            first_body, lang = span
+            tags = lines[first_body - 2].replace("`", " ").replace("~", " ").lower().split()[1:] if first_body >= 2 else []
+            if lang in COMMAND_FENCES and "example" not in tags and not line.lstrip().startswith("#"):
+                if LOOKALIKE_RE.search(line):
+                    out.append(_finding(skill, "command-literal", number,
+                                        "%s: a command uses an address that looks like a real resource; use a <placeholder> "
+                                        "or `python3 scripts/resources.py get <name>`" % label))
+            continue
+        if re.match(r"^\s*(`{3,}|~{3,})", line):
+            continue
+        for match in INLINE_CODE_RE.finditer(line):
+            code = match.group(1)
+            if LOOKALIKE_RE.search(code) and COMMAND_HINT_RE.search(code):
+                out.append(_finding(skill, "command-literal", number,
+                                    "%s: inline command or URL %r uses an address that looks like a real resource" % (label, code[:60])))
+    return out
+
+
+def count_lookalikes(lines: List[str]) -> int:
+    return sum(len(LOOKALIKE_RE.findall(line)) for line in lines)
+
+
 def lint_skill(repo: Path, skill_dir: Path, scanner: Any) -> Tuple[List[Finding], int]:
     skill = skill_dir.name
     out: List[Finding] = []
@@ -277,6 +323,18 @@ def lint_skill(repo: Path, skill_dir: Path, scanner: Any) -> Tuple[List[Finding]
             if (not (skill_dir / ref).exists() and not (repo / ref).exists()
                     and not is_gitignored(repo, ref)):
                 out.append(_finding(skill, "dangling-link", number, "referenced path %s does not exist" % ref))
+
+    refs = sorted((skill_dir / "references").rglob("*.md")) if (skill_dir / "references").is_dir() else []
+    literals = count_lookalikes(lines)
+    out += literal_findings(skill, "SKILL.md", lines, blocks)
+    for ref in refs:
+        ref_lines = ref.read_text(encoding="utf-8", errors="replace").splitlines()
+        ref_blocks, _ = scan_fences(ref_lines)
+        literals += count_lookalikes(ref_lines)
+        out += literal_findings(skill, ref.relative_to(skill_dir).as_posix(), ref_lines, ref_blocks)
+    if literals >= NOTICE_MIN_LITERALS and not ("fictional network" in text and "resources.py" in text):
+        out.append(_finding(skill, "example-notice", 1, "%d lookalike addresses but no notice that they are fictional; add: %s"
+                            % (literals, EXAMPLE_NOTICE)))
 
     if scanner is not None:
         for start, end, lang in blocks:

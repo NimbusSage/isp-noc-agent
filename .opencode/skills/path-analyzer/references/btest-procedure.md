@@ -16,7 +16,7 @@ From tower router `10.0.1.1` to fiber `10.0.5.1`:
 
 ```bash
 export PW="${BTEST_PASSWORD:?set BTEST_PASSWORD in the environment (operator-supplied, see .env.example); never read credentials.json}"
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@10.0.1.1 "/tool bandwidth-test address=10.0.5.1 user=admin password=\"$PW\" protocol=tcp duration=5 direction=both"
+SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_router_ip> "/tool bandwidth-test address=<fiber_ip> user=admin password=\"$PW\" protocol=tcp duration=5 direction=both"
 # status: running duration 3s tx-current 71.3Mbps rx-current 201.1Mbps ...
 # status: done tx-10s-avg 64.1Mbps rx-avg 194.2Mbps local-cpu 41% remote 24%
 ```
@@ -36,12 +36,12 @@ Cap 8 hops, serial only, total wall ~ `hops * (duration+startup+ssh)` ≤ 10 min
 Get /30 peer first:
 
 ```bash
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@10.0.1.1 '/routing ospf neighbor print'
+SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_router_ip> '/routing ospf neighbor print'
 # 0 D address=10.0.2.2 router-id=10.0.2.2 state Full
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@10.0.1.1 '/ip address print where interface=ether1'
+SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_router_ip> '/ip address print where interface=ether1'
 # 10.0.2.1/30 network 10.0.2.0 → peer is 10.0.2.2
 
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@10.0.1.1 "/tool bandwidth-test address=10.0.2.2 user=admin password=\"$PW\" protocol=tcp duration=5 direction=both"
+SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_router_ip> "/tool bandwidth-test address=<next_hop_ip> user=admin password=\"$PW\" protocol=tcp duration=5 direction=both"
 # 919.9Mbps tx / 860.9Mbps rx local-cpu 94% remote 83% + warning "results can be limited by cpu, note that traffic generation/termination performance might not be representative of forwarding performance"
 ```
 

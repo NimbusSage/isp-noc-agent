@@ -26,6 +26,8 @@ class Scaffold(unittest.TestCase):
         (self.root / "docs").mkdir()
         (self.root / "AGENTS.md").write_text(AGENTS)
         (self.root / "docs" / "skills.md").write_text(SKILLS_DOC)
+        (self.root / "scripts").mkdir()
+        (self.root / "scripts" / "resources.py").write_text("")   # the scaffold points at it
 
     def run_main(self, *argv):
         out, err = io.StringIO(), io.StringIO()

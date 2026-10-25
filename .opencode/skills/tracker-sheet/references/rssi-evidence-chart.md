@@ -25,10 +25,10 @@ the LibreNMS live graph one click away.
   Resolve the UISP device ids from the NMS device list by mgmt IP; the MyMate `links` cache and
   the device record give both endpoints (`lima2mike` AP 10.0.81.58 ↔ `Lima2Mike ST` 10.0.81.59).
 - **LibreNMS CANNOT serve graph images via the API token on this install:**
-  `http://10.0.0.5/graph?type=device_wireless_rssi&device=<device_id>&from=<epoch>&height=598&width=2022` and the
+  `<LIBRENMS_URL>/graph?type=device_wireless_rssi&device=<device_id>&from=<epoch>&height=598&width=2022` and the
   clean `/graphs/type=…` routes 500 without an interactive web session (verified; `/api/v0` has no graphs route).
   The staff/manual reference (requires a logged-in browser) is the operator's usual chart:
-  `http://10.0.0.5/graph?type=device_wireless_rssi&device=<device_id>&from=<epoch>&height=598&width=2022`.
+  `<LIBRENMS_URL>/graph?type=device_wireless_rssi&device=<device_id>&from=<epoch>&height=598&width=2022`.
   **Authentic LibreNMS render — WORKS (server + client both fixed; verified end-to-end):**
   `--librenms-render` fetches the real LibreNMS-rendered graph. Worked example: a ticket comment with
   two files (LibreNMS native, 1771×754, and the self-render) — DECIDED (operator, after the

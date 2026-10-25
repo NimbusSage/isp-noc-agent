@@ -154,21 +154,36 @@ Full walkthrough with the credentials layout: `references/tier1-devices.md`.
    - `encrypt` does NOT delete the plaintext. The operator removes it
      (`shred -u config/credentials.json`, or `rm` where shred is missing). Confirm
      with `ls mcp-server/config`: `credentials.enc` present, `credentials.json` gone.
-3. **LibreNMS and btest.** `LIBRENMS_URL` is not secret (for example
-   `http://10.0.x.y`): the operator sets it with `env_set.py` or an editor. Secrets,
+3. **Register the services.** This is what makes the agent use YOUR UISP, LibreNMS,
+   MyMate and Oxidized, never an example address from a skill.
+   - See what is already known: `python3 scripts/resources.py migrate` (reads `.env`,
+     older profile keys and `site-pack/devices.md`; prints addresses, never secrets).
+   - Confirm each address with the operator, then register it. `python3 scripts/resources.py
+     migrate --write` registers what `.env` and the old profile already hold;
+     `python3 scripts/resources.py set <name> <url>` registers the rest (`uisp`,
+     `librenms`, `mymate`, `oxidized`; the sheets are set in T3). A line marked
+     `suggestion only` came from a device table and is not proof: ask which URL people
+     actually open (a host name often works where the raw IP rejects the token).
+   - Do this only because the operator asked; the agent never registers a service on
+     its own. A service they do not run stays `NOT REGISTERED` and its skills stay off.
+   - Proof: `python3 scripts/resources.py check --probe` lists each registered URL as
+     reachable, and `python3 scripts/doctor.py --only resources` is PASS.
+4. **LibreNMS and btest.** The LibreNMS address is not secret: register it in step 3. Secrets,
    run by the operator: `python3 scripts/env_set.py NOC_MCP_PASSPHRASE LIBRENMS_TOKEN
    BTEST_PASSWORD` for any of them still missing (skip a key you do not have; ask
    what each is for from `references/tier1-devices.md`).
-4. **Read-host policy.** The MCP server only connects to private, loopback and
-   link-local addresses by default. If the gear uses CGNAT (carrier-grade NAT) or public
-   addresses, the operator sets `NOC_READ_ALLOWED_HOSTS` (comma list of exact IPs and
-   CIDRs; it REPLACES the default, so include the private ranges too).
-5. **Verify:** `python3 scripts/doctor.py --tier 1`
+5. **Read-host policy.** The MCP server only connects to private, loopback and
+   link-local addresses by default, plus the host of a registered service for the device
+   type that uses it (the UISP host name for `ubnt-uisp`, no list entry needed). If the
+   gear uses CGNAT (carrier-grade NAT) or public addresses, the operator sets
+   `NOC_READ_ALLOWED_HOSTS` (comma list of exact IPs and CIDRs; it REPLACES the default,
+   so include the private ranges too).
+6. **Verify:** `python3 scripts/doctor.py --tier 1`
    Proof: `[PASS] mcp_store  decrypt-ok devicetypes=N` and, if you configured it,
    `[PASS] librenms ...`. Failure: `references/tier1-devices.md` (wrong passphrase,
    missing dist, host blocked). Skip: tell them path analysis, wireless health and
    device lookups stay off; tickets can still be analyzed from Sonar text alone.
-6. **First read-only smoke test** (ask for one router address they own and confirm it
+7. **First read-only smoke test** (ask for one router address they own and confirm it
    is inside the allowed hosts):
    ```bash
    cd mcp-server
@@ -290,7 +305,7 @@ claiming it is ready.
 | `[  -  ] mcp_store` | passphrase or `credentials.enc` missing | T1 step 2 |
 | `[FAIL] mcp_store` wrong passphrase | `.enc` made with a different passphrase | re-encrypt from plaintext with the current one |
 | `[WARN] mcp_store` dist missing | not built | `cd mcp-server && npm ci && npm run build` |
-| tool says host not permitted | read-host policy | set `NOC_READ_ALLOWED_HOSTS` (T1 step 4) |
+| tool says host not permitted | read-host policy | register the service (T1 step 3) or set `NOC_READ_ALLOWED_HOSTS` (T1 step 5) |
 | `[FAIL] sonar_api` 401 or 403 | bad or under-privileged token | new token via `env_set.py SONAR_TOKEN` |
 | `[WARN] site_profile` | no `site-pack/profile.json` | T2 step 2 |
 | `[FAIL] oauth_files` file too open | OAuth file not 0600 | `chmod 600` it; parent folder `chmod 700` |

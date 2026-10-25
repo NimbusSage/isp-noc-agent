@@ -5,6 +5,8 @@ description: Use when an operator asks to create or file a NOC ticket in natural
 
 # Tracker Sheet — Natural-Language Ticket Filing
 
+> **Examples:** addresses and names in this skill belong to a fictional network. This organization's real ones come from `python3 scripts/resources.py list` and `site-pack/`; never reuse an example.
+
 Turns `create a ticket for <site/device>, <problem>[, <contact note>]` into one
 validated row in `NOC Ticket Tracker 2.1`
 (spreadsheet id set locally via `TRACKER_SPREADSHEET_ID` from the sheet URL, tab `NOC Ticket Tracker`).
@@ -165,7 +167,6 @@ A `turned` claim needs a step-drop, not a drift:
 ## 10. Helper contract (only write path)
 
 ```bash
-set -a; . ./.env; set +a
 node scripts/tracker_sheet.mjs inspect
 node scripts/tracker_sheet.mjs plan-append --data '{...}'
 node scripts/tracker_sheet.mjs append --data '{...}' --confirm-write true

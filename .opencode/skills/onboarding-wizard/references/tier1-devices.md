@@ -51,12 +51,13 @@ Operator steps (the agent never opens either file):
 | Key | Secret? | Purpose |
 |---|---|---|
 | `NOC_MCP_PASSPHRASE` | yes | decrypts the device store |
-| `LIBRENMS_URL` | no | for example `http://10.0.x.y`; sysName, hardware and location lookups |
+| `LIBRENMS_URL` | no | register it with `resources.py set librenms <url>`; sysName, hardware and location lookups |
 | `LIBRENMS_TOKEN` | yes | LibreNMS API token (`X-Auth-Token`), read access |
 | `BTEST_PASSWORD` | yes | RouterOS bandwidth-test password the path analyzer passes to `tool bandwidth-test` |
 | `NOC_READ_ALLOWED_HOSTS` | no | read-host policy, below |
 | `EDGE_ROUTER_IPS`, `RDS2216_SUBNET` | no | fiber-edge hints for the path walk; usually filled from the site pack |
-| `MYMATE_URL`, `MYMATE_USER`, `MYMATE_PASS` | pass: yes | optional MyMate monitor |
+| `MYMATE_URL`, `MYMATE_USER`, `MYMATE_PASS` | pass: yes | optional MyMate monitor; register the URL with `resources.py set mymate <url>` |
+| `UISP_BASE_URL`, `OXIDIZED_BASE_URL` | no | optional; usually registered with `resources.py set uisp <url>` and `resources.py set oxidized <url>` instead |
 
 Secrets: `python3 scripts/env_set.py NOC_MCP_PASSPHRASE LIBRENMS_TOKEN BTEST_PASSWORD`
 run by the operator (already-set keys can be skipped; the tool reports what is
@@ -72,6 +73,9 @@ comma list of exact IPs and CIDRs, for example
 private ranges again if you still want them. A malformed entry blocks all connections
 until fixed. Needed for CGNAT or public-addressed management gear.
 Hostnames are never resolved; they match only if listed verbatim.
+One addition needs no list: the host of a registered service (`python3 scripts/resources.py
+set uisp https://uisp.<your-domain>`) is allowed for the device type that talks to it (UISP
+host for `ubnt-uisp`), and for no other device type, so router credentials can never be sent there.
 
 ## 4. Verify
 

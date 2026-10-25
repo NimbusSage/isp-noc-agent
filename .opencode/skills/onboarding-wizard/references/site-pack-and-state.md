@@ -10,8 +10,10 @@ copy-and-fill examples are in `site-pack/example/`: drop `.example` from the nam
   fiber-topology notes, temp BGP config. The skills read the site pack first. Build it
   by walking the network with the agent over the read-only device path (traceroutes,
   route tables). Never enter geometry from memory without a discovered hop behind it.
-- **Org profile** (`site-pack/profile.json`): Sonar group and category IDs, base URLs,
-  portability tokens. T2 writes it from discovery.
+- **Org profile** (`site-pack/profile.json`): Sonar group and category IDs, the
+  `resources` block (this organization's UISP, LibreNMS, MyMate, Oxidized and Sonar
+  addresses and its sheet IDs; write it with `python3 scripts/resources.py set`, T1 step 3),
+  portability tokens. T2 writes the IDs from discovery.
 - **Device inventory** (`site-pack/devices.md`, example `devices.example.md`) and the
   dispatch tech to calendar map (`site-pack/tech_calendars.json`).
 - **Naming standards** (`site-pack/ticket-context/naming-conventions.md` and

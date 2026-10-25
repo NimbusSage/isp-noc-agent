@@ -41,7 +41,9 @@ One or two sentences: what this skill lets the agent do, and what it never does.
 ## Never
 
 - Put a secret, a real hostname, address, person or ticket number in this file. Name a secret by its
-  environment variable and use `<PLACEHOLDER>` for site data (it belongs in `site-pack/`).
+  environment variable and use `<placeholder>` for site data (it belongs in `site-pack/`).
+- Write a service address as a literal. Look it up with `python3 scripts/resources.py get <name>`
+  (stop and ask the operator when it is not registered).
 - Change a device or Sonar outside a gated tool or script.
 
 ## References

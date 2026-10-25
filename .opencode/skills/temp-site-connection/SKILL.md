@@ -5,6 +5,8 @@ description: Use when an operator asks to connect or restore a temporary path to
 
 # Temporary Site Connection
 
+> **Examples:** addresses and names in this skill belong to a fictional network. This organization's real ones come from `python3 scripts/resources.py list` and `site-pack/`; never reuse an example.
+
 Provides an operator-triggered workflow for restoring reachability to an isolated site or area. It guides discovery, candidate assessment, and—in a specifically configured deployment—inspection or reservation in the `Temp OSPF` Google Sheet. Paths may be direct, multi-hop, or use a wireless AP when a site's router is dead but its switch/radios remain online. The operator has authorized temporary customer disconnection on a donor AP when necessary for an explicitly requested recovery; do not request duplicate approval solely because that AP has customers. Minimize and disclose the expected impact, then restore its original role/configuration after the temporary path is established. Execution uses the live typed MCP executor (see **Live executor reference** below: `temp-radio-*`, `temp-ospf-*`, `temp-mt-*` tools with kill-switch, transport, allowlist, and exact-device-binding gates). The standing authorization covers the donor interruption; the executor's gates cover the technical path.
 
 ## Permission and activation boundary

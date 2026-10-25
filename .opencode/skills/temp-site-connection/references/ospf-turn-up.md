@@ -12,7 +12,7 @@ still `station-bridge → ssid sigma24o` from an earlier incident, live
 signal -60 dBm, while every routed path was dark.)
 
 1. **Oxidized archaeology (read-only HTTP, no MCP needed):**
-   `GET http://10.0.0.6:8888/node/fetch/<donor-ip>` and `/fetch/<island-ip>`.
+   `GET <OXIDIZED_URL>/node/fetch/<donor-ip>` (`python3 scripts/resources.py get oxidized`) and `/fetch/<island-ip>`.
    Donor `mode=station-bridge` + `ssid=<island-ssid>` against island
    `mode=ap-bridge` + same `ssid` = the pair. The donor backup is live
    (device up); the island backup is pre-outage but its ssid/mode stands.

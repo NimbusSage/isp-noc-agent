@@ -5,7 +5,9 @@ description: Use when setting up emergency temp BGP peering for a fiber network 
 
 # Temp BGP Peering — Emergency Fiber Failover
 
-Replicates the manual `Echo 10.0.50.1` fix as code: `traceroute <advertised_subnet>` that should be via BGP but isn't → loops `A-B-A-B` at end → last IP before bounce = tower router that needs `TEMP` peering to the redundant border network's `bgprr`. Handles the `hop-not-peered → downstream black-hole` case seen with `Foxtrot 10.0.60.0/24` looping `10.0.100.2 tango (10.0.101.2) ↔ 10.0.100.1 sierra (10.0.101.1)`; fixing `sierra 10.0.101.1` restored `ping Alpha→10.0.60.1 0%`.
+> **Examples:** addresses and names in this skill belong to a fictional network. This organization's real ones come from `python3 scripts/resources.py list` and `site-pack/`; never reuse an example.
+
+Replicates the manual `Echo 10.0.50.1` fix as code: `traceroute <advertised_subnet>` that should be via BGP but isn't → loops `A-B-A-B` at end → last IP before bounce = tower router that needs `TEMP` peering to the redundant border network's `bgprr`. Handles the `hop-not-peered → downstream black-hole` case seen with `Foxtrot 10.0.60.0/24` looping `10.0.100.2 tango (10.0.101.2) ↔ 10.0.100.1 sierra (10.0.101.1)`; fixing `sierra 10.0.101.1` restored `ping` from the upstream site to the affected subnet (0% loss).
 
 Works for **ANY** fiber network via `traceroute` from loopback (OSPF must be running over network borders — loopbacks reachable). `Delta 10.0.22.1`, `Alpha 10.0.20.1`, `Bravo 10.0.21.33`, `Charlie 10.0.8.1` etc. per `fiber-testing-ips.json` and `bgp-rr-map.json`.
 
@@ -19,7 +21,7 @@ Works for **ANY** fiber network via `traceroute` from loopback (OSPF must be run
 
 ## Step A — Discover Affected Loopbacks (filter disabled/not-used)
 
-1. **Primary: Oxidized** `GET http://10.0.0.6:8888/node/fetch/<rr_ip>` (`reprogram-device:46`) parse `/routing/bgp/connection` `remote.address` — e.g. `Delta RR 10.0.22.1` → `215` `10.0.200.x` (`delta_peers.json`). **Skip** `disabled=yes` (`X`) entries — old config not connected/not used contributed to incorrect devices.
+1. **Primary: Oxidized** `GET <OXIDIZED_URL>/node/fetch/<rr_ip>` (`python3 scripts/resources.py get oxidized`) (`reprogram-device:46`) parse `/routing/bgp/connection` `remote.address` — e.g. `Delta RR 10.0.22.1` → `215` `10.0.200.x` (`delta_peers.json`). **Skip** `disabled=yes` (`X`) entries — old config not connected/not used contributed to incorrect devices.
 2. **Live filter:** `ssh admin@<RR> '/routing/bgp/connection print where disabled=no'` + `session print where established` (`E`) to know which are actually used. Copy only `disabled=no` template.
 3. **Fallback:** MyMate `GET /api/outages?state=open` `10.0.200` (`mymate:60`) when Oxidized stale, but prefer Oxidized for loopback list.
 
@@ -49,7 +51,7 @@ See `references/fiber-classifier.md` and `site-pack/topology/bgp-rr-map.json` (s
 
 Credentials come from the MCP encrypted store (`mikrotik-ssh` pool, priority order; passphrase `NOC_MCP_PASSPHRASE`), resolved at runtime by the scripts (`scripts/credstore.py`) and passed to ssh with `sshpass -e` (password in the `SSHPASS` environment variable), never hard-coded (see `AGENTS.md` credential rules). RR passwords and peer prefixes for this workflow come from `site-pack/topology/temp-bgp-config.json` (schema: `site-pack/example/temp-bgp-config.example.json`).
 
-- **RR side:** `ssh admin@$RR '/routing/bgp/connection print detail where remote.address=10.0.200.30'` (existing `2xray`) → copy `remote.as=<REMOTE_AS> templates=default multihop=yes output.network=bgp-networks` (+ `output.filter-chain` if present) `local.address=<RR> local.role=ibgp-rr`
+- **RR side:** `ssh admin@$RR '/routing/bgp/connection print detail where remote.address=<tower_ip>'` (an existing peer) → copy `remote.as=<REMOTE_AS> templates=default multihop=yes output.network=bgp-networks` (+ `output.filter-chain` if present) `local.address=<RR> local.role=ibgp-rr`
 - **Tower side:** `ssh admin@$tower '/routing/bgp/connection print detail where name~delta'` → if `instance=bgp-instance-1` present (e.g. `Whiskey 10.0.200.31` on RouterOS `7.22.3`), include `instance=bgp-instance-1` else omit (RouterOS `missing instance` error). Use `local.address=<loopback> local.role=ibgp`
 
 See `references/peering-template.md` for the two-password (second-cred vs primary) RR handling.

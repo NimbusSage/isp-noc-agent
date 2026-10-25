@@ -5,7 +5,9 @@ description: Use when corroborating a tower or fiber router device via LibreNMS 
 
 # LibreNMS — Device Inventory Corroboration
 
-LibreNMS at `http://10.0.0.5/api/v0` (same internal host as the legacy analyzer service but port 80). Docs: https://docs.librenms.org/API/
+> **Examples:** addresses and names in this skill belong to a fictional network. This organization's real ones come from `python3 scripts/resources.py list` and `site-pack/`; never reuse an example.
+
+LibreNMS API at `<LIBRENMS_URL>/api/v0` (`python3 scripts/resources.py get librenms` prints the address). Docs: https://docs.librenms.org/API/
 
 - **Auth:** `X-Auth-Token: $LIBRENMS_TOKEN` (from `.env`: `LIBRENMS_TOKEN=<VALUE FROM .env>` — never hardcode, load it with `set -a; . <(grep '^LIBRENMS_TOKEN=' .env); set +a` or take it from the environment). No MCP encryption per plan (unlike `mikrotik-ssh` creds).
 - **Devices named sysName:** e.g., `zeta pppoe`, `Eta Fiber`, `edge-2216-a`, `mikrotik theta`. Grouped into geolocations — **not** source of truth for tower sites. Sonar `Tower:` field is truth (`ticket-context:118`).
@@ -19,7 +21,7 @@ set -a; . <(grep -E '^LIBRENMS' .env); set +a   # loads only these variables; th
 printf 'header = "X-Auth-Token: %s"\n' "$LIBRENMS_TOKEN" | curl -s -K - "$LIBRENMS_URL/api/v0/devices" | python3 -m json.tool
 
 # single device by IP/hostname (sysName or mgmt_ip works)
-printf 'header = "X-Auth-Token: %s"\n' "$LIBRENMS_TOKEN" | curl -s -K - "$LIBRENMS_URL/api/v0/devices/10.0.1.1" | python3 -m json.tool
+printf 'header = "X-Auth-Token: %s"\n' "$LIBRENMS_TOKEN" | curl -s -K - "$LIBRENMS_URL/api/v0/devices/<device_ip>" | python3 -m json.tool
 # → {"status":"ok","devices":[{"device_id":101,"hostname":"10.0.1.1","sysName":"zeta backhauls","hardware":"RB4011iGS+","os":"routeros","status":true,"location":null}]}
 
 # ports for error counters
@@ -43,5 +45,5 @@ LibreNMS `sysName` values observed: `zeta backhauls` dev 101, `zeta pppoe` reach
 
 ## Env
 
-- `LIBRENMS_URL`: no built-in default (example `http://10.0.0.5`)
+- `LIBRENMS_URL`: no built-in default; `python3 scripts/resources.py get librenms` prints the registered address
 - `LIBRENMS_TOKEN` required for above (export from `.env`)

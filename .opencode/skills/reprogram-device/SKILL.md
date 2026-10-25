@@ -1,14 +1,16 @@
 ---
 name: reprogram-device
-description: Use when a network device has factory reset (often after weather, power, or surge events) and needs its backup configuration restored, e.g. "Reprogram beta5n 10.0.40.5", "Reprogram Quebec2GammaST 10.0.41.3". Covers retrieving the backup config from Oxidized or UISP, locating where the reset device is plugged in (gateway router, sector switch, or backhaul switch), and reinstalling the config on UBNT airMAX/airOS AND Wave/MLO devices.
+description: Use when a network device has factory reset (often after weather, power, or surge events) and needs its backup configuration restored, e.g. "Reprogram <ap_name> <device_ip>", "Reprogram <st_name> <device_ip>". Covers retrieving the backup config from Oxidized or UISP, locating where the reset device is plugged in (gateway router, sector switch, or backhaul switch), and reinstalling the config on UBNT airMAX/airOS AND Wave/MLO devices.
 ---
 
 # Device Reprogramming (Factory-Reset Restore)
 
-Restore a factory-reset Ubiquiti device to its previous working state using its backup config. The user MUST supply the device IP — the device name is optional context. Example invocations:
-- Customer AP: `Reprogram beta5n 10.0.40.5`
-- Backhaul AP: `Reprogram Gamma2QuebecAP 10.0.41.2`
-- Backhaul ST (router must be supplied): `Reprogram Quebec2GammaST: 10.0.41.3 router: 10.0.41.1`
+> **Examples:** addresses and names in this skill belong to a fictional network. This organization's real ones come from `python3 scripts/resources.py list` and `site-pack/`; never reuse an example.
+
+Restore a factory-reset Ubiquiti device to its previous working state using its backup config. The user MUST supply the device IP — the device name is optional context. Invocation shapes (the operator supplies the real values):
+- Customer AP: `Reprogram <ap_name> <device_ip>`
+- Backhaul AP: `Reprogram <ap_name> <device_ip>`
+- Backhaul ST (router must be supplied): `Reprogram <st_name>: <device_ip> router: <router_ip>`
 
 **Validated live** on a LiteAP GPS (airOS 8, bridge-mode customer AP), a Wave Pro backhaul ST restored via `ucfg backup restore` (`quebec2gammaST`, 10.0.41.3, plugged into a CRS305 switch), and a Wave Pro backhaul ST restored via the factory wizard's **Upload Configuration** option (`nu2psi ST`, 10.0.43.3).
 
@@ -77,7 +79,8 @@ Auth: header `x-auth-token` carrying the UISP API token. No MCP tool covers back
 1. **Find the device.** `GET /devices` returns the FULL inventory (~36k devices, ~90MB) and accepts NO query filters — stream it and filter client-side by MAC or IP:
 
 ```bash
-printf 'header = "x-auth-token: %s"\n' "$UISP_TOKEN" | curl -sS -K - 'https://uisp.example.com/nms/api/v2.1/devices' | python3 -c "
+UISP=$(python3 scripts/resources.py get uisp) || exit 1   # this organization's UISP; stop and ask the operator if it is not registered
+printf 'header = "x-auth-token: %s"\n' "$UISP_TOKEN" | curl -sS -K - "$UISP/nms/api/v2.1/devices" | python3 -c "
 import sys, json
 data, _ = json.JSONDecoder().raw_decode(sys.stdin.read())
 ip = '<device_ip>'
@@ -93,13 +96,13 @@ If you don't know the MAC, the device IP in `ipAddress` also works (shown in the
 2. **List backups** — pick the most recent with `"type": "cfg"`:
 
 ```bash
-printf 'header = "x-auth-token: %s"\n' "$UISP_TOKEN" | curl -sS -K - "https://uisp.example.com/nms/api/v2.1/devices/<device_id>/backups"
+printf 'header = "x-auth-token: %s"\n' "$UISP_TOKEN" | curl -sS -K - "$UISP/nms/api/v2.1/devices/<device_id>/backups"
 ```
 
 3. **Download the cfg** and strip the UISP header lines (anything starting with `##`):
 
 ```bash
-printf 'header = "x-auth-token: %s"\n' "$UISP_TOKEN" | curl -sS -K - "https://uisp.example.com/nms/api/v2.1/devices/<device_id>/backups/<backup_id>" \
+printf 'header = "x-auth-token: %s"\n' "$UISP_TOKEN" | curl -sS -K - "$UISP/nms/api/v2.1/devices/<device_id>/backups/<backup_id>" \
   | grep -v '^##' > /tmp/reprogram.cfg
 ```
 

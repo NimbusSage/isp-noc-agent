@@ -45,7 +45,8 @@ mid-session (see hard rules 1 and 4) and is the worked failure record.
    the radios' new management path IS this gateway (agent reaches `.x` routed
    through BGP).
 5. **Program the radios** (enable SSH via GUI first if off; then SSH/ucfg).
-6. **Register**: LibreNMS device-add, MyMate site (if new) + device; UISP +
+6. **Register** (service addresses come from `python3 scripts/resources.py get <name>`;
+   an unregistered one means stop and ask the operator): LibreNMS device-add, MyMate site (if new) + device; UISP +
    Sonar + Tower Directory per bring-up completeness.
 7. **Clean temp changes** (dst-nats, temp subnets) once both sides answer
    routed — keep only what the repair/tech path needs.
@@ -168,11 +169,11 @@ GUI Settings page order (rows visible): `HTTPS Server Port`, `SNMP Agent`,
 
 ## LibreNMS + MyMate registration
 
-- **LibreNMS** `POST $LIBRENMS_URL/api/v0/devices`
+- **LibreNMS** `POST <LIBRENMS_URL>/api/v0/devices` (address from
+  `python3 scripts/resources.py get librenms`; token through a stdin curl config as in the
+  `librenms` skill) with
   `{"hostname":"<ip>","version":"v2c","community":"<snmp-community>"}` carried the
-  full config (auto `os: airos-af60`, sysName from SNMP). Env not in the
-  default token export — source the whole `.env` (`set -a; . ./.env; set +a`),
-  not a single-key grep.
+  full config (auto `os: airos-af60`, sysName from SNMP).
 - **MyMate** login flow (mymate skill): Sanctum + Origin/Referer + CSRF.
   `POST /api/sites {name,latitude,longitude}` works for new in-town sites
   (`kind:"other"`). `POST /api/devices {name,mgmt_ip,poll_method:
@@ -202,9 +203,8 @@ GUI Settings page order (rows visible): `HTTPS Server Port`, `SNMP Agent`,
    rather than a blind reboot. **Rule: GET the full doc → merge locally →
    PUT the whole doc → GET readback → diff EVERY key (unms auto-flag noted)
    → immediately re-banner ssh+https after any services move.**
-2. **Env helpers need the caller to source `.env`** (`set -a; . ./.env;
-   set +a`): `tracker_sheet.mjs` has no self-loader, and one-key greps
-   (`grep LIBRENMS_TOKEN`) miss sibling vars like `LIBRENMS_URL`.
+2. **Do not source the whole `.env`.** The helper scripts load the settings they
+   need themselves, and service addresses come from `python3 scripts/resources.py get <name>`.
 3. **Single cred, then back off.** mk.sh's credential burst (6× attempts)
    tripped RouterOS throttling into sequential AUTH_FAILEDs mid-job —
    retry once with a cooldown, prefer a single stored credential.

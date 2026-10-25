@@ -5,6 +5,8 @@ description: Use when triaging slow-speed/tower NOC tickets by testing the live 
 
 # Path Analyzer — Live Router Triage
 
+> **Examples:** addresses and names in this skill belong to a fictional network. This organization's real ones come from `python3 scripts/resources.py list` and `site-pack/`; never reuse an example.
+
 True NOC workflow: log in to the tower router, traceroute to internet, btest to fiber router hop-by-hop, test each radio link over its OSPF /30, flag variance and real multipath.
 
 Example path used throughout this skill: `zeta pppoe 10.0.1.1` → `Eta Fiber 10.0.5.1` → `edge-2216-a 10.0.6.1` (see `site-pack/topology/verified-probes.md` if your install keeps one). Before writing theory, test on real devices.
@@ -30,8 +32,8 @@ Naming: `Smith` → first, `BSmith` → second, `Barry Smith` → third if `BSmi
 1. Fetch first note `ticket_comments ASC 1` and subject. If `Tower: X` → canonical site (`ticket-context:118`). Else `TH:`/`Tower Host:`/`Relayed from` + subject parsing `[Fiber] site pppoe` (`ticket-context:92`). Expand a tech-initials host abbreviation (e.g. `<tech-initials>`) via the TH field.
 2. **Sonar sanity:** keep abbreviation literal for search if no TH; don't guess host.
 3. **MyMate (cheapest):** `GET /api/outages?state=open` filter `site_name`/`device_name` — carries `device_id`+`mgmt_ip` (`mymate:60`). If miss, use **cached** `GET /api/devices` index (fetched once/24h to `/tmp/mymate_devices.json`, never per ticket — 35MB, `mymate:51` guard). Match `site_name` exact → `name` substring → `mgmt_ip`.
-4. **LibreNMS corroboration only:** `GET $LIBRENMS_URL/api/v0/devices` or `/api/v0/devices/:hostname` with `X-Auth-Token: $LIBRENMS_TOKEN` (`http://10.0.0.5/api/v0`, docs https://docs.librenms.org/API/). sysName/geolocation confirms hardware/OS but is **not** source of truth for tower site (geolocation grouped). Timeout 10s.
-5. **Oxidized existence:** `GET http://10.0.0.6:8888/node/fetch/<ip>` (`reprogram-device:46`).
+4. **LibreNMS corroboration only:** `GET $LIBRENMS_URL/api/v0/devices` or `/api/v0/devices/:hostname` with `X-Auth-Token: $LIBRENMS_TOKEN` (`<LIBRENMS_URL>/api/v0` from `python3 scripts/resources.py get librenms`; docs https://docs.librenms.org/API/). sysName/geolocation confirms hardware/OS but is **not** source of truth for tower site (geolocation grouped). Timeout 10s.
+5. **Oxidized existence:** `GET <OXIDIZED_URL>/node/fetch/<ip>` (`python3 scripts/resources.py get oxidized`) (`reprogram-device:46`).
 
 **Tower confidence 0-100 (like `ihn-auto-return:63`, threshold env `PATH_TOWER_THRESHOLD` default 75):**
 
@@ -97,8 +99,8 @@ Env: `BTEST_DURATION` default 10s, `BTEST_PROTOCOL=tcp`, `BTEST_TIMEOUT_MS=60000
 - **E Baseline:** tower → fiber `protocol=tcp duration=10 direction=both user=admin password=$PW` — **address = `internal` from `fiber-testing-ips.json` / Sheets for that `Network/Fiber`**, not traceroute guess (fixes cases like `romeo` where the traceroute guess `10.0.7.5` failed but table `10.0.7.77` succeeds; `Charlie` table `10.0.8.1` internal vs `10.0.8.200` public)
   ```bash
   # romeo example (Network/Fiber: romeo)
-  FIBER=$(python3 -c "import json; m=json.load(open('site-pack/topology/fiber-testing-ips.json')); print(m['romeo']['internal'])") # 10.0.7.77
-  SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@10.0.1.1 "/tool bandwidth-test address=$FIBER user=admin password=\"$PW\" protocol=tcp duration=5 direction=both"
+  FIBER=$(python3 -c "import json; m=json.load(open('site-pack/topology/fiber-testing-ips.json')); print(m['<network>']['internal'])")   # the internal address of that Network/Fiber
+  SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_router_ip> "/tool bandwidth-test address=$FIBER user=admin password=\"$PW\" protocol=tcp duration=5 direction=both"
   # Zeta baseline: 47-71Mbps tx, 168-205 rx local-cpu 40-41% (not CPU-limited)
   ```
   For a fiber router whose Extra Notes name a dedicated btest account (e.g. `November`) use `user=btest password="$BTEST_PASSWORD"` (operator-supplied env var). For `xxx` public (core edge etc.) skip private btest and note the core 2216 edge.
@@ -108,9 +110,9 @@ Env: `BTEST_DURATION` default 10s, `BTEST_PROTOCOL=tcp`, `BTEST_TIMEOUT_MS=60000
 - **G Direct /30:** for each adjacent `(k,k+1)`:
   1. Primary: `/routing ospf neighbor print` on outer router → peer `address` = /30 peer IP
      ```bash
-     SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@10.0.1.1 '/routing ospf neighbor print'
+     SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_router_ip> '/routing ospf neighbor print'
      # 0 D address=10.0.2.2 router-id=10.0.2.2 state=Full
-     SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@10.0.1.1 '/ip address print where interface=ether1'
+     SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_router_ip> '/ip address print where interface=ether1'
      # 10.0.2.0/30 network 10.0.2.0
      ```
   2. Fallback: traceroute hop IP (usually OSPF /30 as you noted).
@@ -118,7 +120,7 @@ Env: `BTEST_DURATION` default 10s, `BTEST_PROTOCOL=tcp`, `BTEST_TIMEOUT_MS=60000
 
   Direct btest:
   ```bash
-  SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@10.0.1.1 "/tool bandwidth-test address=10.0.2.2 user=admin password=\"$PW\" protocol=tcp duration=5 direction=both"
+  SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_router_ip> "/tool bandwidth-test address=<next_hop_ip> user=admin password=\"$PW\" protocol=tcp duration=5 direction=both"
   # verified 919.9Mbps tx / 860.9Mbps rx local-cpu 94% remote 83% — CPU-limited caveat "traffic generation ... might not be representative of forwarding performance"
   ```
 
@@ -250,7 +252,7 @@ evidence, never an escalation on its own).
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `LIBRENMS_URL` | unset (example `http://10.0.0.5`) | LibreNMS base |
+| `LIBRENMS_URL` | unset (register with `scripts/resources.py`) | LibreNMS base |
 | `LIBRENMS_TOKEN` | — | `X-Auth-Token` (source `.env`, never hardcoded) |
 | `EDGE_ROUTER_IPS` | unset (example `10.0.6.1`) | Edge 2216 router(s) (+ the second edge when known) |
 | `RDS2216_SUBNET` | unset (example `10.0.30.0/24`) | LibreQoS CGNAT range (tune) |
