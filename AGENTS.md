@@ -49,6 +49,7 @@ Load when the trigger applies.
 - `temp-site-connection-undo` — reverse one temporary connection by incident ID
 - `temp-bgp-peering` — emergency fiber failover: TEMP BGP peers on a redundant bgprr
 - `onboarding-wizard` — "onboard me": interactive first-run setup
+- `skill-authoring` — create or change a skill: scaffold, content rules, checks before a pull request
 
 ## Ticket Processing Workflow
 

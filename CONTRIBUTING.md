@@ -30,9 +30,11 @@ skills) is normal-review territory: open a PR and expect comments, not veto.
 
 ## How to contribute a change the right way
 
-1. **New skills go in `.opencode/skills/<name>/SKILL.md`** with the standard
-   frontmatter (`name`, `description` starting with "Use when…"). Keep the
-   body under ~500 lines and move deep detail into `references/`.
+1. **New skills go in `.opencode/skills/<name>/SKILL.md`**, created with
+   `python3 scripts/new_skill.py <name> --description "Use when ..." --summary "<one line>"`;
+   it also lists the skill in `AGENTS.md` and `docs/skills.md`. Keep the body under ~500
+   lines and move deep detail into `references/`. Rules and required checks are in
+   `.opencode/skills/skill-authoring/SKILL.md`.
 2. **Prompts/config stay org-agnostic.** No real IPs, org names, ticket IDs,
    or date-stamped "verified on" notes in tracked files — the CI portability
    gate will bounce you. Anything org-specific goes in the gitignored

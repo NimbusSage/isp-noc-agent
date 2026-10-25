@@ -2,9 +2,7 @@
 
 > Operator manual index lives in the repo root [README](../README.md).
 
-## 11. Skills System
-
-Skills are the agent's knowledge modules. Each lives in `.opencode/skills/<name>/SKILL.md` with YAML frontmatter. The agent loads them on demand at runtime via the `skill` tool — there is no build or registration step. Changes take effect on the next agent session.
+Skills are the agent's knowledge modules. Each lives in `.opencode/skills/<name>/SKILL.md` with YAML frontmatter. A harness with skill discovery loads from its own skills folder; for Claude Code, run `python3 scripts/harness_setup.py --harness claude --write` to create the `.claude/skills` symlink. A harness without skill discovery reads `.opencode/skills/<name>/SKILL.md` directly, as specified in `AGENTS.md`. Editing a `SKILL.md` takes effect on the next agent load. There is no registration, build or restart step.
 
 ### Current skills
 
@@ -12,6 +10,7 @@ Skills are the agent's knowledge modules. Each lives in `.opencode/skills/<name>
 |-------|---------|
 | [`path-analyzer`](../.opencode/skills/path-analyzer/SKILL.md) | Live router path triage — traceroute, btest to fiber hop-by-hop, /30 direct, variance + true multipath |
 | [`wireless-health`](../.opencode/skills/wireless-health/SKILL.md) | Investigate a flagged wireless link (signal/CCQ/jitter/loss) — returns data to append to same path-analyzer comment |
+| [`wave-gui`](../.opencode/skills/wave-gui/SKILL.md) | Live WaveOS gen3 radio data: link state, signal (dBm), MCS, capacity, backup and carrier-drop state, and built-in speed test |
 | [`sonar-api`](../.opencode/skills/sonar-api/SKILL.md) | Sonar GraphQL reference for tickets plus verified account-name search, account-ID follow-up and forward service/inventory query shapes; target customer↔radio and live subscriber status still need exact linked evidence |
 | [`ticket-context`](../.opencode/skills/ticket-context/SKILL.md) | Parse ticket subjects to identify the correct tower site (handles fiber-network vs tower-site naming; peak/night detection) |
 | [`comment-formatting`](../.opencode/skills/comment-formatting/SKILL.md) | Format path analysis results as HTML Sonar comments with colored callouts; canonical `Direct Path Analysis` header (legacy `Network Bottleneck Analyzer` accepted when parsing stored comments) |
@@ -33,39 +32,26 @@ Skills are the agent's knowledge modules. Each lives in `.opencode/skills/<name>
 | [`rename-site`](../.opencode/skills/rename-site/SKILL.md) | Agent-driven site rename after tower-host/ownership change (executes via `scripts/airos_rename.py`): full mode (MikroTik identities, infra radios, backhaul/AP/CPE SSIDs, Netonix, MyMate site+map) plus SSID-only fast path; backhaul /29-gateway move before any SSID drop, CPEs-before-AP order, separate `customer-airos`/`customer-mt` credential pools |
 | [`onboarding-wizard`](../.opencode/skills/onboarding-wizard/SKILL.md) | Interactive first-run setup — trigger `onboard me`: ability tour, `.env` walkthrough, Sonar + Google (webhook + per-feature OAuth via `scripts/google_user_auth.mjs`), optional integrations, MCP credential store, systemd install, site-pack profile, topology rebuild; every phase verified read-only with `scripts/doctor.py`; optional phases skippable, required phases fail closed |
 | [`create-site`](../.opencode/skills/create-site/SKILL.md) | Create a NEW site pin across all four external records in order — Sonar `createNetworkSite` (required `height_in_meters`; coordinates ride on the address; custom state subdivision enum resolved via `addresses(city=...)`), Tower Directory alphabetical row insert (4-segment address commas `, City, ST, ZIP`; zero-padded Sonar ID column), UISP site (flat POST — no `data` wrapper, no geoposition per house convention), MyMate site (`kind:"other"`; device→site assignment stays operator-only). Validated live |
+| [`skill-authoring`](../.opencode/skills/skill-authoring/SKILL.md) | for whoever writes or edits a skill, human or model, in any harness: scaffold command, content rules, checks before a pull request |
 
 ### How to add a new skill
 
-1. Create the directory:
+1. Run the scaffold command. It creates `.opencode/skills/<name>/SKILL.md`, adds the skill to the "Skills index" in `AGENTS.md` and to the "Current skills" table above, and refuses an invalid or existing name without writing anything. After editing `SKILL.md`, `git add` the new files and run the checks — each exits non-zero on a problem:
+
    ```bash
-   mkdir -p .opencode/skills/<skill-name>
+   python3 scripts/new_skill.py <name> --description "Use when ..." --summary "<one line>"
+   git add <new files>
+   python3 scripts/gen_tree.py --write
+   python3 scripts/skills_lint.py --strict
+   python3 scripts/docs_check.py
+   python3 scripts/docs_commands_check.py
+   python3 scripts/secret_scan.py --tracked
    ```
 
-2. Write `.opencode/skills/<skill-name>/SKILL.md` with frontmatter:
-   ```markdown
-   ---
-   name: <skill-name>
-   description: Use when <trigger condition>. <What it does.>
-   ---
-
-   # <Skill Title>
-
-   <Knowledge content>
-   ```
-
-   **Frontmatter rules:**
-   - `name` must match the directory name
-   - `description` must start with "Use when..."
-
-3. Keep the body under 500 lines. Move deep detail into a `references/` subdirectory.
-
-4. Add the skill to the Skills list in [AGENTS.md](../AGENTS.md) so the agent knows it exists.
-
-5. Test it by loading the skill in the OpenCode TUI:
-   ```
-   opencode
-   > /skill <skill-name>
-   ```
+2. `name` equals the folder name: lowercase words joined by hyphens, at most 64 characters. `description` starts with "Use when" and is at most 1024 characters.
+3. Keep `SKILL.md` under 500 lines. Put deep detail in `references/`.
+4. Content rules (no real data, no secrets, no write that skips a gate, only existing commands) are in `.opencode/skills/skill-authoring/SKILL.md`.
+5. To try the skill, ask your harness to load it by name, or read its `SKILL.md` directly.
 
 ### Skill design principles
 
@@ -76,7 +62,7 @@ Skills are the agent's knowledge modules. Each lives in `.opencode/skills/<name>
 
 ### How skills are loaded
 
-The agent uses the `skill` tool at runtime to load a skill's `SKILL.md` into its context. There is no registration, build, or restart step. Editing a `SKILL.md` file changes agent behavior on the next session — the running webhook server does not need a restart (it spawns a fresh OpenCode process per batch).
+A harness with skill discovery loads the skill from its own folder. A harness without it reads `.opencode/skills/<name>/SKILL.md` directly. Either way, there is no registration, build or restart step. Editing a `SKILL.md` changes agent behavior on the next load. The running webhook server does not need a restart; it starts a fresh agent harness for each batch.
 
 ---
 
