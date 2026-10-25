@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { checkHostAllowlist } from '../temp-site/allowlist.js';
 import { DeviceIdSchema, IDENT_RE, IdentSchema, Ipv4Schema, ReasonSchema } from '../security/validators.js';
 

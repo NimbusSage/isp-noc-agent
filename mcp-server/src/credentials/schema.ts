@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 export const DeviceTypeSchema = z.enum(['mikrotik-ssh', 'mikrotik-rest', 'ubnt-uisp', 'ubnt-airos', 'ubnt-wave', 'customer-airos', 'customer-mt']);
 export type DeviceType = z.infer<typeof DeviceTypeSchema>;

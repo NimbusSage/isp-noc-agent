@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import type { AllowlistedKey, CfgEdit } from './airos-ssh.js';
 import { checkHostAllowlist } from './allowlist.js';
 import { DeviceIdSchema, IncidentIdSchema, Ipv4Schema, SsidSchema } from '../security/validators.js';

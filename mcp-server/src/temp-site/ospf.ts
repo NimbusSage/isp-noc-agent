@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { HostArgSchema, IDENT_RE, IdentSchema, IncidentIdSchema, INCIDENT_ID_RE, Slash30Schema } from '../security/validators.js';
 
 export const TempOspfInputSchema = z.object({

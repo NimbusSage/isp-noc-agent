@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 
 export const LIBRENMS_UNCONFIGURED_URL = 'http://librenms.example.invalid';
 

@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { ServerConfigSchema, type ServerConfig } from './config/schema.js';
 import { getRepoEnvStatus } from './config/repo-env.js';
 import { CredentialStore } from './credentials/store.js';

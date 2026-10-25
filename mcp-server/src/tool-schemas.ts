@@ -12,7 +12,7 @@
  * registration code (register-tools.ts) still fails fast on a missing entry,
  * and tests/tool-schemas.test.ts asserts coverage so it cannot regress.
  */
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { DeviceTypeSchema } from './credentials/schema.js';
 import { RouterOsWriteSchema } from './writes/routeros-writes.js';
 import {

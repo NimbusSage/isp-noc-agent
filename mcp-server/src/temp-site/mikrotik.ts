@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { planTempOspf } from './ospf.js';
 import { checkHostAllowlist } from './allowlist.js';
 import {

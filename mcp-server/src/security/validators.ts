@@ -6,7 +6,7 @@
  * Everything below is a closed character set instead; every character that is
  * not listed is rejected.
  */
-import { z } from 'zod';
+import { z } from 'zod/v3';
 import { IPV4_CANONICAL_RE, IPV4_OCTET, hostSyntaxError } from './hosts.js';
 
 /** Interface names, aliases, areas, tags, protocol/rate-set identifiers. */
