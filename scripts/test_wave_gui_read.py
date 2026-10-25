@@ -138,6 +138,8 @@ def make_handler(state: dict):
 class MockWave(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        if not os.path.exists(os.path.join(os.path.dirname(SCRIPT), "..", "mcp-server", "dist", "security", "hosts.js")):
+            raise unittest.SkipTest("the host policy lives in the compiled MCP server: cd mcp-server && npm ci && npm run build")
         cls.state = {"running": False, "completed": False, "direction": "rx", "now_ms": 0}
         srv = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(cls.state))
         cls.server = srv
