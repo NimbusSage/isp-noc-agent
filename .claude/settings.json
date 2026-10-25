@@ -50,7 +50,9 @@
       "Edit(/scripts/hooks/**)",
       "Edit(/.githooks/**)",
       "Edit(/scripts/secret_scan.py)",
-      "Edit(/scripts/leak_denylist.sha256)"
+      "Edit(/scripts/leak_denylist.sha256)",
+      "Bash(python3 scripts/resources.py set*)",
+      "Bash(python3 scripts/resources.py migrate*--write*)"
     ]
   },
   "hooks": {

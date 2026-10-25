@@ -86,9 +86,13 @@ test('the default output path is accepted under the real /tmp', () => {
   assert.ok(got.endsWith('oxidized-10-1-2-3.cfg'));
 });
 
-test('resolveOxidizedBase: env first, config fallback, tolerant of a missing config, validates scheme', () => {
-  assert.equal(resolveOxidizedBase({ OXIDIZED_BASE_URL: 'http://ox.example:8888/' }, () => { throw new Error('unused'); }), 'http://ox.example:8888');
-  assert.equal(resolveOxidizedBase({}, () => JSON.stringify({ oxidized_base_url: 'https://cfg.example/' })), 'https://cfg.example');
-  assert.equal(resolveOxidizedBase({}, () => { throw new Error('ENOENT'); }), '');
-  assert.throws(() => resolveOxidizedBase({ OXIDIZED_BASE_URL: 'file:///etc/passwd' }), /http\(s\)/);
+test('resolveOxidizedBase: env first, older config fallback, tolerant of missing files, validates scheme', () => {
+  const none = () => { throw new Error('ENOENT'); };
+  const env = (extra = {}) => ({ NOC_DOTENV: '/nonexistent/.env', NOC_PROFILE_FILE: '/nonexistent/profile.json', ...extra });
+  assert.equal(resolveOxidizedBase(env({ OXIDIZED_BASE_URL: 'http://ox.corp-net.org:8888/' }), none), 'http://ox.corp-net.org:8888');
+  const config = (file) => { if (file.endsWith('temp-bgp-config.json')) return JSON.stringify({ oxidized_base_url: 'https://cfg.corp-net.org/' }); throw new Error('ENOENT'); };
+  assert.equal(resolveOxidizedBase(env(), config), 'https://cfg.corp-net.org');
+  assert.equal(resolveOxidizedBase(env(), none), '');
+  assert.throws(() => resolveOxidizedBase(env({ OXIDIZED_BASE_URL: 'file:///etc/passwd' }), none), /http\(s\)/);
 });
+

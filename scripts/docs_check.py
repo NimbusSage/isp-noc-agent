@@ -28,6 +28,7 @@ Exit 0 = clean, 1 = anything broken. Run in CI and before doc-heavy commits.
 """
 
 import fnmatch
+import json
 import re
 import sys
 from pathlib import Path
@@ -174,6 +175,14 @@ def scan_env_reads(root: Path, ignored_files=()):
             for rx in _res_for(f):
                 for m in rx.finditer(text):
                     reads.setdefault(m.group(1), set()).add(rpath)
+    # The resource registry resolvers (Python, Node, TypeScript) take their variable names from the catalog.
+    try:
+        cat = json.loads((root / "scripts" / "resource_catalog.json").read_text(encoding="utf-8")).get("resources", {})
+        for entry in cat.values():
+            for name in entry.get("env") or []:
+                reads.setdefault(name, set()).add("scripts/resource_catalog.json")
+    except (OSError, ValueError):
+        pass
     return {k: sorted(v) for k, v in reads.items()}
 
 

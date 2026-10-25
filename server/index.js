@@ -743,6 +743,8 @@ function buildAgentEnv(srcEnv, cfg) {
   for (const [name, value] of Object.entries(srcEnv)) {
     if (typeof value === 'string' && envNameMatches(name, cfg.envPassthrough || [])) out[name] = value;
   }
+  // Batch agents run unattended: scripts/resources.py refuses to register or change a service address for them.
+  out.NOC_UNATTENDED = '1';
   out.OPENCODE_MODEL = cfg.model;
   out.MAX_BATCH_SIZE = String(cfg.maxBatchSize);
   out.NOC_AGENT_LOG_DIR = cfg.logDir;

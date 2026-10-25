@@ -11,11 +11,12 @@
 // (the previous check was `out.startsWith('/tmp/')` on the raw string). The file
 // itself is opened with O_NOFOLLOW + mode 0600, so a pre-planted symlink at the
 // target cannot redirect the write.
-import { closeSync, constants, fchmodSync, fstatSync, lstatSync, openSync, readFileSync, realpathSync, writeSync } from 'node:fs';
+import { closeSync, constants, fchmodSync, fstatSync, lstatSync, openSync, realpathSync, writeSync } from 'node:fs';
 import { isIP } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { notRegistered, resolveResource } from './resources.mjs';
 
 const SECRET_KEYS = [/psk/i, /password/i, /community/i, /unms\.uri/i, /snmp/i];
 
@@ -54,15 +55,11 @@ export function defaultOutPath(ip) {
   return `/tmp/oxidized-${ip.replaceAll('.', '-')}.cfg`;
 }
 
-/** Oxidized base URL: env first, else the site-pack temp-bgp config; '' if neither. */
-export function resolveOxidizedBase(env = process.env, readConfig = () => readFileSync(new URL('../site-pack/topology/temp-bgp-config.json', import.meta.url), 'utf8')) {
-  let base = (env.OXIDIZED_BASE_URL || '').trim();
-  if (!base) {
-    try { base = String(JSON.parse(readConfig()).oxidized_base_url || '').trim(); } catch { base = ''; }
-  }
-  base = base.replace(/\/+$/, '');
-  if (base && !/^https?:\/\/[^/\s]+/i.test(base)) throw new Error('OXIDIZED_BASE_URL must be an http(s) URL');
-  return base;
+/** Oxidized base URL from the resource registry (environment, profile, then the older temp-bgp config); '' if none. */
+export function resolveOxidizedBase(env = process.env, readText) {
+  const r = resolveResource('oxidized', { env, ...(readText ? { readText } : {}) });
+  if (!r.value && r.problems.length) throw new Error(`OXIDIZED_BASE_URL is not usable: ${r.problems[0]}`);
+  return r.value;
 }
 
 /** Write 0600 through an O_NOFOLLOW descriptor. */
@@ -83,7 +80,7 @@ async function main() {
     try { return resolveOxidizedBase(); } catch (e) { console.error(`oxidized_fetch: ${e.message}`); process.exit(2); }
   })();
   if (!OXIDIZED_BASE) {
-    console.error('oxidized_fetch: set OXIDIZED_BASE_URL (or oxidized_base_url in site-pack/topology/temp-bgp-config.json)');
+    console.error(notRegistered('oxidized'));
     process.exit(2);
   }
   const args = process.argv.slice(2).filter(a => !a.startsWith('--'));

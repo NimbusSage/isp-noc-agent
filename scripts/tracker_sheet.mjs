@@ -50,6 +50,7 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadEnvPrefixes } from './env_load.mjs';
 import {
   GOOGLE_SHEETS,
   GOOGLE_SHEETS_READONLY,
@@ -496,6 +497,7 @@ function parseArgs(argv) {
 }
 
 async function main() {
+  loadEnvPrefixes(['TRACKER_']);   // only the tracker settings; the rest of .env is not read into the environment
   const args = parseArgs(process.argv);
   const cfg = loadConfig();
   if (args.command === 'inspect') {

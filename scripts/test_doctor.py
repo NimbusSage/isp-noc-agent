@@ -409,6 +409,47 @@ class NotifyTests(DoctorCase):
         self.assertEqual(_Recorder.posts, [])
 
 
+class ResourcesCheckTests(DoctorCase):
+    def profile(self, data):
+        pack = self.root / "site-pack"
+        pack.mkdir(exist_ok=True)
+        (pack / "profile.json").write_text(json.dumps(data))
+
+    def status(self):
+        _, rows = self.rows("--only", "resources")
+        return next(r for r in rows["results"] if r["name"] == "resources")
+
+    def test_nothing_registered_is_unconfigured(self):
+        self.assertEqual(self.status()["status"], "unconfigured")
+
+    def test_registered_resource_passes(self):
+        self.profile({"resources": {"uisp": {"url": "https://uisp.corp-net.org"}}})
+        row = self.status()
+        self.assertEqual(row["status"], "pass")
+        self.assertIn("uisp", row["detail"])
+
+    def test_env_only_value_is_drift(self):
+        self.write_env(LIBRENMS_URL="http://10.1.2.3")
+        row = self.status()
+        self.assertEqual(row["status"], "warn")
+        self.assertIn("migrate --write", row["hint"])
+
+    def test_credentials_without_an_address_fail(self):
+        self.write_env(LIBRENMS_TOKEN="tok-abcdef123456")
+        row = self.status()
+        self.assertEqual(row["status"], "fail")
+        self.assertIn("librenms has credentials but no address", row["detail"])
+        self.assertNotIn("tok-abcdef123456", json.dumps(row))
+
+    def test_placeholder_and_conflict_fail(self):
+        self.profile({"resources": {"uisp": {"url": "https://uisp.example.org"}, "librenms": {"url": "https://a.corp-net.org"}}})
+        self.write_env(LIBRENMS_URL="https://b.corp-net.org")
+        row = self.status()
+        self.assertEqual(row["status"], "fail")
+        self.assertIn("uisp", row["detail"])
+        self.assertIn("librenms disagrees", row["detail"])
+
+
 class HarnessTests(unittest.TestCase):
     def test_harness_row_summarizes_harness_setup(self):
         # Keep the interpreter's runtime environment (a hosted-toolcache Python needs LD_LIBRARY_PATH to start);

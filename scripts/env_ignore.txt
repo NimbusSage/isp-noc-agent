@@ -39,6 +39,8 @@ DEMO_CHAT_URL  # handed from scripts/demo.py to its stub agent via AGENT_ENV_PAS
 NOC_SSH_WARNED  # once-per-process guard exported by ssh_opts.sh
 NO_PASSPHRASE  # status string in cred_store.mjs, not an env var
 
+NOC_UNATTENDED  # set to 1 by the webhook server for batch agents; scripts/resources.py then refuses to register services
+
 # --- status and enum strings that look like env names ---
 API_ERROR  # status string in sonar_bounce.py
 BLOCKED_ANTI_LOOP  # status string in sonar_bounce.py

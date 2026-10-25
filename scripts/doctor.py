@@ -535,8 +535,15 @@ def check_secret_hygiene(env):
             "once credentials.enc decrypts fine, remove the old copies: rm mcp-server/config/credentials.enc.bak-*", required=False)
 
 
+def registered(env, name):
+    """URL of a resource: the environment, then the registry (scripts/resources.py)."""
+    import resources
+    prof, _ = load_profile()
+    return resources.resolve(name, prof or {}, getenv=lambda k: env_val(env, k) or "", pack=ROOT / "site-pack").value or None
+
+
 def check_librenms(env):
-    url, token = env_val(env, "LIBRENMS_URL"), env_val(env, "LIBRENMS_TOKEN")
+    url, token = registered(env, "librenms"), env_val(env, "LIBRENMS_TOKEN")
     if is_placeholder(url) or is_placeholder(token):
         add("librenms", "unconfigured", "LIBRENMS_URL / LIBRENMS_TOKEN not set (optional: device corroboration)")
         return
@@ -550,8 +557,39 @@ def check_librenms(env):
         add("librenms", "fail", str(e), "check LIBRENMS_URL is reachable from this machine (VPN/route) and LIBRENMS_TOKEN is valid")
 
 
+def check_resources(env):
+    """Where this org's services live: every known resource, from one registry (scripts/resources.py)."""
+    import resources
+    prof, err = load_profile()
+    if err:
+        add("resources", "fail", f"profile.json is not valid JSON: {err}", "fix the syntax in site-pack/profile.json")
+        return
+    rows = resources.resolve_all(prof or {}, getenv=lambda k: env_val(env, k) or "", pack=ROOT / "site-pack")
+    have = [r for r in rows if r.value]
+    problems = []
+    for r in rows:
+        if r.value and resources.placeholder_reason(r.value):
+            problems.append(f"{r.name} value {resources.placeholder_reason(r.value)}")
+        if r.conflict:
+            problems.append(f"{r.name} disagrees between " + " and ".join([r.source] + [s for s, _v in r.others]))
+        if not r.value and any(r.credentials.values()):
+            problems.append(f"{r.name} has credentials but no address")
+    drift = [r.name for r in have if r.source != "profile" and not r.others]
+    if problems:
+        add("resources", "fail", "; ".join(problems),
+            "python3 scripts/resources.py check shows each one; register the right value with: python3 scripts/resources.py set <name> <url>")
+    elif not have:
+        add("resources", "unconfigured", "no service addresses registered",
+            "python3 scripts/resources.py migrate (shows what .env already holds), then set what is missing")
+    elif drift:
+        add("resources", "warn", f"{len(have)} registered; {', '.join(drift)} only in .env or an older setting",
+            "python3 scripts/resources.py migrate --write copies them into site-pack/profile.json")
+    else:
+        add("resources", "pass", f"{len(have)} resource(s) registered: {', '.join(r.name for r in have)}")
+
+
 def check_mymate(env):
-    base = (env_val(env, "MYMATE_URL") or "").rstrip("/")
+    base = (registered(env, "mymate") or "").rstrip("/")
     user, pw = env_val(env, "MYMATE_USER"), env_val(env, "MYMATE_PASS")
     if not base or is_placeholder(user) or is_placeholder(pw) or is_placeholder_url(base):
         add("mymate", "unconfigured", "MYMATE_URL/USER/PASS not set (optional feature)")
@@ -904,6 +942,7 @@ CHECKS = [
     ("mcp_build", check_mcp_build, 1, True),
     ("mcp_store", check_mcp_store, 1, True),
     ("harness", check_harness, 1, True),
+    ("resources", check_resources, 1, False),
     ("librenms", check_librenms, 1, False),
     ("mymate", check_mymate, 1, False),
     ("sonar_api", check_sonar, 2, True),

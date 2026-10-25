@@ -114,5 +114,11 @@
       "name_column": "<column-with-site-name>",
       "coords_column": "<column-with-coords>"
     }
+  },
+  "resources": {
+    "_comment": "This organization's own services. Register each one you run with: python3 scripts/resources.py set <name> <url>. URL names: uisp, librenms, mymate, oxidized, sonar. Sheet names (a spreadsheet id): tower_directory, ip_network, tracker. Leave out what you do not run. Placeholders like these are rejected by `resources.py check`.",
+    "uisp": {
+      "url": "https://uisp.<your-domain>"
+    }
   }
 }

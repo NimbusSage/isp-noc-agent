@@ -60,16 +60,18 @@ def uisp_token():
 
 
 def _uisp_base():
-    """UISP NMS base: profile org.uisp_host, else env UISP_BASE_URL, else neutral
-    example (requests fail loudly instead of hitting another org's UISP)."""
+    """UISP NMS base from the resource registry (scripts/resources.py); raises when it is not registered."""
+    return _registered("uisp")
+
+
+def _registered(name):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import noc_config
+    import resources
     try:
-        prof = json.loads((ROOT / "site-pack" / "profile.json").read_text())
-        host = (prof.get("org") or {}).get("uisp_host", "")
-        if host:
-            return "https://%s" % host
-    except Exception:
-        pass
-    return "https://uisp.example.invalid"
+        return resources.get_url(name)
+    except noc_config.ConfigError as exc:
+        raise RuntimeError(str(exc))
 
 
 def fetch_uisp_stats(device_id, window="month", timeout=60):
@@ -338,7 +340,7 @@ def librenms_graph_png(args):
     error page: validates the magic bytes and fails closed.
     """
     import http.cookiejar
-    base = (os.environ.get("LIBRENMS_URL") or "http://librenms.example.invalid").rstrip("/")
+    base = _registered("librenms").rstrip("/")
     user = os.environ.get("LIBRENMS_WEB_USER")
     if not user:
         raise RuntimeError("LIBRENMS_WEB_USER not set in env")

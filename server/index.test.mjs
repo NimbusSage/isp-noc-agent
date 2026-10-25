@@ -681,6 +681,8 @@ test('buildAgentEnv: allowlist + deny regex + explicit passthrough', () => {
   const env = srv.buildAgentEnv(src, cfg);
   for (const n of ['PATH', 'HOME', 'LANG', 'SONAR_TOKEN', 'LIBRENMS_URL', 'UISP_BASE_URL', 'MYMATE_PASS', 'TEMP_SITE_ALLOWED_HOSTS', 'NOC_WRITE_ENABLED', 'PEAK_WINDOW_TZ', 'GOOGLE_APPLICATION_CREDENTIALS', 'FOO_API_KEY', 'NOC_DOTENV', 'RANDOM']) assert.ok(n in env, n);
   for (const n of ['NOC_MCP_PASSPHRASE', 'NOC_TICKETS_GOOGLE_CHAT_WEBHOOK_URL', 'TICKET_WEBHOOK_AUTH_TOKEN', 'GOVERNANCE_AUTH_TOKEN', 'INVOCATION_ID', 'JOURNAL_STREAM']) assert.ok(!(n in env), n);
+  assert.equal(env.NOC_UNATTENDED, '1');                                  // batch agents may not register services
+  assert.equal(srv.buildAgentEnv({ ...src, NOC_UNATTENDED: '' }, cfg).NOC_UNATTENDED, '1');
 });
 
 test('untrusted wrapper neutralises delimiters and control characters', () => {

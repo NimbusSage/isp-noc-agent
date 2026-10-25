@@ -8,6 +8,7 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getResource } from './resources.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const CACHE = resolve(ROOT, 'logs', 'mymate-device-index.json');
@@ -38,8 +39,8 @@ function mergeCookies(jar, setCookies) {
 }
 
 async function login() {
-  const base = process.env.MYMATE_URL;
-  if (!base || !process.env.MYMATE_USER || !process.env.MYMATE_PASS) throw new Error('MYMATE_URL/USER/PASS not configured');
+  const base = getResource('mymate');   // throws with the next action when MyMate is not registered
+  if (!process.env.MYMATE_USER || !process.env.MYMATE_PASS) throw new Error('MYMATE_USER / MYMATE_PASS not configured');
   let jar = [];
   const csrf = await fetch(base + '/sanctum/csrf-cookie', { redirect: 'manual' });
   jar = mergeCookies(jar, csrf.headers.getSetCookie?.() || []);
