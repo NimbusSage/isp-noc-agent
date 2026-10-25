@@ -378,5 +378,37 @@ class TestChatAlert(Base):
         self.assertEqual(py("chat_alert.py", "--selftest", env=self.env).returncode, 0)
 
 
+class TestGqlCli(Base):
+    def run_cli(self, query, *argv):
+        return subprocess.run([sys.executable, "-B", str(SCRIPTS / "gql_client.py"), *argv], input=query,
+                              capture_output=True, text=True, env=self.env, timeout=90)
+
+    def test_reads_a_query_from_stdin_and_prints_data(self):
+        q = 'query($t: Int64Bit!) { ticket_comments(search: {integer_fields: [{attribute: "ticket_id", operator: EQ, search_value: $t}]}, paginator: {page: 1, records_per_page: 2}) { entities { id } } }'
+        r = self.run_cli(q, "--vars", '{"t": 91001}')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("ticket_comments", json.loads(r.stdout))
+
+    def test_token_is_not_on_the_command_line_or_in_output(self):
+        r = self.run_cli("{ __typename }")
+        self.assertNotIn(self.token, r.stdout + r.stderr)
+
+    def test_mutation_refused_unless_allowed(self):
+        r = self.run_cli("mutation { x }")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("refusing a mutation", r.stderr)
+
+    def test_bad_input_exits_1(self):
+        self.assertEqual(self.run_cli("", ).returncode, 1)
+        self.assertEqual(self.run_cli("{ a }", "--vars", "[1]").returncode, 1)
+
+    def test_api_error_exits_2_without_traceback(self):
+        self.env["SONAR_TOKEN"] = "wrong-" + "x" * 12
+        r = self.run_cli("{ __typename }")
+        self.assertEqual(r.returncode, 2)
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertNotIn("wrong-", r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

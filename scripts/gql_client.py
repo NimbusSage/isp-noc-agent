@@ -20,6 +20,13 @@ Variable types: Sonar ids are the custom scalar `Int64Bit` on this API (see
 `Int64Bit!` on this tenant"). If a tenant differs, set SONAR_ID_SCALAR (a bare
 GraphQL type name, e.g. `Int`).
 
+Command line (reads the query from stdin, prints the `data` object as JSON; refuses a mutation
+unless --allow-mutation is given, because writes belong in sonar_comment.py and sonar_bounce.py):
+
+    python3 scripts/gql_client.py --vars '{"id": 1234}' <<'GQL'
+    query($id: Int64Bit!) { tickets(search: {string_fields: [{attribute: "id", search_value: $id, match: true}]}) { entities { id subject } } }
+    GQL
+
 Env: SONAR_TOKEN (env or .env), SONAR_BASE_URL (else site-pack profile
 org.sonar_base_url), SONAR_ID_SCALAR, SONAR_ALLOW_INSECURE_HTTP=1 (tests only).
 """
@@ -198,3 +205,40 @@ def fetch_recent_comments(ticket_id: int, **kw: Any) -> list:
     if not isinstance(entities, list):
         raise GraphQLError("shape", "ticket_comments.entities is not a list")
     return entities
+
+
+# --- command line ------------------------------------------------------------
+
+_MUTATION = re.compile(r"(?m)^\s*mutation\b|\bmutation\s*[({A-Za-z]")
+
+
+def main(argv: Optional[list] = None) -> int:
+    import argparse
+    ap = argparse.ArgumentParser(description="Run one Sonar GraphQL operation read from stdin; print `data` as JSON.")
+    ap.add_argument("--vars", default="{}", help="JSON object of GraphQL variables (default: none)")
+    ap.add_argument("--allow-mutation", action="store_true", help="permit a mutation (default: refuse)")
+    args = ap.parse_args(argv)
+    try:
+        variables = json.loads(args.vars)
+        if not isinstance(variables, dict):
+            raise ValueError("not an object")
+    except ValueError:
+        print("--vars must be a JSON object", file=sys.stderr)
+        return 1
+    query = sys.stdin.read()
+    if not query.strip():
+        print("no query on stdin", file=sys.stderr)
+        return 1
+    if _MUTATION.search(query) and not args.allow_mutation:
+        print("refusing a mutation: use sonar_comment.py or sonar_bounce.py, or pass --allow-mutation", file=sys.stderr)
+        return 1
+    try:
+        print(json.dumps(execute(query, variables), indent=2))
+    except GraphQLError as e:
+        print(f"Sonar error: {e}", file=sys.stderr)
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
