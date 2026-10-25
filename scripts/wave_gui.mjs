@@ -21,7 +21,6 @@
 //     only disabled when running as root (it cannot start otherwise) or CHROME_NO_SANDBOX=1.
 //   * --ignore-certificate-errors stays: radios ship self-signed certificates.
 
-import puppeteer from 'puppeteer-core';
 import https from 'node:https';
 import http from 'node:http';
 import { closeSync, constants, fchmodSync, mkdirSync, openSync, writeFileSync, writeSync } from 'node:fs';
@@ -143,6 +142,10 @@ async function main() {
   if (!['probe', 'enable-ssh'].includes(cmd)) { console.error('unknown command:', cmd); process.exit(2); }
   if (cmd === 'enable-ssh' && !EXECUTE) log('DRY-RUN: add --execute to actually change settings');
 
+  // Loaded only for the browser modes, so read/speedtest work without the root npm dependencies.
+  let puppeteer;
+  try { puppeteer = (await import('puppeteer-core')).default; }
+  catch { console.error('puppeteer-core is not installed: run `npm ci` in the repository root'); process.exit(2); }
   const browser = await puppeteer.launch({
     executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome',
     headless: 'new',
