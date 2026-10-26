@@ -54,7 +54,7 @@ Grouped geolocations not used for site truth — just error counters.
 
 ### 4. UISP (UBNT only)
 
-`device-statistics` interval `HOUR` for the radio's wireless rate.
+`device-statistics` interval `hour` (lower case; also `fourhours`, `day`, `week`, `month`, `quarter`, `year`) for the radio's wireless rate.
 
 ## Thresholds (flag degraded)
 

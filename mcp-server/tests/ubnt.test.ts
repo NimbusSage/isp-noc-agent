@@ -38,6 +38,26 @@ describe('UBNTUispClient', () => {
     );
   });
 
+  it('an API error carries the start of the response body, so a missing parameter is visible', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false, status: 400, statusText: 'Bad Request',
+      text: async () => '{"message":"\\"count\\" is required"}\n' + 'x'.repeat(500),
+    });
+    const result = await client.execute(UBNT_UISP_COMMANDS['outages'], { count: 5, page: 1 });
+    expect(result.status).toBe('error');
+    const warning = result.warnings[0];
+    expect(warning).toContain('HTTP 400: Bad Request - ');
+    expect(warning).toContain('is required');
+    expect(warning.length).toBeLessThan(260);
+    expect(warning).not.toContain('\n');
+  });
+
+  it('an error response without a readable body still reports the status', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404, statusText: 'Not Found' });
+    const result = await client.execute(UBNT_UISP_COMMANDS['sites'], {});
+    expect(result.warnings[0]).toBe('HTTP 404: Not Found');
+  });
+
   it('includes auth header', () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,

@@ -83,7 +83,15 @@ export class UBNTUispClient implements DeviceClient {
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      // The first part of an error body usually says what was wrong (a missing query parameter, for
+      // example). Control characters are dropped and the text is capped so it stays one short line.
+      let detail = '';
+      try {
+        detail = (await response.text()).replace(/[\u0000-\u001f]+/g, ' ').trim().slice(0, 200);
+      } catch {
+        detail = '';
+      }
+      throw new Error(`HTTP ${response.status}: ${response.statusText}${detail ? ` - ${detail}` : ''}`);
     }
 
     return response.json();

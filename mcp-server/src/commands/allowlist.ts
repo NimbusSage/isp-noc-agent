@@ -23,8 +23,10 @@ const COUNT_PARAM = (dflt: number): ParamSpec => ({
 const BTEST_USER_PARAM: ParamSpec = { type: 'string', required: true, maxLength: 64, pattern: /^[A-Za-z0-9_.@-]{1,64}$/ };
 const BTEST_PASSWORD_PARAM: ParamSpec = { type: 'string', required: true, maxLength: 128, pattern: /^[A-Za-z0-9_.@%+=:,/!#^*~-]{1,128}$/ };
 const UISP_DEVICE_ID_PARAM: ParamSpec = { type: 'string', required: true, maxLength: 128, pattern: UISP_DEVICE_ID_RE };
-// UISP statistics interval (HOUR, DAY, WEEK, ...): letters/digits/underscore only.
-const UISP_INTERVAL_PARAM: ParamSpec = { type: 'string', required: false, default: 'HOUR', maxLength: 16, pattern: /^[A-Za-z0-9_]{1,16}$/ };
+const UISP_PAGE_PARAM: ParamSpec = { type: 'number', required: false, default: 1, integer: true, min: 1, max: 1000 };
+const UISP_COUNT_PARAM: ParamSpec = { type: 'number', required: false, default: 20, integer: true, min: 1, max: 100 };
+// The values UISP accepts for ?interval= (a live 400 lists them; `range` also needs start and end, so it is left out).
+const UISP_INTERVAL_PARAM: ParamSpec = { type: 'string', required: false, default: 'hour', enum: ['hour', 'fourhours', 'day', 'week', 'month', 'quarter', 'year'] };
 
 export const MIKROTIK_SSH_COMMANDS: Record<string, DeviceCommand> = {
   'system-resource': {
@@ -265,7 +267,7 @@ export const UBNT_UISP_COMMANDS: Record<string, DeviceCommand> = {
     name: 'device-statistics',
     category: 'interfaces',
     description: 'Device throughput and error statistics',
-    template: '/nms/api/v2.1/devices/{{deviceId}}/statistics',
+    template: '/nms/api/v2.1/devices/{{deviceId}}/statistics?interval={{interval}}',
     params: {
       deviceId: UISP_DEVICE_ID_PARAM,
       interval: UISP_INTERVAL_PARAM,
@@ -282,12 +284,22 @@ export const UBNT_UISP_COMMANDS: Record<string, DeviceCommand> = {
     },
     readOnly: true,
   },
-  'alerts': {
-    name: 'alerts',
+  // UISP has no /alerts route (it answers 404). Its alert-like data is the outage list and the system
+  // log, and both refuse a request without `count` and `page` (HTTP 400 "count is required"), checked live.
+  'outages': {
+    name: 'outages',
     category: 'system',
-    description: 'Active system alerts',
-    template: '/nms/api/v2.1/alerts',
-    params: {},
+    description: 'Recent device outages, newest first',
+    template: '/nms/api/v2.1/outages?count={{count}}&page={{page}}',
+    params: { count: UISP_COUNT_PARAM, page: UISP_PAGE_PARAM },
+    readOnly: true,
+  },
+  'logs': {
+    name: 'logs',
+    category: 'system',
+    description: 'Recent system log entries',
+    template: '/nms/api/v2.1/logs?count={{count}}&page={{page}}',
+    params: { count: UISP_COUNT_PARAM, page: UISP_PAGE_PARAM },
     readOnly: true,
   },
   'sites': {

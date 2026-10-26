@@ -97,8 +97,25 @@ describe('command parameter validation (injection)', () => {
     for (const deviceId of ['../../etc/passwd', '..', 'a/b', 'a?x=1', 'a#b', 'a b', '%2e%2e', 'a\n', '', '-abc', 'a'.repeat(129)]) {
       expect(validator.validate('ubnt-uisp', 'device-detail', { deviceId }).valid, JSON.stringify(deviceId)).toBe(false);
     }
-    expect(validator.validate('ubnt-uisp', 'device-statistics', { deviceId: 'abc', interval: 'DAY' }).valid).toBe(true);
-    expect(validator.validate('ubnt-uisp', 'device-statistics', { deviceId: 'abc', interval: 'DAY&x=1' }).valid).toBe(false);
+    expect(validator.validate('ubnt-uisp', 'device-statistics', { deviceId: 'abc', interval: 'day' }).valid).toBe(true);
+    expect(validator.validate('ubnt-uisp', 'device-statistics', { deviceId: 'abc', interval: 'day&x=1' }).valid).toBe(false);
+  });
+
+  it('UISP requests carry the query parameters the API requires (checked against a live instance)', () => {
+    const render = (name: string, params: Record<string, unknown>): string =>
+      renderTemplate(UBNT_UISP_COMMANDS[name], validator.validate('ubnt-uisp', name, params).params ?? params, encodeURIComponent);
+    // interval is mandatory and lower-case; the old default HOUR and the missing parameter both got HTTP 400.
+    expect(render('device-statistics', { deviceId: 'abc' })).toBe('/nms/api/v2.1/devices/abc/statistics?interval=hour');
+    expect(render('device-statistics', { deviceId: 'abc', interval: 'month' })).toContain('interval=month');
+    expect(validator.validate('ubnt-uisp', 'device-statistics', { deviceId: 'abc', interval: 'HOUR' }).valid).toBe(false);
+    expect(validator.validate('ubnt-uisp', 'device-statistics', { deviceId: 'abc', interval: 'range' }).valid).toBe(false);
+    // outages and logs need count and page; /alerts does not exist on UISP (404).
+    expect(render('outages', {})).toBe('/nms/api/v2.1/outages?count=20&page=1');
+    expect(render('logs', { count: 5, page: 2 })).toBe('/nms/api/v2.1/logs?count=5&page=2');
+    expect(UBNT_UISP_COMMANDS['alerts']).toBeUndefined();
+    for (const bad of [{ count: 0 }, { count: 101 }, { count: 1.5 }, { count: '5;x' }, { page: 0 }]) {
+      expect(validator.validate('ubnt-uisp', 'outages', bad).valid, JSON.stringify(bad)).toBe(false);
+    }
   });
 
   it('every string param in the registry has a validation schema and every number a range', () => {
