@@ -110,6 +110,7 @@ NocAgent/
 │   ├── portability-reinstall.md              # Portability: Moving & Reinstalling
 │   ├── quickstart.md                         # Try the demo before connecting anything real
 │   ├── skills.md                             # Skills System
+│   ├── team.md                               # Working as a team
 │   ├── ticket-pipeline.md                    # Ticket Pipeline — How Tickets Flow Through the Agent
 │   ├── tree-notes.txt
 │   └── webhook-api.md                        # Webhook API & N8N Integration
@@ -266,6 +267,7 @@ NocAgent/
 │   │   ├── fiber-topology.example.md
 │   │   ├── naming-convention.example.md
 │   │   ├── naming-conventions.example.md
+│   │   ├── team.example.json
 │   │   ├── tech_calendars.example.json
 │   │   ├── temp-bgp-config.example.json
 │   │   └── verified-probes.example.md
