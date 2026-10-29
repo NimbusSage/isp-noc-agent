@@ -292,7 +292,7 @@ class TestRollbackSh(Sandbox):
         self.repo = self.tmp / "repo"
         (self.repo / "scripts").mkdir(parents=True)
         (self.repo / "site-pack" / "topology").mkdir(parents=True)
-        for name in ("temp_bgp_rollback.sh", "ssh_opts.sh", "credstore.py", "envfile.py", "cred_store.mjs"):
+        for name in ("temp_bgp_rollback.sh", "ssh_opts.sh", "credstore.py", "envfile.py", "noc_config.py", "cred_store.mjs"):
             shutil.copy(SCRIPTS / name, self.repo / "scripts" / name)
         self.cfg = {
             "oxidized_base_url": "http://ox.test.invalid:8888",
@@ -309,6 +309,22 @@ class TestRollbackSh(Sandbox):
     def run_rollback(self, *args):
         return subprocess.run(["bash", str(self.repo / "scripts" / "temp_bgp_rollback.sh"), *args],
                               capture_output=True, text=True, env=self.env, timeout=60)
+
+    def test_router_password_can_live_in_the_local_overlay(self):
+        cfg = json.loads(json.dumps(self.cfg))
+        del cfg["rr_credentials"][0]["password"]
+        self.write_cfg(cfg)
+        (self.repo / "site-pack" / "topology" / "temp-bgp-config.local.json").write_text(
+            json.dumps({"rr_credentials": [{"ip": "10.20.0.1", "password": PW1}]}))  # secret-scan:allow(fake credential or address fixture for an offline test)
+        r = self.run_rollback("--network", "fiber-a", "--dry-run")
+        self.assertEqual(r.returncode, 0, r.stderr + r.stdout)
+        self.assertIn("SSHPASS=" + PW1, self.log.read_text())
+
+    def test_broken_overlay_stops_the_run(self):
+        (self.repo / "site-pack" / "topology" / "temp-bgp-config.local.json").write_text("{nope")
+        r = self.run_rollback("--network", "fiber-a", "--dry-run")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("temp-bgp-config.local.json", r.stderr)
 
     def test_dry_run_uses_sshpass_e_and_keeps_passwords_out_of_argv(self):
         r = self.run_rollback("--network", "fiber-a", "--dry-run")

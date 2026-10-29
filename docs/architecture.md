@@ -250,7 +250,7 @@ NocAgent/
 │   ├── tracker_sheet.mjs                     # Tracker Sheet helper — NOC Ticket Tracker 2.1 append-only writer
 │   ├── wave_gui.mjs                          # Wave radio web UI driver (puppeteer-core + system Chrome)
 │   ├── wave_rename.py                        # WaveOS rename executor: jq-filter SSID/hostname edits with snapshot/verify/rollback
-│   └── (40 test files)                       # matching *.test.mjs, test_*.py
+│   └── (42 test files)                       # matching *.test.mjs, test_*.py
 ├── server/                                   # Node.js/Express webhook server and its batch prompt template
 │   ├── batch_prompt_template.md
 │   ├── index.js
