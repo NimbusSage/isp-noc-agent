@@ -52,7 +52,16 @@
       "Edit(/scripts/secret_scan.py)",
       "Edit(/scripts/leak_denylist.sha256)",
       "Bash(python3 scripts/resources.py set*)",
-      "Bash(python3 scripts/resources.py migrate*--write*)"
+      "Bash(python3 scripts/resources.py migrate*--write*)",
+      "Bash(python3 scripts/team.py add*)",
+      "Bash(python3 scripts/team.py set-role*)",
+      "Bash(python3 scripts/team.py disable*)",
+      "Bash(python3 scripts/team.py enable*)",
+      "Bash(python3 scripts/team.py me*)",
+      "Bash(python3 scripts/pack.py init*)",
+      "Bash(python3 scripts/pack.py join*)",
+      "Bash(python3 scripts/pack.py pull*)",
+      "Bash(python3 scripts/pack.py git*)"
     ]
   },
   "hooks": {

@@ -14,6 +14,10 @@ copy-and-fill examples are in `site-pack/example/`: drop `.example` from the nam
   `resources` block (this organization's UISP, LibreNMS, MyMate, Oxidized and Sonar
   addresses and its sheet IDs; write it with `python3 scripts/resources.py set`, T1 step 3),
   portability tokens. T2 writes the IDs from discovery.
+- **Team roster** (`site-pack/team.json`): members with roles (`viewer`, `tech`, `lead`),
+  which credential pools are shared or personal, and the approved model list. Managed
+  with `python3 scripts/team.py`; shared through the pack repository with
+  `python3 scripts/pack.py` (TJ and Invite in the wizard).
 - **Device inventory** (`site-pack/devices.md`, example `devices.example.md`) and the
   dispatch tech to calendar map (`site-pack/tech_calendars.json`).
 - **Naming standards** (`site-pack/ticket-context/naming-conventions.md` and
@@ -38,7 +42,7 @@ the proving doctor row only, never a value from `.env`.
   "ts": "2026-01-01T12:00:00Z",
   "harness": "claude",
   "tiers_selected": ["T0", "T1"],
-  "phases": {"phase0": "pass", "t0": "pass", "t1": "pass", "t2": "skipped", "t3": "skipped"},
+  "phases": {"phase0": "pass", "t0": "pass", "tj": "skipped", "t1": "pass", "t2": "skipped", "t3": "skipped"},
   "proof": {"t0": "demo.py exit 0", "t1": "[PASS] mcp_store decrypt-ok devicetypes=3"},
   "ready_tier": 1,
   "complete": false

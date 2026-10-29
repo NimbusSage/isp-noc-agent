@@ -113,6 +113,12 @@ skipped, T0 is recommended for everyone):
 
 Record the chosen tiers in the state file, then run them in order.
 
+**Joining a team?** Ask: "Does a colleague already run NocAgent for your organization?"
+If yes, do Phase 0 and T0, then **TJ** below instead of building the org layer by hand:
+the service addresses, Sonar IDs, topology, device table and roster arrive in the
+team's pack, so skip the registration in T1 step 3, the IDs in T2 step 2 and the
+site-pack phase. Your own tokens are still yours (TJ step 4).
+
 ---
 
 ## T0 - Demo (no credentials)
@@ -269,6 +275,52 @@ Full walkthrough, scopes and the headless tunnel: `references/tier3-google.md`.
    Proof: `[PASS] oauth_files` naming each configured file. Skip: tracker filing,
    calendar dispatch and the temp-OSPF sheet stay off.
 
+## TJ - Join your team (a colleague already runs NocAgent)
+
+Everything shared (service addresses, topology, device table, roster, approved models)
+comes from the team's private pack. What stays yours are your own tokens and your own
+role. Detail: `docs/team.md`.
+
+1. **Get the invite.** A lead gives you the pack repository URL and your handle. Neither
+   is a secret. Do not guess them.
+2. **Preview the pack, then install it.** `python3 scripts/pack.py join <pack-url>`
+   lists every service address, setting, member and skill it would install and writes
+   nothing. Show that list to the operator; on their yes run the same command with
+   `--yes`. If git cannot log in, the operator fixes their own git access (an ssh key
+   or `gh auth login`); you never handle that credential.
+3. **Say who you are.** `python3 scripts/team.py me <handle>`, then
+   `python3 scripts/team.py whoami`. New people start as `viewer` (reads and analyzes);
+   a lead promotes them later.
+4. **Your own credentials.** `python3 scripts/resources.py list` shows which services
+   are registered and which credential names are present, never the values. For each
+   missing personal credential (`SONAR_TOKEN`; Google OAuth, T3) the operator creates
+   their own and sets it with `env_set.py`. Never ask a colleague for theirs, and never
+   copy someone else's `.env` or credential store. Device logins: ask the lead how the
+   team provides them; device skills stay off until they are in place.
+5. **Verify:** `python3 scripts/doctor.py --only team,resources`
+   Proof: `[PASS] team`, `[PASS] team_operator` with the role, `[PASS] team_pack`, and
+   `resources` PASS. Failure: `team_operator` WARN means step 3 is missing; `team_pack`
+   WARN means `python3 scripts/pack.py pull`.
+6. **Drill (read-only).** If T0 has not run, run it. Then ask the agent to analyze one
+   demo ticket. As a `viewer`, nothing is written anywhere.
+
+## Invite - bring a colleague in (leads only)
+
+Only when `python3 scripts/team.py can admin` exits 0 and the operator asks.
+
+1. **A pack repository must exist and be private.** If the team has none yet:
+   `python3 scripts/pack.py init <private-remote-url>` (it refuses credentials), the
+   operator creates that private repository, then
+   `python3 scripts/pack.py git push -u origin main`.
+2. **Add them:** `python3 scripts/team.py add <handle> --name "<Full Name>"` (role
+   `viewer`), then `python3 scripts/pack.py git add team.json`,
+   `python3 scripts/pack.py git commit -m "chore: add <handle>"` and
+   `python3 scripts/pack.py git push`.
+3. **Send them** the pack URL and the handle. Nothing secret goes in the message.
+4. **They run `onboard me`** and choose TJ. After their drill, promote them with
+   `python3 scripts/team.py set-role <handle> tech` (or `lead`) and push the roster
+   the same way.
+
 ## Optional - site pack (after T1 or T2)
 
 The tracked tree ships schemas only; your network reality (fiber map, BGP route
@@ -290,6 +342,7 @@ Run the doctor for the highest tier reached one last time, then tell the operato
   needs T2) or to check a router ("run system-resource on 10.0.x.y", needs T1); rerun
   `python3 scripts/demo.py --scenario breaker-open` to see a gate refuse; doctor any
   time with `python3 scripts/doctor.py`.
+- **Team:** whether the install is shared (`python3 scripts/team.py whoami`, `python3 scripts/pack.py status`), and how to invite or join a colleague (TJ and Invite above).
 - **Where docs live:** `README.md` (index), `docs/ticket-pipeline.md`, `docs/config.md`
   (every setting), `docs/skills.md`, `docs/operations.md`, `docs/incident-runbook.md`,
   `docs/mcp-server.md`, `docs/governance.md`.
