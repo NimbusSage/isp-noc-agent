@@ -130,7 +130,8 @@ NocAgent/
 │   │   └── encrypt-credentials.ts
 │   ├── src/                                  # TypeScript source of the MCP server
 │   │   ├── audit/                            # Audit log writer: one record per tool call, allowed or blocked
-│   │   │   └── logger.ts
+│   │   │   ├── logger.ts
+│   │   │   └── operator.ts
 │   │   ├── commands/                         # Per-device-type command allowlist, parameter checks and read-only validator
 │   │   │   ├── allowlist.ts
 │   │   │   ├── params.ts                     # Parameter validation and template rendering for read-only device commands
@@ -174,7 +175,7 @@ NocAgent/
 │   │   ├── tool-cli.ts                       # Universal tool CLI — harness-independent access to the MCP executor
 │   │   └── tool-schemas.ts                   # Single source of truth for every tool's INPUT schema
 │   ├── state/                                # Rollback snapshots written by the temporary-site tools
-│   ├── tests/                                # 30 files
+│   ├── tests/                                # 31 files
 │   ├── .gitignore
 │   ├── package-lock.json
 │   ├── package.json
@@ -222,6 +223,7 @@ NocAgent/
 │   ├── noc_config.py                         # Shared config resolution for the ops scripts
 │   ├── notify.py                             # Provider-neutral notifications for NocAgent (stdlib only)
 │   ├── oxidized_fetch.mjs                    # Deterministic Oxidized backup-config fetch for the agent
+│   ├── pack.py                               # Share the organization's site pack between colleagues through a private git repository (stdlib + git)
 │   ├── provision_exact_binding.mjs           # Provision (or remove) an exact-device credential binding in the encrypted MCP store by pinning an…
 │   ├── rain_fade_model.py                    # Predict the rain rate that kills a fading-prone link
 │   ├── rain_fade_readiness.py                # One-command rain-fade readiness for a Wave (WaveOS gen3) 60 GHz link
@@ -240,13 +242,14 @@ NocAgent/
 │   ├── ssh_opts.mjs                          # Host-key policy shared by the node ops scripts (mirrors scripts/ssh_common.py)
 │   ├── ssh_opts.sh                           # Sourced by the bash ops scripts (mk.sh, temp_bgp_rollback.sh)
 │   ├── statefile.py                          # Crash-safe, multi-process-safe state file primitives
+│   ├── team.py                               # Who is working, and what they may do: the team roster and the current operator (stdlib only)
 │   ├── temp_bgp_peering.py                   # Temp BGP Peering — Emergency Fiber Failover Usage: python3 scripts/temp_bgp_peering.py --network…
 │   ├── temp_bgp_rollback.sh                  # Temp BGP Rollback — disable only TEMP peers created during outage
 │   ├── temp_ospf_sheet.mjs                   # Temp OSPF sheet: read-only inspector and gated row reservation for the temporary-site workflow
 │   ├── tracker_sheet.mjs                     # Tracker Sheet helper — NOC Ticket Tracker 2.1 append-only writer
 │   ├── wave_gui.mjs                          # Wave radio web UI driver (puppeteer-core + system Chrome)
 │   ├── wave_rename.py                        # WaveOS rename executor: jq-filter SSID/hostname edits with snapshot/verify/rollback
-│   └── (37 test files)                       # matching *.test.mjs, test_*.py
+│   └── (40 test files)                       # matching *.test.mjs, test_*.py
 ├── server/                                   # Node.js/Express webhook server and its batch prompt template
 │   ├── batch_prompt_template.md
 │   ├── index.js

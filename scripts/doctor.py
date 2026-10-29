@@ -588,6 +588,61 @@ def check_resources(env):
         add("resources", "pass", f"{len(have)} resource(s) registered: {', '.join(r.name for r in have)}")
 
 
+def check_team(env):
+    """Who is working and what they may do: the team roster, this operator and the shared pack (scripts/team.py, scripts/pack.py)."""
+    import pack
+    import team
+    base = Path(os.environ.get("NOC_SITE_PACK_DIR") or ROOT / "site-pack")
+    roster_file = Path(os.environ.get("NOC_TEAM_FILE") or base / "team.json")
+    roster, problem = team.load_roster(roster_file)
+    if problem:
+        add("team", "fail", problem, "fix the file, or restore it with: python3 scripts/pack.py pull")
+        return
+    if roster is None:
+        add("team", "unconfigured", "no team roster (site-pack/team.json): single-person install, nothing is restricted",
+            "to join your team's pack: python3 scripts/pack.py join <url>; to start a team: python3 scripts/team.py add <handle> --name <name> --role lead")
+        return
+    bad, warn = team.problems(roster)
+    if bad:
+        add("team", "fail", "; ".join(bad), "python3 scripts/team.py check shows each one")
+    elif warn:
+        add("team", "warn", "; ".join(warn), "python3 scripts/team.py add <handle> --name <name> --role lead")
+    else:
+        add("team", "pass", f"{len(roster.get('members', {}))} member(s) in the roster")
+    op = team.current(roster_file)
+    if op.role == "disabled":
+        add("team_operator", "fail", op.problem, "ask a lead to enable you: python3 scripts/team.py enable <handle>")
+    elif not op.known:
+        add("team_operator", "warn", op.problem or "operator not identified",
+            "python3 scripts/team.py me <your-handle> (or ask a lead to add you with team.py add)")
+    else:
+        add("team_operator", "pass", f"{op.handle or 'unnamed'} ({op.role})")
+    gdir = Path(os.environ.get("NOC_PACK_GIT_DIR") or base / ".pack.git")
+    if (gdir / "HEAD").is_file():
+        branch = pack.git("symbolic-ref", "--short", "HEAD", gdir=gdir, wtree=base).stdout.strip() or "main"
+        counts = pack.git("rev-list", "--left-right", "--count", f"HEAD...origin/{branch}", gdir=gdir, wtree=base).stdout.split()
+        ahead, behind = (int(counts[0]), int(counts[1])) if len(counts) == 2 else (0, 0)
+        dirty = [ln for ln in pack.git("status", "--porcelain", gdir=gdir, wtree=base).stdout.splitlines() if ln.strip()]
+        if behind:
+            add("team_pack", "warn", f"{behind} change(s) from the team not pulled yet", "python3 scripts/pack.py pull")
+        elif ahead or dirty:
+            add("team_pack", "warn", f"{ahead} local commit(s) not shared, {len(dirty)} file(s) edited here",
+                "share them: python3 scripts/pack.py git push (a lead), or ask one to review")
+        else:
+            add("team_pack", "pass", f"site pack is up to date with the team (branch {branch}, as of the last fetch)")
+    else:
+        add("team_pack", "unconfigured", "site pack is not shared (no pack repository)",
+            "python3 scripts/pack.py join <url> (or pack.py init <url> for a lead)")
+    model = env_val(env, "AGENT_MODEL") or env_val(env, "OPENCODE_MODEL")
+    if model:
+        status = team.model_status(model, roster)
+        if status == "unlisted":
+            add("team_model", "warn", f"model {model} is not on the roster's approved list; ticket text can include customer details",
+                "use an approved model (AGENT_MODEL) or ask a lead to approve it in site-pack/team.json")
+        elif status == "approved":
+            add("team_model", "pass", f"model {model} is approved")
+
+
 def check_mymate(env):
     base = (registered(env, "mymate") or "").rstrip("/")
     user, pw = env_val(env, "MYMATE_USER"), env_val(env, "MYMATE_PASS")
@@ -943,6 +998,7 @@ CHECKS = [
     ("mcp_store", check_mcp_store, 1, True),
     ("harness", check_harness, 1, True),
     ("resources", check_resources, 1, False),
+    ("team", check_team, 1, False),
     ("librenms", check_librenms, 1, False),
     ("mymate", check_mymate, 1, False),
     ("sonar_api", check_sonar, 2, True),

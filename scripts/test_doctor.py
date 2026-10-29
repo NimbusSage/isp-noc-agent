@@ -455,6 +455,55 @@ class ResourcesCheckTests(DoctorCase):
         self.assertIn("librenms disagrees", row["detail"])
 
 
+class TeamCheckTests(DoctorCase):
+    ROSTER = {"members": {"ada": {"name": "Ada Lead", "role": "lead", "active": True},
+                          "vic": {"name": "Vic Viewer", "role": "viewer", "active": True}},
+              "approved_models": ["opencode/big-pickle"]}
+
+    def roster(self, data):
+        pack = self.root / "site-pack"
+        pack.mkdir(exist_ok=True)
+        (pack / "team.json").write_text(json.dumps(data))
+
+    def results(self, **env):
+        base = {"NOC_USER_CONFIG": str(self.root / "absent.json"), "NOC_DOTENV": str(self.root / "absent.env")}
+        with mock.patch.dict(os.environ, {**base, **env}):
+            _, rows = self.rows("--only", "team")
+        return {r["name"]: r for r in rows["results"]}
+
+    def test_no_roster_is_a_single_person_install(self):
+        rows = self.results()
+        self.assertEqual(rows["team"]["status"], "unconfigured")
+        self.assertNotIn("team_operator", rows)
+
+    def test_roster_with_a_known_operator_passes(self):
+        self.roster(self.ROSTER)
+        rows = self.results(NOC_OPERATOR="ada")
+        self.assertEqual(rows["team"]["status"], "pass")
+        self.assertEqual(rows["team_operator"]["status"], "pass")
+        self.assertIn("lead", rows["team_operator"]["detail"])
+        self.assertEqual(rows["team_pack"]["status"], "unconfigured")
+
+    def test_unidentified_operator_warns_with_the_fix(self):
+        self.roster(self.ROSTER)
+        row = self.results()["team_operator"]
+        self.assertEqual(row["status"], "warn")
+        self.assertIn("team.py me", row["hint"])
+
+    def test_invalid_roster_fails(self):
+        self.roster({"members": {"ada": {"name": "Ada", "role": "boss"}}})
+        self.assertEqual(self.results()["team"]["status"], "fail")
+
+    def test_model_outside_the_approved_list_warns(self):
+        self.roster(self.ROSTER)
+        self.write_env(AGENT_MODEL="other/free-model")
+        row = self.results(NOC_OPERATOR="ada")["team_model"]
+        self.assertEqual(row["status"], "warn")
+        self.assertIn("other/free-model", row["detail"])
+        self.write_env(AGENT_MODEL="opencode/big-pickle")
+        self.assertEqual(self.results(NOC_OPERATOR="ada")["team_model"]["status"], "pass")
+
+
 class HarnessTests(unittest.TestCase):
     def test_harness_row_summarizes_harness_setup(self):
         # Keep the interpreter's runtime environment (a hosted-toolcache Python needs LD_LIBRARY_PATH to start);

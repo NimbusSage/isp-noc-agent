@@ -78,9 +78,9 @@ def user_config_path() -> Path:
     return Path(override) if override else Path.home() / ".config" / "nocagent" / "user.json"
 
 
-def load_roster() -> Tuple[Optional[dict], Optional[str]]:
+def load_roster(path: Optional[Path] = None) -> Tuple[Optional[dict], Optional[str]]:
     """(roster, None); (None, None) when there is no roster file; (None, problem) when it is unreadable."""
-    path = roster_path()
+    path = path or roster_path()
     try:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -133,11 +133,11 @@ def configured_handle() -> Tuple[str, str]:
     return "", ""
 
 
-def current() -> Operator:
+def current(roster_file: Optional[Path] = None) -> Operator:
     handle, source = configured_handle()
     if handle == "batch" or handle.startswith("batch:"):
         return Operator(handle=handle, role="batch", name="batch run", source=source)
-    roster, problem = load_roster()
+    roster, problem = load_roster(roster_file)
     if problem:
         return Operator(handle=handle, role="unknown", source=source, problem=problem)
     if roster is None:
