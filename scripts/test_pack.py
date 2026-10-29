@@ -108,6 +108,26 @@ class Init(Base):
         self.assertNotIn(TOKEN, out + err)
         self.assertFalse((self.lead / ".pack.git").exists())
 
+    def test_dry_run_lists_files_and_settings_and_writes_nothing(self):
+        self.seed_lead()
+        with self.at(self.lead):
+            code, out, _e = self.run_pack("init", str(self.remote), "--dry-run")
+        self.assertEqual(code, 0, out)
+        for text in ("4 file(s)", "profile.json", "topology/map.md", "service uisp: https://uisp.corp-net.org", "member ada: lead"):
+            self.assertIn(text, out)
+        self.assertNotIn("README.md", out)
+        self.assertNotIn(".bak", out)
+        self.assertFalse((self.lead / ".pack.git").exists())
+
+    def test_dry_run_still_refuses_a_credential(self):
+        self.seed_lead()
+        (self.lead / "devices.md").write_text("token = %s\n" % TOKEN)
+        with self.at(self.lead):
+            code, out, err = self.run_pack("init", str(self.remote), "--dry-run")
+        self.assertEqual(code, 1)
+        self.assertIn("devices.md:1 github-token", err)
+        self.assertNotIn("Nothing was written", out)
+
     def test_the_commit_hook_refuses_a_credential(self):
         self.publish()
         with self.at(self.lead):

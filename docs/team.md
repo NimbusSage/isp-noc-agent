@@ -59,9 +59,10 @@ On a person's own machine the roster is a file that person can edit. There, role
 
 3. Check it: `python3 scripts/team.py check`.
 
-4. Create a **private** repository for the pack, then publish:
+4. Create a **private** repository for the pack. Preview what would be committed (this writes nothing), then publish:
 
    ```bash
+   python3 scripts/pack.py init <private-remote-url> --dry-run
    python3 scripts/pack.py init <private-remote-url>
    python3 scripts/pack.py git push -u origin main
    ```

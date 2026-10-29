@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Share the organization's site pack between colleagues through a private git repository (stdlib + git).
 
-    python3 scripts/pack.py init <remote-url>     # a lead: turn this site-pack/ into a pack repository
+    python3 scripts/pack.py init <remote-url> [--dry-run]   # a lead: turn this site-pack/ into a pack repository
     python3 scripts/pack.py join <remote-url>     # a colleague: fetch the team's pack into site-pack/
     python3 scripts/pack.py status [--fetch]      # where this copy stands against the team's
     python3 scripts/pack.py pull [--yes]          # show what changed, then apply it
@@ -307,6 +307,20 @@ def cmd_init(args: argparse.Namespace) -> int:
         for line in findings:
             print("  " + line, file=sys.stderr)
         return 1
+    if args.dry_run:
+        print("dry run: init would commit %d file(s) from %s and publish them to %s. No credential found. Nothing was written."
+              % (len(files), base, args.url))
+        for p in files:
+            print("  " + str(p.relative_to(base)))
+        profile = _json(_read_text(base / "profile.json"))
+        roster = _json(_read_text(base / "team.json"))
+        lines = [f"service {k}: {v}" for k, v in sorted(_resources(profile).items())]
+        lines += [f"member {k}: {v}" for k, v in sorted(_members(roster).items())]
+        if lines:
+            print("these become the team's shared settings:")
+            for line in lines:
+                print("  " + line)
+        return 0
     try:
         _setup_repo(args.url, args.branch)
         git("add", "-A")
@@ -493,6 +507,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         p.add_argument("--branch", default="main")
         if name == "join":
             p.add_argument("--yes", action="store_true", help="install without asking (after reading the summary)")
+        else:
+            p.add_argument("--dry-run", action="store_true", help="list what would be committed and published; write nothing")
         p.set_defaults(fn=fn)
     p = sub.add_parser("status", help="where this copy stands")
     p.add_argument("--fetch", action="store_true")
