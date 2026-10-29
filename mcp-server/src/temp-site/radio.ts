@@ -254,6 +254,18 @@ export async function resolveStationPsk(
   return { psk: validatePsk(keys[idx], `env:${idx}`), source: `env:${idx}` };
 }
 
+/** Remote command that reads back every key an op edited and no others. Verification has to cover the keys the
+ * op actually wrote: a fixed grep of radio.1.mode|freq made every set-mode managed and set-frequency check miss
+ * its wpasupplicant.* and chanbw edits, fail the safe-mode readback and trigger an unneeded restore write.
+ * Keys are interpolated into a remote shell command, so only plain config key characters are accepted. */
+export function readbackCommand(edits: CfgEdit[]): string {
+  if (edits.length === 0) throw new Error('no edits to read back');
+  for (const e of edits) {
+    if (!/^[A-Za-z0-9._-]+$/.test(e.key)) throw new Error('refusing to read back an unsafe config key');
+  }
+  return `grep -E '^(${edits.map((e) => e.key).join('|')})=' /tmp/system.cfg`;
+}
+
 /** Strip any captured key material from user-facing text. Audit/metadata must
  * call this on readbacks that may include `*.psk=` lines. Key NAMES stay. */
 export function redactCfgValues(text: string): string {

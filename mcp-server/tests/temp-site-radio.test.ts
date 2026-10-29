@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { planTempRadio, checkExecuteGates } from '../src/temp-site/radio.js';
+import { planTempRadio, checkExecuteGates, opToEdits, readbackCommand, redactCfgValues } from '../src/temp-site/radio.js';
 
 describe('temp-site radio planner (dry-run only)', () => {
   it('plans a station flip with verify + rollback and a confirm deadline', () => {
@@ -33,5 +33,41 @@ describe('temp-site radio planner (dry-run only)', () => {
     expect(checkExecuteGates().ok).toBe(true);
     if (prior === undefined) delete process.env.TEMP_SITE_WRITE_ENABLED;
     else process.env.TEMP_SITE_WRITE_ENABLED = prior;
+  });
+});
+
+describe('readbackCommand', () => {
+  const ops = [
+    { op: 'set-mode', mode: 'managed', ssid: 'TEST-AP' },
+    { op: 'set-mode', mode: 'master' },
+    { op: 'set-frequency', frequencyMhz: 5180, chanbw: 20 },
+  ] as const;
+
+  it('reads back every key the op edits, for every op shape', () => {
+    for (const op of ops) {
+      const edits = opToEdits(op as never, op.op === 'set-mode' && op.mode === 'managed' ? 'a-valid-test-psk' : undefined);
+      const cmd = readbackCommand(edits);
+      const wanted = cmd.match(/\^\((.+)\)=/)?.[1].split('|') ?? [];
+      expect(wanted).toEqual(edits.map((e) => e.key));
+      expect(cmd.endsWith(' /tmp/system.cfg')).toBe(true);
+    }
+  });
+
+  it('covers the wpasupplicant and chanbw keys the old fixed grep missed', () => {
+    const managed = readbackCommand(opToEdits({ op: 'set-mode', mode: 'managed', ssid: 'TEST-AP' } as never));
+    expect(managed).toContain('wpasupplicant.profile.1.network.1.ssid');
+    expect(readbackCommand(opToEdits({ op: 'set-frequency', frequencyMhz: 5180, chanbw: 20 } as never))).toContain('radio.1.chanbw');
+  });
+
+  it('refuses keys that could break out of the quoted pattern, and an empty edit list', () => {
+    for (const key of ["radio.1.mode'; id #", 'a b', 'a|b', '', 'x$(id)']) {
+      expect(() => readbackCommand([{ key, value: 'v' }])).toThrow(/unsafe/);
+    }
+    expect(() => readbackCommand([])).toThrow(/no edits/);
+  });
+
+  it('a key line that comes back with the PSK is redacted before it reaches any detail text', () => {
+    const readback = 'radio.1.mode=managed\nwpasupplicant.profile.1.network.1.psk=super-secret-test-value';
+    expect(redactCfgValues(readback)).not.toContain('super-secret-test-value');
   });
 });

@@ -12,7 +12,7 @@ import { resolveOperator } from './audit/operator.js';
 import { lookupLibreNmsDeviceByExactIp } from './inventory/librenms.js';
 import { RouterOsWriteSchema, planRouterOsWrite, executeRouterOsWrite, checkInfraWriteGates } from './writes/routeros-writes.js';
 import { planTempOspf } from './temp-site/ospf.js';
-import { planTempRadio, checkExecuteGates, checkTransportGates, opToEdits, resolveStationPsk, redactCfgValues } from './temp-site/radio.js';
+import { planTempRadio, checkExecuteGates, checkTransportGates, opToEdits, resolveStationPsk, redactCfgValues, readbackCommand } from './temp-site/radio.js';
 import { TempOspfApplySchema, applyOspfAdjacency, rollbackOspfAdjacency, checkRouterGates, TempMtFlipSchema, applyMtFlip, rollbackMtFlip, checkMtGates, TempApWdsSchema, applyApWds, TempMtBounceSchema, applyMtBounce, TempMtAliasSchema, applyMtAlias, removeMtAlias } from './temp-site/mikrotik.js';
 import { MikroTikClient } from './devices/mikrotik.js';
 import { Ssh2Runner, applyCfgEdits, restoreSnapshot } from './temp-site/airos-ssh.js';
@@ -839,9 +839,10 @@ export class NocMcpServer {
       writeSnapshotFile(snapshotId, preSnapshot);
       // Save-only apply: no post-save reboot (INC-C-01 live precedent — assoc
       // forms on softrestart save; INC-F-01 proved a reboot breaks verify+rollback).
+      // The readback covers the keys this op actually edited (see readbackCommand).
       const result = await applyCfgEdits(runner, String(host), credential, edits, async () => {
         try {
-          const check = await runner.exec(String(host), credential, `grep -E '^(radio.1.mode|radio.1.freq)=' /tmp/system.cfg`, 20000);
+          const check = await runner.exec(String(host), credential, readbackCommand(edits), 20000);
           return { ok: edits.every((e) => check.includes(`${e.key}=${e.value}`)), detail: redactCfgValues(check).trim().slice(0, 300) || 'empty readback' };
         } catch (e) {
           return { ok: false, detail: this.errText(e, credential) };
