@@ -81,10 +81,12 @@ def _env() -> Dict[str, str]:
 
 def git(*args: str, gdir: Optional[Path] = None, wtree: Optional[Path] = None, stdin: Optional[str] = None,
         interactive: bool = False) -> subprocess.CompletedProcess:
-    cmd = ["git", "--git-dir", str(gdir or git_dir()), "--work-tree", str(wtree or pack_dir())] + list(args)
+    tree = wtree or pack_dir()
+    cmd = ["git", "--git-dir", str(gdir or git_dir()), "--work-tree", str(tree)] + list(args)
+    cwd = str(tree) if tree.is_dir() else None       # path arguments (pack.py git add team.json) are relative to the pack
     if interactive:      # let git show its own output and prompts (push, fetch asking for a passphrase)
-        return subprocess.run(cmd, env=_env(), text=True, check=False)
-    return subprocess.run(cmd, env=_env(), input=stdin, text=True, capture_output=True, check=False)
+        return subprocess.run(cmd, env=_env(), cwd=cwd, text=True, check=False)
+    return subprocess.run(cmd, env=_env(), cwd=cwd, input=stdin, text=True, capture_output=True, check=False)
 
 
 def initialised() -> bool:

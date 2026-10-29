@@ -241,6 +241,13 @@ class Pull(Base):
 
 
 class Misc(Base):
+    def test_git_paths_are_relative_to_the_pack(self):
+        self.publish()
+        (self.lead / "devices.md").write_text("| changed |\n")
+        with self.at(self.lead):
+            self.assertEqual(pack.main(["git", "add", "devices.md"]), 0)
+            self.assertIn("devices.md", pack.git("diff", "--cached", "--name-only").stdout)
+
     def test_status_without_a_pack(self):
         self.mate.mkdir(parents=True)
         with self.at(self.mate):
