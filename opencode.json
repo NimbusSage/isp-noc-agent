@@ -4,8 +4,10 @@
   "mcp": {
     "network-troubleshooter": {
       "type": "local",
-      "command": ["node", "/root/NocAgent/mcp-server/dist/index.js"],
-      "cwd": "/root/NocAgent/mcp-server",
+      "command": [
+        "node",
+        "scripts/mcp_launch.mjs"
+      ],
       "enabled": true,
       "environment": {
         "NOC_MCP_PASSPHRASE": "{env:NOC_MCP_PASSPHRASE}",

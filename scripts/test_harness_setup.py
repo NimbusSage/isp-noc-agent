@@ -28,8 +28,8 @@ MCP_FILES = {
     "codex": ".codex/config.toml",
     "opencode": "opencode.json",
 }
-RELATIVE_HARNESSES = ("claude", "cursor", "vscode")
-ABSOLUTE_HARNESSES = ("gemini", "codex", "opencode")
+RELATIVE_HARNESSES = ("claude", "cursor", "vscode", "opencode")
+ABSOLUTE_HARNESSES = ("gemini", "codex")
 
 
 def make_repo(root: Path, agents_bytes: int = 200) -> Path:
@@ -220,8 +220,8 @@ class TestWrite(TempRepoCase):
         data = json.loads(path.read_text())
         entry = data["mcp"][hs.SERVER_NAME]
         self.assertEqual(data["model"], "opencode/big-pickle")
-        self.assertEqual(entry["command"], ["node", str(self.repo / "mcp-server" / "dist" / "index.js")])
-        self.assertEqual(entry["cwd"], str(self.repo / "mcp-server"))
+        self.assertEqual(entry["command"], ["node", "scripts/mcp_launch.mjs"])
+        self.assertNotIn("cwd", entry)
         self.assertIn("TEMP_SITE_ALLOWED_HOSTS", entry["environment"])
 
     def test_opencode_v2_layout_gets_disabled_false(self) -> None:

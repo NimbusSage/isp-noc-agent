@@ -299,11 +299,12 @@ def _gemini_entry(repo: Path) -> Dict[str, Any]:
 
 
 def _opencode_entry(repo: Path) -> Dict[str, Any]:
-    paths = server_paths(repo)
+    # Relative on purpose, so the tracked opencode.json works in every checkout. OpenCode resolves a
+    # relative command against the directory it was started in (checked with opencode 2.2.0), so it
+    # has to be started at the repository root; the launcher then anchors itself.
     return {
         "type": "local",
-        "command": ["node", str(paths["entry"])],
-        "cwd": str(paths["mcp_root"]),
+        "command": ["node", "scripts/mcp_launch.mjs"],
         "enabled": True,
         "environment": {name: "{env:%s}" % name for name in PASS_THROUGH},
     }
@@ -369,16 +370,8 @@ def merge_opencode(existing: Optional[str], repo: Path) -> str:
             entry = v2
         holder[SERVER_NAME] = entry
         return dump_json(data)
-    paths = server_paths(repo)
-    command = current.get("command")
-    if isinstance(command, list):
-        current["command"] = [
-            str(paths["entry"]) if isinstance(part, str) and part.endswith("dist/index.js") else part
-            for part in command
-        ]
-    else:
-        current["command"] = ["node", str(paths["entry"])]
-    current["cwd"] = str(paths["mcp_root"])
+    current["command"] = list(entry["command"])
+    current.pop("cwd", None)
     return dump_json(data)
 
 
@@ -552,10 +545,9 @@ def do_write(harness: str, repo: Path, force: bool = False, dry_run: bool = Fals
             entry["action"] = "wrote"
     out["files"].append(entry)
 
-    if harness == "opencode" and old is not None and entry["action"] in ("wrote", "would-write"):
-        out["notes"].append("opencode.json is tracked: this edit is machine-local. Keep it out of "
-                            "commits (git update-index --skip-worktree opencode.json).")
-    if harness in ("codex", "gemini", "opencode") and entry["action"] in ("wrote", "would-write", "unchanged"):
+    if harness == "opencode" and entry["action"] in ("wrote", "would-write", "unchanged"):
+        out["notes"].append("Start OpenCode from the repository root: %s uses a relative path." % rel)
+    if harness in ("codex", "gemini") and entry["action"] in ("wrote", "would-write", "unchanged"):
         out["notes"].append("%s contains absolute paths for this checkout: do not commit it." % rel)
     if harness in ("cursor", "vscode"):
         out["notes"].append("No env is passed to the server: it reads the repo .env itself.")

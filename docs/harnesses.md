@@ -66,7 +66,7 @@ For Claude Code specifically, `--harness claude --write` also creates the `.clau
 | VS Code | `.vscode/mcp.json` | Instruction loading not confirmed; read `AGENTS.md` yourself | None |
 | Any other | None | `AGENTS.md` | None |
 
-**MCP launcher note.** Claude Code and Cursor start the MCP server through `node scripts/mcp_launch.mjs`. Those two tools do not document a setting for the working directory, so the launcher changes into `mcp-server/` before starting the server. OpenCode, Codex, Gemini CLI, and VS Code document a working-directory setting and run `node mcp-server/dist/index.js` directly.
+**MCP launcher note.** Claude Code and Cursor start the MCP server through `node scripts/mcp_launch.mjs`. Those two tools do not document a setting for the working directory, so the launcher changes into `mcp-server/` before starting the server. OpenCode also uses the launcher, with a relative path, so start it from the repository root. Codex, Gemini CLI, and VS Code document a working-directory setting and run `node mcp-server/dist/index.js` directly.
 
 ## Notes
 

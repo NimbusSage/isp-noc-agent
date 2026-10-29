@@ -34,8 +34,7 @@ npm run encrypt -- config/credentials.json
   "mcp": {
     "network-troubleshooter": {
       "type": "local",
-      "command": ["node", "<path-to-repo>/mcp-server/dist/index.js"],
-      "cwd": "<path-to-repo>/mcp-server",
+      "command": ["node", "scripts/mcp_launch.mjs"],
       "enabled": true,
       "environment": {
         "NOC_MCP_PASSPHRASE": "{env:NOC_MCP_PASSPHRASE}"
@@ -44,6 +43,8 @@ npm run encrypt -- config/credentials.json
   }
 }
 ```
+
+The path is relative, so the same file works in every checkout. OpenCode resolves it against the directory it was started in, so start OpenCode from the repository root; `scripts/mcp_launch.mjs` then finds `mcp-server/` on its own.
 
 The `NOC_MCP_PASSPHRASE` env var must be set in the agent harness's process environment (it is — the systemd service loads `.env` via `EnvironmentFile`). The MCP server also self-loads the repo-root `.env` as a fallback for any unset var (`NOC_MCP_DOTENV` override, else `./.env`, else `../.env` relative to its cwd; explicit env always wins — see `mcp-server/src/config/repo-env.ts`). A scrubbed-env smoke test (`env -i … node dist/index.js` + `tools/call list-device-types`) proves the store decrypts. If the passphrase is still missing, the error names the fallback path attempted.
 
