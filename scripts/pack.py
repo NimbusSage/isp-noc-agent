@@ -587,7 +587,9 @@ def cmd_init(args: argparse.Namespace) -> int:
     try:
         _setup_repo(args.url, args.branch)
         git("add", "-A")
-        r = git("commit", "-q", "-m", "chore: initial site pack")
+        # The first commit is automatic: never wait on a signing prompt (a global commit.gpgsign=true with no
+        # terminal would hang here). Later commits made with `pack.py git commit` follow the person's own git settings.
+        r = git("-c", "commit.gpgsign=false", "commit", "-q", "-m", "chore: initial site pack")
         if r.returncode != 0:
             raise PackError("git commit failed: %s (set user.name and user.email, or fix commit signing)" % r.stderr.strip())
         hook = git_dir() / "hooks" / "pre-commit"

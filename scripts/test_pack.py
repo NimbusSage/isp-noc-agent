@@ -109,6 +109,16 @@ class Init(Base):
         self.assertNotIn(TOKEN, out + err)
         self.assertFalse((self.lead / ".pack.git").exists())
 
+    def test_the_first_commit_does_not_wait_for_a_signing_prompt(self):
+        gitconfig = Path(os.environ["GIT_CONFIG_GLOBAL"])
+        gitconfig.write_text(gitconfig.read_text().replace("gpgsign = false", "gpgsign = true")
+                             + "[gpg]\n\tprogram = /bin/false\n[user]\n\tsigningkey = ABCDEF0123456789\n")
+        self.seed_lead()
+        with self.at(self.lead):
+            code, out, err = self.run_pack("init", str(self.remote))
+        self.assertEqual(code, 0, err)
+        self.assertTrue((self.lead / ".pack.git" / "HEAD").exists())
+
     def test_dry_run_lists_files_and_settings_and_writes_nothing(self):
         self.seed_lead()
         with self.at(self.lead):
