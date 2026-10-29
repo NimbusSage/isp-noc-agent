@@ -189,13 +189,21 @@ def _load_denylist(path: Path) -> Tuple[Set[str], int, Optional[str]]:
 def _load_profile_tokens(path: Optional[Path]) -> Tuple[frozenset, Optional["re.Pattern[str]"]]:
     if path is None or not path.exists():
         return frozenset(), None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        tokens = data.get("org", {}).get("portability_tokens", [])
-    except (OSError, ValueError, AttributeError):
-        return frozenset(), None
-    if not isinstance(tokens, list):
-        return frozenset(), None
+    tokens: list = []
+    # The shared profile and the machine-local overlay beside it (profile.local.json): a token moved out of the
+    # shared pack must still be caught in the public tree.
+    for source in (path, path.with_name(path.stem + ".local" + path.suffix)):
+        try:
+            data = json.loads(source.read_text(encoding="utf-8"))
+            found = data.get("org", {}).get("portability_tokens", [])
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError, AttributeError):
+            return frozenset(), None
+        if isinstance(found, list):
+            tokens.extend(found)
+        elif source is path:
+            return frozenset(), None
     plain: Set[str] = set()
     other: List[str] = []
     for t in tokens:

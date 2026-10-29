@@ -2,7 +2,8 @@
 """
 noc_config.py - shared config resolution for the ops scripts.
 
-* site-pack/profile.json loader (org-specific Sonar group/category ids, base URL)
+* site-pack/profile.json loader (org-specific Sonar group/category ids, base URL), with the machine-local
+  profile.local.json overlay merged over it (secret values; never shared through the site pack)
 * state directory resolution (breaker state, decision log, metrics, eval output)
 * strict integer-id resolution: env (real environment, then .env) beats the
   profile; there are NO built-in fallback ids - a missing id is an error the
@@ -32,6 +33,42 @@ class ConfigError(Exception):
     """A required setting is missing or malformed. Callers map this to their config exit code."""
 
 
+def overlay_path(path: Path) -> Path:
+    """The machine-local overlay beside a config file: profile.json -> profile.local.json."""
+    return path.with_name(path.stem + ".local" + path.suffix)
+
+
+def merge_overlay(base: Any, overlay: Any) -> Any:
+    """Overlay on top of base: objects merge key by key, anything else (lists included) is replaced whole."""
+    if isinstance(base, dict) and isinstance(overlay, dict):
+        out = dict(base)
+        for key, value in overlay.items():
+            out[key] = merge_overlay(base[key], value) if key in base else value
+        return out
+    return overlay
+
+
+def load_json_overlay(path: Path) -> Any:
+    """JSON from `path` with its `.local` overlay merged over it. The base file must exist (FileNotFoundError, like
+    open()); a missing overlay is normal; invalid JSON in either raises ValueError naming the file.
+
+    Secret values (SNMP communities, router passwords) live in the overlay, which the shared site pack never
+    tracks (scripts/pack.py localize moves them there). Only readers that need those values merge it in."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as e:
+        raise ValueError("%s: %s" % (path, e)) from e
+    local = overlay_path(path)
+    try:
+        text = local.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return data
+    try:
+        return merge_overlay(data, json.loads(text))
+    except ValueError as e:
+        raise ValueError("%s: %s" % (local, e)) from e
+
+
 def profile_path() -> Path:
     override = os.environ.get("NOC_PROFILE_FILE", "").strip()
     return Path(override) if override else ROOT / "site-pack" / "profile.json"
@@ -40,7 +77,7 @@ def profile_path() -> Path:
 def load_profile() -> dict:
     """site-pack/profile.json as a dict; {} when missing, unreadable or not an object."""
     try:
-        data = json.loads(profile_path().read_text(encoding="utf-8"))
+        data = load_json_overlay(profile_path())
     except (OSError, ValueError):
         return {}
     return data if isinstance(data, dict) else {}

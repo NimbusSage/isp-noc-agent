@@ -22,9 +22,10 @@ ISP's configuration.
    (gitignored) or secret files outside the repo (OAuth — enforced by
    `scripts/google_user_auth.mjs`). Device creds live encrypted in
    `mcp-server/config/credentials.enc` (gitignored, passphrase in `.env`).
-2. **Org identity goes in `site-pack/profile.json`.** The same file holds the `resources` block, which registers this organization's service addresses (UISP, LibreNMS, MyMate, Oxidized, Sonar, and its spreadsheets) with `python3 scripts/resources.py set` (see `site-pack/profile.example.json`).
-3. **Shared infrastructure details stay private.**
-4. **Nothing in the core layer should reference a person's personal
+2. **Secret values beside shared files go in a `.local.json` overlay** (`profile.local.json`, `topology/temp-bgp-config.local.json`). Overlays are merged by the scripts that read those files, are never shared through the pack, and `python3 scripts/pack.py localize` moves existing ones (see `docs/team.md`).
+3. **Org identity goes in `site-pack/profile.json`.** The same file holds the `resources` block, which registers this organization's service addresses (UISP, LibreNMS, MyMate, Oxidized, Sonar, and its spreadsheets) with `python3 scripts/resources.py set` (see `site-pack/profile.example.json`).
+4. **Shared infrastructure details stay private.**
+5. **Nothing in the core layer should reference a person's personal
    calendar, email, or machine paths.** Runtime paths come from `.env`
    (`AGENT_WORKSPACE`, systemd units) — never hardcode `/root/...` in new
    code; use `scripts/install.sh` which templates the unit files.

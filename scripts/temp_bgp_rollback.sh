@@ -45,11 +45,15 @@ noc_ssh_opts || exit 2
 # ---- config load (fail closed: missing file or placeholder values) ----------
 # python validates and prints tab-separated "KIND<TAB>VALUE" records; bash reads them as
 # DATA (never eval'd): RR_SRC, PREFIX, OXIDIZED, RR <ip>, PW <base64 password>.
-if ! CFGOUT="$(python3 - "$CFG" "$NETWORK" <<'PYEOF'
+if ! CFGOUT="$(python3 - "$CFG" "$NETWORK" "$SCRIPT_DIR" <<'PYEOF'
 import base64, ipaddress, json, os, re, sys
-cfg_path, network = sys.argv[1], sys.argv[2]
+cfg_path, network, scripts_dir = sys.argv[1], sys.argv[2], sys.argv[3]
+sys.path.insert(0, scripts_dir)
+import noc_config  # merges temp-bgp-config.local.json (the router passwords) over the shared file
 try:
-    cfg = json.load(open(cfg_path))
+    cfg = noc_config.load_json_overlay(__import__("pathlib").Path(cfg_path))
+except ValueError as e:
+    sys.exit(f"temp_bgp_rollback: invalid JSON: {e}")
 except FileNotFoundError:
     sys.exit(f"temp_bgp_rollback: missing {cfg_path} — cp "
              f"site-pack/example/temp-bgp-config.example.json "

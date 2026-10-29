@@ -143,6 +143,7 @@ When several people share one setup, the roster (`site-pack/team.json`) and the 
 | `NOC_TEAM_FILE` | `<site-pack>/team.json` | Alternate roster path |
 | `NOC_USER_CONFIG` | `~/.config/nocagent/user.json` | Per-user settings: the saved handle and `pack.require_signed` |
 | `NOC_PACK_GIT_DIR` | `<site-pack>/.pack.git` | Alternate git directory of the shared pack |
+| `NOC_PACK_SSH_KEY` | `~/.config/nocagent/pack_deploy_key` | Deploy key `pack.py` uses for git when the file exists (made by `pack.py deploy-key`) |
 
 ### Temp OSPF Google Sheet Helper
 

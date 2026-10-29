@@ -6,6 +6,8 @@
     python3 scripts/pack.py status [--fetch]      # where this copy stands against the team's
     python3 scripts/pack.py pull [--yes]          # show what changed, then apply it
     python3 scripts/pack.py git <git arguments>   # a lead: run git against the pack (add, commit, push, branch)
+    python3 scripts/pack.py localize [--write]    # move secret values out of the pack files into *.local.json overlays
+    python3 scripts/pack.py deploy-key            # create a key for this machine to reach the private pack repository
 
 The pack holds only the org-specific files that the public repository ignores: profile.json (with
 the service registry), devices.md, tech_calendars.json, team.json, topology/, ticket-context/,
@@ -24,29 +26,50 @@ Secrets do not belong in a pack. `init` and every commit (a pre-commit hook in t
 directory) refuse content that looks like a credential: tokens, keys, passwords, URL credentials.
 Addresses, names and IDs are fine here; that is what the pack is for.
 
+Some files legitimately carry a secret next to shared settings: profile.json (an SNMP community)
+and topology/temp-bgp-config.json (route-reflector passwords). Keep those values in a
+machine-local overlay beside the file (profile.local.json, temp-bgp-config.local.json). Overlays
+are never tracked, the readers that need the values merge them in, and a pack file that contains
+any value stored in an overlay is refused. `localize` moves the flagged fields for you and prints
+only their paths, never a value; without --write it shows what it would do.
+
+A machine with no person's git login (the central hub) reaches the private repository with a deploy
+key: `deploy-key` creates one in ~/.config/nocagent/ (pack_deploy_key, mode 0600) and pins GitHub's
+host keys, and pack.py then uses it for every git command it runs. Add the printed public half under
+the repository's Settings > Deploy keys, with write access if this machine publishes. People with
+their own git access need none of this. Use an ssh URL (git@github.com:<org>/<repo>.git) with it.
+
 Exit codes: 0 ok, 1 failed (credential found, git error, diverged), 2 usage, invalid pack, or needs
 a yes, 3 no pack repository here, 4 refused (unattended).
 """
 from __future__ import annotations
 
 import argparse
+import copy
 import fnmatch
 import json
 import os
+import re
+import shlex
 import shutil
+import socket
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import noc_config  # noqa: E402
 import secret_scan  # noqa: E402
+import statefile  # noqa: E402
 import team  # noqa: E402
 
 PACK_FILES = ("profile.json", "devices.md", "tech_calendars.json", "team.json")
 PACK_DIRS = ("topology", "ticket-context", "rename-site", "evals", "skills")
-NEVER = ("*.bak*", ".env*", "*.pem", "*.key", "*oauth*", ".secrets")
+NEVER = ("*.bak*", ".env*", "*.pem", "*.key", "*oauth*", ".secrets", "*.local.*")
+SENSITIVE_KEY = re.compile(r"(?i)(password|passwd|passphrase|pwd|secret|token|api[_-]?key|apikey|community|psk)")
+NAMES_A_PLACE = re.compile(r"(?i)(_env|_file|_path|_url|_name|_id|_ids|_count)$")   # password_env names a variable, not a value
+MIN_SECRET = 4
 CREDENTIAL_RULES = frozenset({
     "aws-key", "github-token", "slack-token", "google-api-key", "google-oauth", "api-key", "jwt", "private-key",
     "bearer-token", "sshpass-literal", "url-credentials", "url-secret-param", "literal-secret",
@@ -71,11 +94,33 @@ def git_dir() -> Path:
     return Path(override) if override else pack_dir() / ".pack.git"
 
 
+def deploy_key_path() -> Path:
+    override = os.environ.get("NOC_PACK_SSH_KEY", "").strip()
+    return Path(override) if override else team.user_config_path().parent / "pack_deploy_key"
+
+
+def known_hosts_path() -> Path:
+    return deploy_key_path().with_name("pack_known_hosts")
+
+
+def _ssh_command() -> Optional[str]:
+    """ssh with this machine's deploy key and pinned host keys, or None when no deploy key exists here."""
+    key = deploy_key_path()
+    if not key.is_file():
+        return None
+    hosts = known_hosts_path()
+    return "ssh -i %s -o IdentitiesOnly=yes -o UserKnownHostsFile=%s -o StrictHostKeyChecking=%s" % (
+        shlex.quote(str(key)), shlex.quote(str(hosts)), "yes" if hosts.is_file() else "accept-new")
+
+
 def _env() -> Dict[str, str]:
     """The environment without repository-local GIT_* variables (a hook exports GIT_DIR and friends),
     and with only plain transports allowed (no ext:: or other remote helpers)."""
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_") or k in KEEP_GIT_ENV}
     env["GIT_ALLOW_PROTOCOL"] = "file:https:ssh:git"
+    ssh = _ssh_command()
+    if ssh:
+        env["GIT_SSH_COMMAND"] = ssh
     return env
 
 
@@ -286,6 +331,169 @@ def _read_text(p: Path) -> str:
         return ""
 
 
+# --- machine-local overlays ---------------------------------------------------
+
+def _strings(node: Any) -> List[str]:
+    if isinstance(node, str):
+        return [node]
+    if isinstance(node, dict):
+        return [x for v in node.values() for x in _strings(v)]
+    if isinstance(node, list):
+        return [x for v in node for x in _strings(v)]
+    return []
+
+
+def overlay_files(base: Path) -> List[Path]:
+    """Every *.local.json overlay in the site pack (top level and the pack folders)."""
+    found = [p for p in sorted(base.glob("*.local.json")) if p.is_file()]
+    for d in PACK_DIRS:
+        if (base / d).is_dir():
+            found += [p for p in sorted((base / d).rglob("*.local.json")) if p.is_file()]
+    return found
+
+
+def overlay_values(base: Path) -> Set[str]:
+    """The secret values kept in overlays: strings an overlay holds that its shared file does not. (An overlay copy of a
+    list repeats the non-secret entries, such as addresses, which stay in the shared file; those are not secrets.)
+    Nothing in the pack may contain one of these values."""
+    out: Set[str] = set()
+    for p in overlay_files(base):
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        shared = p.with_name(p.name.replace(".local.", ".", 1))
+        try:
+            known = set(_strings(json.loads(shared.read_text(encoding="utf-8"))))
+        except (OSError, ValueError):
+            known = set()
+        out.update(v for v in _strings(data) if len(v.strip()) >= MIN_SECRET and v not in known)
+    return out
+
+
+def leak_findings(items: List[Tuple[str, str]], secrets: Set[str]) -> List[str]:
+    out = []
+    for path, text in items:
+        for number, line in enumerate(text.splitlines(), 1):
+            if any(v in line for v in secrets):
+                out.append("%s:%d holds a value that is stored in a .local.json file" % (path, number))
+    return out
+
+
+def _is_secret_leaf(key: str, value: Any) -> bool:
+    return (isinstance(value, str) and bool(SENSITIVE_KEY.search(key)) and not NAMES_A_PLACE.search(key)
+            and len(value.strip()) >= 1 and not (value.startswith("<") and value.endswith(">")))
+
+
+def _collect_secrets(node: Any, out: Set[str]) -> None:
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if _is_secret_leaf(k, v):
+                out.add(v)
+            else:
+                _collect_secrets(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            _collect_secrets(v, out)
+
+
+def _strip(node: Any, secrets: Set[str], path: str, removed: List[str]) -> Any:
+    """Copy of `node` without any secret leaf: a key whose value is a secret, or a list item equal to one."""
+    if isinstance(node, dict):
+        out = {}
+        for k, v in node.items():
+            where = "%s.%s" % (path, k) if path else k
+            if isinstance(v, str) and (_is_secret_leaf(k, v) or v in secrets):
+                removed.append(where)
+            else:
+                out[k] = _strip(v, secrets, where, removed)
+        return out
+    if isinstance(node, list):
+        kept = []
+        for i, v in enumerate(node):
+            if isinstance(v, str) and v in secrets:
+                removed.append("%s[%d]" % (path, i))
+            else:
+                kept.append(_strip(v, secrets, "%s[%d]" % (path, i), removed))
+        return kept
+    return node
+
+
+def _fragment(orig: Any, stripped: Any) -> Any:
+    """The smallest overlay that restores `orig` over `stripped` (lists are replaced whole, objects merge)."""
+    if isinstance(orig, dict) and isinstance(stripped, dict):
+        frag: Dict[str, Any] = {}
+        for k, v in orig.items():
+            if k not in stripped:
+                frag[k] = v
+            elif v != stripped[k]:
+                sub = _fragment(v, stripped[k])
+                if sub not in ({}, None):
+                    frag[k] = sub
+        return frag
+    return orig
+
+
+def cmd_localize(args: argparse.Namespace) -> int:
+    if args.write:
+        refused = _unattended("localize --write")
+        if refused:
+            return refused
+    base = pack_dir()
+    files = [p for p in _pack_files(base) if p.suffix == ".json"]
+    docs: Dict[Path, Any] = {}
+    for p in files:
+        try:
+            docs[p] = json.loads(_read_text(p))
+        except ValueError:
+            print("skipped %s: not valid JSON" % p.relative_to(base), file=sys.stderr)
+    secrets: Set[str] = set()
+    existing: Dict[Path, Any] = {}
+    for p, doc in docs.items():
+        _collect_secrets(doc, secrets)
+        local = noc_config.overlay_path(p)
+        try:
+            existing[p] = json.loads(local.read_text(encoding="utf-8")) if local.exists() else {}
+        except (OSError, ValueError):
+            print("error: %s is not valid JSON; fix or remove it first" % local.relative_to(base), file=sys.stderr)
+            return 2
+    secrets = {v for v in secrets if len(v.strip()) >= MIN_SECRET}
+    plan = []
+    for p, doc in docs.items():
+        removed: List[str] = []
+        stripped = _strip(doc, secrets, "", removed)
+        if not removed:
+            continue
+        combined = noc_config.merge_overlay(_fragment(doc, stripped), existing[p])
+        if noc_config.merge_overlay(stripped, combined) != noc_config.merge_overlay(doc, existing[p]):
+            print("error: cannot move the fields out of %s without changing what the readers see; edit it by hand"
+                  % p.relative_to(base), file=sys.stderr)
+            return 2
+        plan.append((p, stripped, combined, removed))
+    if not plan:
+        print("nothing to move: no secret-looking field is stored in a pack file")
+        return 0
+    for p, stripped, combined, removed in plan:
+        rel, local = p.relative_to(base), noc_config.overlay_path(p).relative_to(base)
+        print("%s -> %s: %s" % (rel, local, ", ".join(removed)))
+        if args.write:
+            statefile.atomic_write_text(noc_config.overlay_path(p), json.dumps(combined, indent=2, ensure_ascii=False) + "\n", mode=0o600)
+            shutil.copy2(str(p), str(p) + ".bak")
+            statefile.atomic_write_text(p, json.dumps(stripped, indent=2, ensure_ascii=False) + "\n", mode=p.stat().st_mode & 0o777)
+    if not args.write:
+        print("dry run: nothing was changed. Run again with --write to move these fields (a .bak copy of each file is kept).")
+        return 0
+    left = leak_findings([(str(p.relative_to(base)), _read_text(p)) for p in _pack_files(base)], overlay_values(base))
+    if left:
+        print("moved, but these pack files still contain a moved value; edit them by hand:", file=sys.stderr)
+        for line in left:
+            print("  " + line, file=sys.stderr)
+        return 1
+    print("moved %d field(s). Back up the .local.json files with your other secrets; the pack never carries them." %
+          sum(len(r) for _p, _s, _c, r in plan))
+    return 0
+
+
 # --- commands -----------------------------------------------------------------
 
 def cmd_init(args: argparse.Namespace) -> int:
@@ -300,10 +508,11 @@ def cmd_init(args: argparse.Namespace) -> int:
     if not files:
         print("error: nothing to track in %s (expected profile.json, topology/, ...)" % base, file=sys.stderr)
         return 2
-    findings = credential_findings([(str(p.relative_to(base)), _read_text(p)) for p in files])
+    items = [(str(p.relative_to(base)), _read_text(p)) for p in files]
+    findings = credential_findings(items) + leak_findings(items, overlay_values(base))
     if findings:
-        print("refused: these files look like they hold a credential. Remove it (secrets belong in .env or the "
-              "credential store), then run init again:", file=sys.stderr)
+        print("refused: these files look like they hold a credential. Remove it (secrets belong in .env, the "
+              "credential store or a .local.json overlay: see  pack.py localize), then run init again:", file=sys.stderr)
         for line in findings:
             print("  " + line, file=sys.stderr)
         return 1
@@ -482,12 +691,62 @@ def cmd_git(args: argparse.Namespace) -> int:
     return git(*args.git_args, interactive=True).returncode
 
 
+def _github_host_keys() -> List[str]:
+    """GitHub's published ssh host keys, from its authenticated API (over TLS), as known_hosts lines. [] on any failure."""
+    if not shutil.which("gh"):
+        return []
+    r = subprocess.run(["gh", "api", "meta", "--jq", ".ssh_keys[]"], capture_output=True, text=True, check=False)
+    if r.returncode != 0:
+        return []
+    return ["github.com " + ln.strip() for ln in r.stdout.splitlines() if ln.strip()]
+
+
+def cmd_deploy_key(_args: argparse.Namespace) -> int:
+    refused = _unattended("deploy-key")
+    if refused:
+        return refused
+    key = deploy_key_path()
+    pub = Path(str(key) + ".pub")
+    if not key.exists():
+        if not shutil.which("ssh-keygen"):
+            print("error: ssh-keygen is not installed (package openssh-client)", file=sys.stderr)
+            return 2
+        key.parent.mkdir(parents=True, exist_ok=True)
+        os.chmod(key.parent, 0o700)
+        r = subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "nocagent-pack@" + socket.gethostname(), "-f", str(key)],
+                           capture_output=True, text=True, check=False)
+        if r.returncode != 0:
+            print("error: ssh-keygen failed: " + r.stderr.strip(), file=sys.stderr)
+            return 2
+        print("created %s (mode 0600)" % key)
+    else:
+        print("using the existing key %s" % key)
+    hosts = known_hosts_path()
+    if not hosts.exists():
+        lines = _github_host_keys()
+        if lines:
+            statefile.atomic_write_text(hosts, "\n".join(lines) + "\n", mode=0o644)
+            print("pinned GitHub's %d published host key(s) in %s" % (len(lines), hosts))
+        else:
+            print("warning: could not fetch GitHub's host keys (gh missing or not logged in), so the first connection will "
+                  "trust what it sees. Compare the fingerprint it shows with https://docs.github.com/en/authentication/"
+                  "keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints", file=sys.stderr)
+    try:
+        public = pub.read_text(encoding="utf-8").strip()
+    except OSError:
+        print("error: %s is missing; remove %s and run again" % (pub, key), file=sys.stderr)
+        return 2
+    print("\nAdd this public key to the private pack repository: Settings > Deploy keys > Add deploy key"
+          "\n(tick 'Allow write access' if this machine publishes the pack):\n\n  " + public)
+    return 0
+
+
 def cmd_guard(args: argparse.Namespace) -> int:
     """pre-commit hook: refuse staged content that looks like a credential."""
     gdir, wtree = Path(args.git_dir), Path(args.work_tree)
     names = git("diff", "--cached", "--name-only", "--diff-filter=AM", gdir=gdir, wtree=wtree).stdout.splitlines()
     items = [(n, git("show", ":" + n, gdir=gdir, wtree=wtree).stdout) for n in names]
-    findings = credential_findings(items)
+    findings = credential_findings(items) + leak_findings(items, overlay_values(wtree))
     if findings:
         print("pack commit refused: these staged files look like they hold a credential:", file=sys.stderr)
         for line in findings:
@@ -519,6 +778,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     p = sub.add_parser("git", help="run git against the pack")
     p.add_argument("git_args", nargs=argparse.REMAINDER)
     p.set_defaults(fn=cmd_git)
+    p = sub.add_parser("localize", help="move secret values from pack files into machine-local .local.json overlays")
+    p.add_argument("--write", action="store_true", help="make the change (default: show what would move)")
+    p.set_defaults(fn=cmd_localize)
+    sub.add_parser("deploy-key", help="create a deploy key for this machine and print its public half").set_defaults(fn=cmd_deploy_key)
     p = sub.add_parser("guard", help="pre-commit hook (internal)")
     p.add_argument("--git-dir", required=True)
     p.add_argument("--work-tree", required=True)

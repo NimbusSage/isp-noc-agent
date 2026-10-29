@@ -33,7 +33,39 @@ The current operator is `NOC_OPERATOR`, else the handle saved by `python3 script
 
 On a person's own machine the roster is a file that person can edit. There, roles guard against mistakes and against an agent doing more than it was asked; they are not a defence against the person at the keyboard. The enforcing limits are the systems themselves: with a personal Sonar token, Sonar applies that person's own permissions, and a device accepts only the logins it was given.
 
+## Secrets stay on the machine
+
+A pack never carries a secret. Two files legitimately hold one next to shared settings: `profile.json` (an SNMP community under `conventions`) and `topology/temp-bgp-config.json` (route-reflector passwords). Keep those values in an **overlay** beside each file:
+
+| Shared file (in the pack) | Overlay (this machine only) |
+|---|---|
+| `site-pack/profile.json` | `site-pack/profile.local.json` |
+| `site-pack/topology/temp-bgp-config.json` | `site-pack/topology/temp-bgp-config.local.json` |
+
+An overlay has the same shape as its file and is merged over it when a script reads the file: objects merge key by key, and a list in the overlay replaces the list in the shared file whole. The profile loader, the temp-BGP scripts and the repository scanner all read overlays. Overlays are never tracked: the pack skips every `*.local.*` file, refuses a pulled pack that contains one, and refuses a pack file that contains a value stored in an overlay.
+
+To move the secrets that are in a pack file today:
+
+```bash
+python3 scripts/pack.py localize          # lists the fields it would move; changes nothing
+python3 scripts/pack.py localize --write  # moves them, keeps a .bak copy of each file
+```
+
+`localize` prints the paths of the fields it moves (`conventions.snmp.community`, `rr_credentials[0].password`), never their values. It treats a field as secret when its name says so (`password`, `token`, `community`, `psk`, and similar, except names that point at somewhere else such as `password_env`), and it also removes the same value wherever else it appears in the pack's JSON files, for example in a list of tokens. Back the overlay files up with your other secrets. A colleague who needs the same values gets them from you directly or from a central store, not from the pack.
+
+## A machine with no personal git login (the central hub)
+
+People use their own git access to reach the private repository. A shared machine such as the central hub has none, so give it a deploy key that reaches only the pack repository:
+
+```bash
+python3 scripts/pack.py deploy-key
+```
+
+This creates `~/.config/nocagent/pack_deploy_key` (mode 0600), pins GitHub's published SSH host keys from `gh api meta` when `gh` is logged in (otherwise it warns, and the first connection trusts what it sees), and prints the public half. In the pack repository open Settings, Deploy keys, Add deploy key, paste it, and tick "Allow write access" if this machine publishes the pack. From then on every git command `pack.py` runs on this machine uses that key and only that key. Use the ssh form of the remote URL (`git@github.com:<org>/<repo>.git`). The command refuses to overwrite an existing key.
+
 ## Start a team (a lead)
+
+0. If the pack files hold secrets, run `python3 scripts/pack.py localize --write` first (see above); `init` refuses otherwise.
 
 1. Add yourself as the first member. The first member has to be a lead, and anyone can add them:
 

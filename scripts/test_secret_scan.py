@@ -277,6 +277,16 @@ class DenyList(unittest.TestCase):
         self.assertIn("portability-token", rules(cat("net 198.51", ".100 up\n"), cfg=cfg))
         self.assertEqual(rules("keep <your-brand-word> as is\n", cfg=cfg), [])  # untouched placeholder
 
+    def test_profile_tokens_also_come_from_the_local_overlay(self):
+        prof = Path(self.tmp.name) / "profile.json"
+        word = cat("zork", "mid")
+        moved = cat("acme", " corp")
+        prof.write_text(json.dumps({"org": {"portability_tokens": [word]}}))
+        (Path(self.tmp.name) / "profile.local.json").write_text(json.dumps({"org": {"portability_tokens": [word, moved]}}))
+        cfg = secret_scan.load_config(write_denylist(self.tmp.name, ["qvxlorpton"]), profile=prof)
+        self.assertEqual(rules(cat("Acme", "_Corp rocks\n"), cfg=cfg), ["portability-token"])   # only the overlay lists it
+        self.assertEqual(rules(f"{word} here\n", cfg=cfg), ["denylist"])
+
 
 class Suppression(unittest.TestCase):
     def test_reason_is_mandatory(self):

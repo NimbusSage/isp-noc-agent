@@ -69,8 +69,11 @@ OXIDIZED = ""
 _CREDS = None
 
 
-def _load_json_or_die(path, what):
+def _load_json_or_die(path, what, overlay=False):
+    """JSON from `path`; with overlay=True the machine-local `.local` file (passwords) is merged over it."""
     try:
+        if overlay:
+            return noc_config.load_json_overlay(pathlib.Path(path))
         with open(path) as fh:
             return json.load(fh)
     except FileNotFoundError:
@@ -78,14 +81,14 @@ def _load_json_or_die(path, what):
                  f"site-pack/example/temp-bgp-config.example.json "
                  f"site-pack/topology/temp-bgp-config.json and fill in your "
                  f"org's {what} (this repo never ships org-specific values)")
-    except json.JSONDecodeError as e:
+    except ValueError as e:        # json.JSONDecodeError is a ValueError
         sys.exit(f"temp_bgp_peering: invalid JSON in {path}: {e}")
 
 
 def init_config():
     """Load the org config (fail closed). Called from main(), not at import."""
     global BGP_CFG, RR_MAP, FIBER_IPS, RR_PW, RR_LOOPBACK, OXIDIZED
-    BGP_CFG = _load_json_or_die(_TOPOLOGY / "temp-bgp-config.json", "temp-BGP inputs")
+    BGP_CFG = _load_json_or_die(_TOPOLOGY / "temp-bgp-config.json", "temp-BGP inputs", overlay=True)
     # Fail closed on the tracked example (it must never run against real routers).
     blob = json.dumps(BGP_CFG)
     if any(m in blob for m in PLACEHOLDER_MARKERS):

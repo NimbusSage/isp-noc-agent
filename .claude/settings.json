@@ -61,7 +61,9 @@
       "Bash(python3 scripts/pack.py init*)",
       "Bash(python3 scripts/pack.py join*)",
       "Bash(python3 scripts/pack.py pull*)",
-      "Bash(python3 scripts/pack.py git*)"
+      "Bash(python3 scripts/pack.py git*)",
+      "Bash(python3 scripts/pack.py localize*--write*)",
+      "Bash(python3 scripts/pack.py deploy-key*)"
     ]
   },
   "hooks": {
