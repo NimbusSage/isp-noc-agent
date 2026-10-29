@@ -1,0 +1,12 @@
+{
+  "_comment": "Copy to site-pack/team.json. Manage it with scripts/team.py; share it with the pack (scripts/pack.py). Roles: viewer reads and analyzes, tech also posts comments, rows and calendar entries, lead also changes devices and settings and edits the roster. Nothing secret belongs here.",
+  "version": 1,
+  "members": {
+    "<handle>": { "name": "<Full Name>", "role": "lead", "active": true, "chat": "<chat handle>", "calendar": "<calendar name>" }
+  },
+  "pools": {
+    "mikrotik-ssh": { "scope": "shared" },
+    "customer-airos": { "scope": "personal" }
+  },
+  "approved_models": ["<provider>/<model>"]
+}

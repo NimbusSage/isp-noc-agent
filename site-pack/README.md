@@ -9,7 +9,7 @@ ISP's configuration.
 | Layer | Location | What lives here | In git? |
 |---|---|---|---|
 | **Core agent** | `AGENTS.md`, `.opencode/skills/*`, `scripts/`, `server/`, `mcp-server/`, `evals/` | All workflow logic, gates, skills, governance | Yes (safe to share) |
-| **Site pack** | `site-pack/` | THIS ISP's identifiers: Sonar group/category IDs, org name/domains, fiber topology, BGP maps, naming conventions, `profile.json` | `profile.json` and `site-pack/topology/` are gitignored; `profile.example.json` is tracked |
+| **Site pack** | `site-pack/` | THIS ISP's identifiers: Sonar group/category IDs, org name/domains, fiber topology, BGP maps, naming conventions, `profile.json`, the team roster `team.json` | `profile.json` and `site-pack/topology/` are gitignored; `profile.example.json` is tracked. Colleagues share the real files through a separate private repository (`scripts/pack.py`), never this one |
 
 **Topology canonical rule:** the real, current network data lives in
 `site-pack/topology/` — `fiber-map.json`, `bgp-rr-map.json`,
@@ -37,4 +37,5 @@ ISP's configuration.
 - [ ] `mcp-server/config/credentials.json` from example → encrypted store
 - [ ] Recreate `site-pack/topology/*.json` topology for your network
 - [ ] Sonar group/category IDs verified against your instance
+- [ ] Team: a lead adds the roster (`python3 scripts/team.py add <handle> --name <name> --role lead`) and shares the pack through a private repository (`python3 scripts/pack.py init <url>`); colleagues run `python3 scripts/pack.py join <url>` instead of building their own (see `docs/team.md`)
 - [ ] `python3 scripts/doctor.py` all green

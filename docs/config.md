@@ -133,6 +133,17 @@ Lookup order: environment variable (real environment first, then `.env`), then t
 
 A resource that is not registered is unavailable: `get` exits with status 3, and the agent stops and asks the operator instead of taking an address from an example, another system's device list, or DNS. `set` refuses example and placeholder values: an `example.com` host, a value in angle brackets, or a documentation address range. `set` and `migrate --write` refuse to run for batch agents, because the webhook server sets `NOC_UNATTENDED=1` for them; this is a guard against an agent registering an address on its own, not a security boundary. The MCP server allows the registered UISP host name for the `ubnt-uisp` device type without an entry in `NOC_READ_ALLOWED_HOSTS`, and for no other device type.
 
+### Team roster and shared pack
+
+When several people share one setup, the roster (`site-pack/team.json`) and the shared pack are described in [team.md](team.md). These variables are optional and listed in `.env.example`:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `NOC_OPERATOR` | the handle saved by `scripts/team.py me`, else none | Who is running this: a handle from the roster, or `batch` for the webhook server's agents. Written into the decision log and the MCP audit log |
+| `NOC_TEAM_FILE` | `<site-pack>/team.json` | Alternate roster path |
+| `NOC_USER_CONFIG` | `~/.config/nocagent/user.json` | Per-user settings: the saved handle and `pack.require_signed` |
+| `NOC_PACK_GIT_DIR` | `<site-pack>/.pack.git` | Alternate git directory of the shared pack |
+
 ### Temp OSPF Google Sheet Helper
 
 The helper is invoked on demand by the `temp-site-connection` skill or directly from the repository. It uses read-only OAuth scope unless write mode is deliberately enabled.
