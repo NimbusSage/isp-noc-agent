@@ -29,8 +29,9 @@ service if moving, not cloning).
 
 **Backup these before trusting any single box:** every secret below lives
 ONLY on this machine (gitignored by design). `python3 scripts/backup_runtime_config.py`
-archives `.env`, `site-pack/profile.json`, `credentials.enc` and all `*_OAUTH_FILE`
-files into `/root/nocagent-backups/` (mode 0600/0700, retention 14, nothing printed
+archives `.env`, `site-pack/profile.json`, its secret overlay `site-pack/profile.local.json`
+(the overlays under `site-pack/topology/` ride along with that tree; see [team.md](team.md)),
+`credentials.enc` and all `*_OAUTH_FILE` files into `/root/nocagent-backups/` (mode 0600/0700, retention 14, nothing printed
 or added to git); `--list <archive>` enumerates; `--restore <archive> <dir>` extracts
 with 0600 modes. `BACKUP_DIR` and `BACKUP_KEEP` env vars are used. If the box dies:
 restore members into the same paths on the new install (plus the passphrase and your

@@ -8,7 +8,8 @@ audit trail (decision log), circuit-breaker state and the pending peak-retest
 queue live in the state dir (logs/ by default) and are lost the same way.
 
 What it does:
-- Collects: .env, site-pack/profile.json, credentials.enc, every
+- Collects: .env, site-pack/profile.json, its secret overlay site-pack/profile.local.json
+  (the overlays under topology/ come with that tree), credentials.enc, every
   *_OAUTH_FILE path found in .env (files must live outside the repo —
   their contents are archived, never printed), the gitignored
   site-pack/topology/ tree (org network knowledge — untracked by design), and
@@ -50,6 +51,7 @@ RESTORE (e.g. onto a rebuilt host):
   2. Copy files from /tmp/noc-restore/runtime/ into place (all extracted 0600):
        .env                        -> <repo>/.env
        profile.json                -> <repo>/site-pack/profile.json
+       profile.local.json          -> <repo>/site-pack/profile.local.json
        credentials.enc             -> <repo>/mcp-server/config/credentials.enc
        <name>.json (OAuth)         -> the path named by the matching *_OAUTH_FILE in .env
        topology__a__b.json         -> <repo>/site-pack/topology/a/b.json   ("__" = "/")
@@ -103,7 +105,7 @@ def state_members():
 def collect_members():
     env = load_env()
     members = []
-    for rel in (".env", "site-pack/profile.json", "mcp-server/config/credentials.enc"):
+    for rel in (".env", "site-pack/profile.json", "site-pack/profile.local.json", "mcp-server/config/credentials.enc"):
         p = ROOT / rel
         if p.exists():
             members.append(p)

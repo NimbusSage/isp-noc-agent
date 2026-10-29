@@ -30,6 +30,8 @@ class BackupBase(unittest.TestCase):
         (self.repo / ".env").write_text("NOC_MCP_PASSPHRASE=fake-mcp-pass\n")
         (self.repo / "site-pack" / "topology").mkdir(parents=True)
         (self.repo / "site-pack" / "profile.json").write_text('{"org": {}}')
+        (self.repo / "site-pack" / "profile.local.json").write_text('{"org": {"portability_tokens": ["x"]}}')
+        (self.repo / "site-pack" / "topology" / "temp-bgp-config.local.json").write_text("{}")
         (self.repo / "site-pack" / "topology" / "map.json").write_text("{}")
         cfg = self.repo / "mcp-server" / "config"
         cfg.mkdir(parents=True)
@@ -70,8 +72,8 @@ class TestPlaintextFallback(BackupBase):
         self.assertEqual([p.name for p in self.out.iterdir() if p.name.startswith(".")], [])   # no leftover partials
         with tarfile.open(arc) as t:
             members = sorted(m.name for m in t.getmembers())
-        for want in ("runtime/.env", "runtime/profile.json", "runtime/credentials.enc",
-                     "runtime/topology__map.json", "runtime/state__decisions__2026-10.jsonl",
+        for want in ("runtime/.env", "runtime/profile.json", "runtime/profile.local.json", "runtime/credentials.enc",
+                     "runtime/topology__map.json", "runtime/topology__temp-bgp-config.local.json", "runtime/state__decisions__2026-10.jsonl",
                      "runtime/state__circuit_breaker.json", "runtime/state__pending_peak_checks.json"):
             self.assertIn(want, members)
 
