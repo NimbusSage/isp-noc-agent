@@ -7,6 +7,8 @@ export interface AuditEvent {
   command: string;
   category: string;
   outcome: 'success' | 'error' | 'timeout' | 'auth_failed' | 'transport_error' | 'blocked' | 'warning';
+  /** Who made the call (team handle, or "batch"). Filled in by the logger when not set. */
+  operator?: string;
   redactions: number;
   durationMs: number;
   metadata?: Record<string, unknown>;
@@ -16,6 +18,7 @@ interface AuditLoggerConfig {
   path: string;
   maxFileSizeMb: number;
   maxFiles: number;
+  operator?: string;
 }
 
 const SENSITIVE_KEYS = new Set([
@@ -32,7 +35,8 @@ export class AuditLogger {
   }
 
   log(event: AuditEvent): void {
-    const sanitized = this.sanitize(event);
+    const stamped = event.operator || !this.config.operator ? event : { ...event, operator: this.config.operator };
+    const sanitized = this.sanitize(stamped);
     const line = JSON.stringify(sanitized) + '\n';
 
     this.rotateIfNeeded();

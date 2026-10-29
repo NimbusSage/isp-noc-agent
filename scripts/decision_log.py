@@ -22,6 +22,8 @@ Line schema (flat, extra keys allowed — schema is append-friendly):
     requires_human_review bool
     evidence              [strings] — markers, correlated ticket ids, hop evidence
     escalation_reason     null | string
+    operator              who ran it: the NOC_OPERATOR handle (see scripts/team.py), "batch" for the server;
+                          absent on a single-person install that has no handle
     ...any extra keys from --json payload
 
 CLI:
@@ -63,6 +65,15 @@ def shard_path(ts: float) -> Path:
     return DECISIONS_DIR / f"{month}.jsonl"
 
 
+def _operator() -> str:
+    """The current operator's handle, or "". Never raises: a decision must be logged either way."""
+    try:
+        import team
+        return team.configured_handle()[0]
+    except Exception:
+        return ""
+
+
 def append_decision(payload: dict, kind: str = None, ticket_id: str = None) -> dict:
     ts = time.time()
     record = {"ts": datetime.fromtimestamp(ts, tz=timezone.utc).isoformat(timespec="seconds")}
@@ -70,6 +81,9 @@ def append_decision(payload: dict, kind: str = None, ticket_id: str = None) -> d
         record["kind"] = kind
     if ticket_id:
         record["ticket_id"] = str(ticket_id)
+    operator = _operator()
+    if operator:
+        record["operator"] = operator
     # Payload keys never overwrite the envelope keys set above
     for k, v in payload.items():
         if k not in record:

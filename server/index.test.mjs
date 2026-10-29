@@ -683,6 +683,8 @@ test('buildAgentEnv: allowlist + deny regex + explicit passthrough', () => {
   for (const n of ['NOC_MCP_PASSPHRASE', 'NOC_TICKETS_GOOGLE_CHAT_WEBHOOK_URL', 'TICKET_WEBHOOK_AUTH_TOKEN', 'GOVERNANCE_AUTH_TOKEN', 'INVOCATION_ID', 'JOURNAL_STREAM']) assert.ok(!(n in env), n);
   assert.equal(env.NOC_UNATTENDED, '1');                                  // batch agents may not register services
   assert.equal(srv.buildAgentEnv({ ...src, NOC_UNATTENDED: '' }, cfg).NOC_UNATTENDED, '1');
+  assert.equal(env.NOC_OPERATOR, 'batch');                                // audit records name the run, never a person
+  assert.equal(srv.buildAgentEnv({ ...src, NOC_OPERATOR: 'ada' }, cfg).NOC_OPERATOR, 'batch');
 });
 
 test('untrusted wrapper neutralises delimiters and control characters', () => {

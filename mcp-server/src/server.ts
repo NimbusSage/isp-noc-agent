@@ -8,6 +8,7 @@ import { CommandValidator } from './commands/validator.js';
 import { createDeviceClient } from './devices/factory.js';
 import { RedactionEngine } from './redaction/engine.js';
 import { AuditLogger, type AuditEvent } from './audit/logger.js';
+import { resolveOperator } from './audit/operator.js';
 import { lookupLibreNmsDeviceByExactIp } from './inventory/librenms.js';
 import { RouterOsWriteSchema, planRouterOsWrite, executeRouterOsWrite, checkInfraWriteGates } from './writes/routeros-writes.js';
 import { planTempOspf } from './temp-site/ospf.js';
@@ -54,7 +55,7 @@ export class NocMcpServer {
     this.config = ServerConfigSchema.parse(config);
     this.validator = new CommandValidator();
     this.redaction = new RedactionEngine(this.config.redaction);
-    this.audit = new AuditLogger(this.config.auditLog);
+    this.audit = new AuditLogger({ ...this.config.auditLog, operator: resolveOperator() });
     // Host-list env typos fail closed per call; surface them once at startup
     // (stderr only: stdout is the MCP protocol channel).
     for (const problem of hostEnvProblems()) console.error(`[config] ${problem}`);

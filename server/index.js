@@ -745,6 +745,8 @@ function buildAgentEnv(srcEnv, cfg) {
   }
   // Batch agents run unattended: scripts/resources.py refuses to register or change a service address for them.
   out.NOC_UNATTENDED = '1';
+  // Whatever the server's own environment says, a batch agent is "batch" in every audit record, never a person.
+  out.NOC_OPERATOR = 'batch';
   out.OPENCODE_MODEL = cfg.model;
   out.MAX_BATCH_SIZE = String(cfg.maxBatchSize);
   out.NOC_AGENT_LOG_DIR = cfg.logDir;
@@ -762,7 +764,7 @@ function batchAgentEnv() {
 
 // Environment for the server's own helper scripts (decision log, breaker): trusted code, full env, same dirs.
 function scriptEnv() {
-  const env = { ...process.env, NOC_AGENT_LOG_DIR: CFG.logDir };
+  const env = { ...process.env, NOC_AGENT_LOG_DIR: CFG.logDir, NOC_OPERATOR: 'batch' };
   if (CFG.stateDir !== CFG.logDir) {
     if (!env.DECISION_LOG_DIR) env.DECISION_LOG_DIR = CFG.decisionLogDir;
     if (!env.BREAKER_STATE_FILE) env.BREAKER_STATE_FILE = CFG.breakerStateFile;
