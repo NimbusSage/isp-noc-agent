@@ -7,6 +7,7 @@
     python3 scripts/pack.py pull [--yes]          # show what changed, then apply it
     python3 scripts/pack.py git <git arguments>   # a lead: run git against the pack (add, commit, push, branch)
     python3 scripts/pack.py localize [--write]    # move secret values out of the pack files into *.local.json overlays
+    python3 scripts/pack.py localize --scrub [--write]   # replace a moved value left inside notes with a placeholder
     python3 scripts/pack.py deploy-key            # create a key for this machine to reach the private pack repository
 
 The pack holds only the org-specific files that the public repository ignores: profile.json (with
@@ -31,7 +32,10 @@ and topology/temp-bgp-config.json (route-reflector passwords). Keep those values
 machine-local overlay beside the file (profile.local.json, temp-bgp-config.local.json). Overlays
 are never tracked, the readers that need the values merge them in, and a pack file that contains
 any value stored in an overlay is refused. `localize` moves the flagged fields for you and prints
-only their paths, never a value; without --write it shows what it would do.
+only their paths, never a value; without --write it shows what it would do. A moved value can also
+sit inside free text (a `notes` field, a markdown note); `localize --scrub` replaces each such
+occurrence with the placeholder "<secret kept locally>", keeps a `<file>.pre-scrub.bak`, and
+lists file and line only.
 
 A machine with no person's git login (the central hub) reaches the private repository with a deploy
 key: `deploy-key` creates one in ~/.config/nocagent/ (pack_deploy_key, mode 0600) and pins GitHub's
@@ -70,6 +74,7 @@ NEVER = ("*.bak*", ".env*", "*.pem", "*.key", "*oauth*", ".secrets", "*.local.*"
 SENSITIVE_KEY = re.compile(r"(?i)(password|passwd|passphrase|pwd|secret|token|api[_-]?key|apikey|community|psk)")
 NAMES_A_PLACE = re.compile(r"(?i)(_env|_file|_path|_url|_name|_id|_ids|_count)$")   # password_env names a variable, not a value
 MIN_SECRET = 4
+SCRUB_PLACEHOLDER = "<secret kept locally>"
 CREDENTIAL_RULES = frozenset({
     "aws-key", "github-token", "slack-token", "google-api-key", "google-oauth", "api-key", "jwt", "private-key",
     "bearer-token", "sshpass-literal", "url-credentials", "url-secret-param", "literal-secret",
@@ -434,12 +439,61 @@ def _fragment(orig: Any, stripped: Any) -> Any:
     return orig
 
 
+def _scrub(base: Path, write: bool) -> int:
+    """Replace every overlay secret still present in a pack file with a placeholder (paths and lines are printed, never values)."""
+    secrets = sorted(overlay_values(base), key=len, reverse=True)
+    if not secrets:
+        print("nothing to scrub: no overlay holds a secret value")
+        return 0
+    plan = []
+    for p in _pack_files(base):
+        text = _read_text(p)
+        hits = [(n, sum(line.count(v) for v in secrets)) for n, line in enumerate(text.splitlines(), 1)
+                if any(v in line for v in secrets)]
+        if hits:
+            plan.append((p, text, hits))
+    if not plan:
+        print("nothing to scrub: no pack file contains a moved value")
+        return 0
+    for p, _text, hits in plan:
+        print("%s: line %s" % (p.relative_to(base), ", ".join("%d (%d)" % h for h in hits)))
+    if not write:
+        print("dry run: nothing was changed. Run again with --scrub --write to replace these with %s "
+              "(a .pre-scrub.bak copy of each file is kept)." % SCRUB_PLACEHOLDER)
+        return 0
+    for p, text, _hits in plan:
+        new = text
+        for v in secrets:
+            new = new.replace(v, SCRUB_PLACEHOLDER)
+        if p.suffix == ".json":
+            try:
+                json.loads(new)
+            except ValueError:
+                print("error: scrubbing %s would break its JSON; edit it by hand (nothing was changed there)" % p.relative_to(base),
+                      file=sys.stderr)
+                return 2
+        backup = Path(str(p) + ".pre-scrub.bak")
+        if not backup.exists():
+            shutil.copy2(str(p), str(backup))
+        statefile.atomic_write_text(p, new, mode=p.stat().st_mode & 0o777)
+    left = leak_findings([(str(p.relative_to(base)), _read_text(p)) for p in _pack_files(base)], overlay_values(base))
+    if left:
+        print("scrubbed, but these still contain a moved value:", file=sys.stderr)
+        for line in left:
+            print("  " + line, file=sys.stderr)
+        return 1
+    print("scrubbed %d file(s). Review the notes: the placeholder stands where the value was." % len(plan))
+    return 0
+
+
 def cmd_localize(args: argparse.Namespace) -> int:
     if args.write:
         refused = _unattended("localize --write")
         if refused:
             return refused
     base = pack_dir()
+    if args.scrub:
+        return _scrub(base, args.write)
     files = [p for p in _pack_files(base) if p.suffix == ".json"]
     docs: Dict[Path, Any] = {}
     for p in files:
@@ -780,6 +834,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.set_defaults(fn=cmd_git)
     p = sub.add_parser("localize", help="move secret values from pack files into machine-local .local.json overlays")
     p.add_argument("--write", action="store_true", help="make the change (default: show what would move)")
+    p.add_argument("--scrub", action="store_true",
+                   help="instead of moving fields, replace moved values still sitting in notes with a placeholder")
     p.set_defaults(fn=cmd_localize)
     sub.add_parser("deploy-key", help="create a deploy key for this machine and print its public half").set_defaults(fn=cmd_deploy_key)
     p = sub.add_parser("guard", help="pre-commit hook (internal)")

@@ -95,6 +95,18 @@ class Identity(Base):
             self.assertEqual(team.current().role, "disabled")
             self.assertFalse(team.allowed("read"))
 
+    def test_handles_are_case_insensitive(self):
+        self.write_roster()
+        with self.as_operator("ADA"):
+            self.assertEqual((team.current().handle, team.current().role), ("ada", "lead"))
+        with self.as_operator("ada"):
+            self.assertEqual(self.run_cli("add", "NewPerson", "--name", "New Person")[0], 0)
+            self.assertEqual(self.run_cli("set-role", "NEWPERSON", "tech")[0], 0)
+        member = json.loads(self.roster.read_text())["members"]["newperson"]
+        self.assertEqual(member["role"], "tech")
+        self.assertEqual(self.run_cli("me", "TOM")[0], 0)
+        self.assertEqual(json.loads(self.user.read_text())["operator"], "tom")
+
     def test_env_beats_user_config(self):
         self.write_roster()
         self.user.write_text(json.dumps({"operator": "vic"}))
@@ -141,7 +153,7 @@ class Editing(Base):
     def test_invalid_handles_and_duplicates_are_refused(self):
         self.write_roster()
         with self.as_operator("ada"):
-            for handle in ("Bad", "x", "batch", "has space"):
+            for handle in ("x", "BATCH", "has space", "1abc", "a/b"):
                 self.assertEqual(self.run_cli("add", handle, "--name", "N")[0], 2, handle)
             self.assertEqual(self.run_cli("add", "tom", "--name", "Tom Again")[0], 2)
 

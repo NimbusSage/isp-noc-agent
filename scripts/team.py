@@ -59,6 +59,11 @@ HANDLE_RE = re.compile(r"^[a-z][a-z0-9._-]{1,30}$")
 RESERVED = ("batch",)
 
 
+def norm(handle: str) -> str:
+    """Handles are case-insensitive and stored in lowercase, so EthanL and ethanl are the same person."""
+    return (handle or "").strip().lower()
+
+
 class TeamError(Exception):
     """Invalid input; maps to exit code 2."""
 
@@ -120,7 +125,7 @@ class Operator:
 
 def configured_handle() -> Tuple[str, str]:
     """(handle, source): NOC_OPERATOR, else ~/.config/nocagent/user.json, else ("", "")."""
-    env = envfile.get("NOC_OPERATOR").strip()
+    env = norm(envfile.get("NOC_OPERATOR"))
     if env:
         return env, "NOC_OPERATOR"
     path = user_config_path()
@@ -129,7 +134,7 @@ def configured_handle() -> Tuple[str, str]:
     except (OSError, ValueError, AttributeError):
         value = ""
     if isinstance(value, str) and value.strip():
-        return value.strip(), str(path)
+        return norm(value), str(path)
     return "", ""
 
 
@@ -294,6 +299,7 @@ def cmd_list(_args: argparse.Namespace) -> int:
 
 
 def cmd_me(args: argparse.Namespace) -> int:
+    args.handle = norm(args.handle)
     refused = _refuse_if_unattended("team.py me")
     if refused:
         return refused
@@ -318,6 +324,7 @@ def cmd_me(args: argparse.Namespace) -> int:
 
 
 def cmd_add(args: argparse.Namespace) -> int:
+    args.handle = norm(args.handle)
     refused = _refuse_if_unattended("team.py add")
     if refused:
         return refused
@@ -348,6 +355,7 @@ def cmd_add(args: argparse.Namespace) -> int:
 
 
 def _change(args: argparse.Namespace, action: str, mutate) -> int:
+    args.handle = norm(args.handle)
     refused = _refuse_if_unattended("team.py " + action)
     if refused:
         return refused

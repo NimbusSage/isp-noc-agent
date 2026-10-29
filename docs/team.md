@@ -53,6 +53,15 @@ python3 scripts/pack.py localize --write  # moves them, keeps a .bak copy of eac
 
 `localize` prints the paths of the fields it moves (`conventions.snmp.community`, `rr_credentials[0].password`), never their values. It treats a field as secret when its name says so (`password`, `token`, `community`, `psk`, and similar, except names that point at somewhere else such as `password_env`), and it also removes the same value wherever else it appears in the pack's JSON files, for example in a list of tokens. Back the overlay files up with your other secrets. A colleague who needs the same values gets them from you directly or from a central store, not from the pack.
 
+A moved value can also sit inside free text, such as a `notes` field that says "user: btest pass: ..." or a markdown note with `admin:<password>` in a command. Those are not fields, so `localize` cannot move them, and `pack.py init` refuses while they exist. Review them with:
+
+```bash
+python3 scripts/pack.py localize --scrub           # lists file and line; changes nothing
+python3 scripts/pack.py localize --scrub --write   # replaces each occurrence with <secret kept locally>
+```
+
+Each changed file keeps a `<file>.pre-scrub.bak` copy (the first one is never overwritten), a JSON file is checked to still parse, and the command prints locations, not values. Where a note needs the value, the placeholder is the cue to take it from the credential store, `.env` (for example `BTEST_PASSWORD`) or the overlay.
+
 ## A machine with no personal git login (the central hub)
 
 People use their own git access to reach the private repository. A shared machine such as the central hub has none, so give it a deploy key that reaches only the pack repository:
@@ -67,7 +76,7 @@ This creates `~/.config/nocagent/pack_deploy_key` (mode 0600), pins GitHub's pub
 
 0. If the pack files hold secrets, run `python3 scripts/pack.py localize --write` first (see above); `init` refuses otherwise.
 
-1. Add yourself as the first member. The first member has to be a lead, and anyone can add them:
+1. Add yourself as the first member. The first member has to be a lead, and anyone can add them. Handles are not case sensitive and are stored in lowercase:
 
    ```bash
    python3 scripts/team.py add <handle> --name "<Full Name>" --role lead

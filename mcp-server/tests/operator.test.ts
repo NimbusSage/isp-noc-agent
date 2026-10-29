@@ -22,6 +22,10 @@ describe('resolveOperator', () => {
     expect(resolveOperator({ NOC_USER_CONFIG: file, NOC_OPERATOR: 'batch' })).toBe('batch');
   });
 
+  it('treats handles as case-insensitive, like scripts/team.py', () => {
+    expect(resolveOperator({ NOC_OPERATOR: 'EthanL', NOC_USER_CONFIG: join(dir, 'absent.json') })).toBe('ethanl');
+  });
+
   it('ignores values that are not a plain handle', () => {
     for (const bad of ['Ada Lovelace', 'x'.repeat(60), '../etc', 'a b', '1abc']) {
       expect(resolveOperator({ NOC_OPERATOR: bad, NOC_USER_CONFIG: join(dir, 'absent.json') })).toBeUndefined();

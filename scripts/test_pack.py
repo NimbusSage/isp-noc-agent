@@ -370,6 +370,56 @@ class Localize(Base):
         self.assertEqual(merged["conventions"]["snmp"]["community"], "Other-local-value-1")
         self.assertEqual(merged["conventions"]["infrastructure-snmp-community"], COMMUNITY)
 
+    def seed_leftovers(self):
+        self.seed()
+        self.assertEqual(self.localize("--write")[0], 0)
+        (self.lead / "topology" / "fiber-testing-ips.json").write_text(json.dumps(
+            {"net": {"internal": "192.0.2.9", "notes": "user: btest pass: %s" % RR_PW}}, indent=2))
+        (self.lead / "topology" / "verified.md").write_text(
+            "# probes\n- peer 192.0.2.1:%s ok\n- nothing here\n- again %s and %s\n" % (RR_PW, RR_PW, COMMUNITY))
+
+    def test_scrub_dry_run_lists_file_and_line_but_no_value(self):
+        self.seed_leftovers()
+        code, out, err = self.localize("--scrub")
+        self.assertEqual(code, 0, err)
+        self.assertIn("topology/fiber-testing-ips.json: line", out)
+        self.assertIn("topology/verified.md: line 2 (1), 4 (2)", out)
+        self.assertIn("dry run", out)
+        for value in (COMMUNITY, RR_PW):
+            self.assertNotIn(value, out + err)
+        self.assertIn(RR_PW, (self.lead / "topology" / "verified.md").read_text())
+
+    def test_scrub_write_replaces_values_keeps_a_backup_and_leaves_valid_json(self):
+        self.seed_leftovers()
+        code, out, err = self.localize("--scrub", "--write")
+        self.assertEqual(code, 0, err)
+        for value in (COMMUNITY, RR_PW):
+            self.assertNotIn(value, out + err)
+        md = (self.lead / "topology" / "verified.md").read_text()
+        self.assertIn("peer 192.0.2.1:<secret kept locally> ok", md)
+        self.assertNotIn(RR_PW, md)
+        self.assertNotIn(COMMUNITY, md)
+        data = json.loads((self.lead / "topology" / "fiber-testing-ips.json").read_text())
+        self.assertEqual(data["net"]["notes"], "user: btest pass: <secret kept locally>")
+        self.assertIn(RR_PW, (self.lead / "topology" / "verified.md.pre-scrub.bak").read_text())
+        with self.at(self.lead):
+            self.assertEqual(self.run_pack("init", str(self.remote), "--dry-run")[0], 0)      # the pack is now publishable
+        self.assertIn("nothing to scrub", self.localize("--scrub")[1])
+
+    def test_scrub_keeps_the_first_backup_on_a_second_run(self):
+        self.seed_leftovers()
+        self.assertEqual(self.localize("--scrub", "--write")[0], 0)
+        (self.lead / "topology" / "verified.md").write_text("again %s\n" % RR_PW)
+        self.assertEqual(self.localize("--scrub", "--write")[0], 0)
+        self.assertIn("peer 192.0.2.1:%s" % RR_PW, (self.lead / "topology" / "verified.md.pre-scrub.bak").read_text())
+
+    def test_unattended_scrub_write_is_refused(self):
+        self.seed_leftovers()
+        with mock.patch.dict(os.environ, {"NOC_UNATTENDED": "1"}):
+            code, _o, _e = self.localize("--scrub", "--write")
+        self.assertEqual(code, 4)
+        self.assertIn(RR_PW, (self.lead / "topology" / "verified.md").read_text())
+
     def test_unattended_write_is_refused(self):
         self.seed()
         with mock.patch.dict(os.environ, {"NOC_UNATTENDED": "1"}):

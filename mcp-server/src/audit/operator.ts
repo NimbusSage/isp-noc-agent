@@ -11,7 +11,7 @@ const HANDLE = /^[a-z][a-z0-9._:-]{0,40}$/;
  */
 export function resolveOperator(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const fromEnv = (env.NOC_OPERATOR ?? '').trim();
-  const candidate = fromEnv || handleFromUserConfig(env);
+  const candidate = (fromEnv || handleFromUserConfig(env)).toLowerCase();
   return HANDLE.test(candidate) ? candidate : undefined;
 }
 
