@@ -177,7 +177,7 @@ NocAgent/
 │   │   ├── tool-cli.ts                       # Universal tool CLI — harness-independent access to the MCP executor
 │   │   └── tool-schemas.ts                   # Single source of truth for every tool's INPUT schema
 │   ├── state/                                # Rollback snapshots written by the temporary-site tools
-│   ├── tests/                                # 31 files
+│   ├── tests/                                # 32 files
 │   ├── .gitignore
 │   ├── package-lock.json
 │   ├── package.json
