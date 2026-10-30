@@ -33,6 +33,16 @@ The current operator is `NOC_OPERATOR`, else the handle saved by `python3 script
 
 On a person's own machine the roster is a file that person can edit. There, roles guard against mistakes and against an agent doing more than it was asked; they are not a defence against the person at the keyboard. The enforcing limits are the systems themselves: with a personal Sonar token, Sonar applies that person's own permissions, and a device accepts only the logins it was given.
 
+## Where to host the pack
+
+The pack is your organization's operating knowledge, so treat it as confidential: it holds service addresses, the device table, network topology, naming conventions, calendar names and the roster, and it can hold a golden eval set, which is built from real tickets (subjects and short snippets from your ticketing system) and may contain customer details.
+
+- Use a **private** repository. Never a public one, and not a shared drive, where the folder's permissions become your whole access control.
+- A **self-hosted** git server on your own network (Gitea, GitLab, or plain git over SSH) is the safest choice, because the data never leaves your infrastructure. A private repository on a hosted service works if you accept that provider holding the data; require two-factor sign-in for every member and keep the member list short.
+- Give each reader the least access that works: read-only for colleagues who only join and pull, write for the leads who publish. A machine with no personal git login uses a deploy key (below).
+- Require review of changes to `team.json`, `profile.json` and `skills/`, because those decide what the agent trusts.
+- Real eval data stays out of the public repository. The builder (`evals/build_golden_set.py`) and `metrics_rollup.py --incident` write to `site-pack/evals/`, which the public repository ignores, and `evals/golden/` keeps only a fictional example set. If your tickets carry customer details and you do not want them in any shared repository, leave `evals/` out of the pack by listing `/evals/` as the last line of `site-pack/.pack.git/info/exclude`.
+
 ## Secrets stay on the machine
 
 A pack never carries a secret. Two files legitimately hold one next to shared settings: `profile.json` (an SNMP community under `conventions`) and `topology/temp-bgp-config.json` (route-reflector passwords). Keep those values in an **overlay** beside each file:

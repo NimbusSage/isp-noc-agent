@@ -64,7 +64,7 @@ python3 evals/build_golden_set.py --limit 100   # outcome-derived labels from So
 
 ```bash
 python3 evals/build_golden_set.py --add-incident 12345       # into golden set
-python3 scripts/metrics_rollup.py --incident 12345           # stub in evals/golden/pending/
+python3 scripts/metrics_rollup.py --incident 12345           # stub in site-pack/evals/pending/
 ```
 
 **Metrics tracked** (per the production-agent criteria): human correction rate (reverts),

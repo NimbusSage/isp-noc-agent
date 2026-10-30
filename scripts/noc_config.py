@@ -74,6 +74,17 @@ def profile_path() -> Path:
     return Path(override) if override else ROOT / "site-pack" / "profile.json"
 
 
+def site_pack_dir() -> Path:
+    """The org's site pack: NOC_SITE_PACK_DIR, else the folder holding the profile."""
+    override = os.environ.get("NOC_SITE_PACK_DIR", "").strip()
+    return Path(override) if override else profile_path().parent
+
+
+def eval_dir() -> Path:
+    """Where this org's own eval data lives (golden set, incident stubs): inside the site pack, never the tracked tree."""
+    return site_pack_dir() / "evals"
+
+
 def load_profile() -> dict:
     """site-pack/profile.json as a dict; {} when missing, unreadable or not an object."""
     try:

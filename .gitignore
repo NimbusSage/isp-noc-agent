@@ -64,6 +64,12 @@ site-pack/*
 !site-pack/profile.example.json
 !site-pack/example/
 
+# ============ Real eval data (tickets from Sonar) never goes in the tracked tree ============
+# The builder and metrics_rollup write to site-pack/evals/ (ignored above). This guards a hand-made copy.
+evals/golden/*
+!evals/golden/README.md
+!evals/golden/example_set.json
+
 # ============ OS editor noise ============
 .DS_Store
 Thumbs.db
@@ -73,6 +79,8 @@ archive/
 
 # ============ Session-scoped ops scratch (underscore-prefixed helpers) ============
 scripts/_*
+# One-off incident probes an agent leaves behind (they carry device addresses and read the credential store)
+scripts/probe_*
 
 # ============ Personal community-skill installs (npx skills add) ============
 .agents/

@@ -24,7 +24,7 @@ ISP's configuration.
    `mcp-server/config/credentials.enc` (gitignored, passphrase in `.env`).
 2. **Secret values beside shared files go in a `.local.json` overlay** (`profile.local.json`, `topology/temp-bgp-config.local.json`). Overlays are merged by the scripts that read those files, are never shared through the pack, and `python3 scripts/pack.py localize` moves existing ones (see `docs/team.md`).
 3. **Org identity goes in `site-pack/profile.json`.** The same file holds the `resources` block, which registers this organization's service addresses (UISP, LibreNMS, MyMate, Oxidized, Sonar, and its spreadsheets) with `python3 scripts/resources.py set` (see `site-pack/profile.example.json`).
-4. **Shared infrastructure details stay private.**
+4. **Shared infrastructure details stay private.** If colleagues share a site pack, host it in a private or self-hosted git repository, never a public one (see `docs/team.md`).
 5. **Nothing in the core layer should reference a person's personal
    calendar, email, or machine paths.** Runtime paths come from `.env`
    (`AGENT_WORKSPACE`, systemd units) — never hardcode `/root/...` in new

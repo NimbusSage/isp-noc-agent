@@ -7,7 +7,8 @@ re-run this dataset every time you change prompts, models, or logic."
 
 Pulls NOC tickets (the configured NOC group) from Sonar via GraphQL, derives an expected label for
 each from its OUTCOME (categories + final group + status — the ground truth Sonar
-already recorded), and writes evals/golden/golden_set.json:
+already recorded), and writes site-pack/evals/golden_set.json (the real tickets never go in the
+tracked tree; keep that file in a private repository, see docs/team.md):
 
     {
       "built_at": "...",
@@ -64,7 +65,9 @@ import noc_config  # noqa: E402
 IDS = {"noc_group": None, "cs_group": None, "slow_cat": None,
        "night_cat": None, "bounce_cat": None, "weather_cat": None}
 
-GOLDEN_DIR = ROOT / "evals" / "golden"
+# Real tickets stay out of the tracked tree: the default output is the org's site pack
+# (site-pack/evals/golden_set.json, which eval_run.py reads first). evals/golden/ holds only the example set.
+GOLDEN_DIR = noc_config.eval_dir()
 DEFAULT_OUT = GOLDEN_DIR / "golden_set.json"
 PASSTHROUGH_SUBJECTS = [
     (r"garbage collect datastore 'backups' successful", "auto_closed"),
@@ -209,7 +212,7 @@ def build(limit: int, group_id: int, out: Path) -> None:
                                  {c["id"]: c["name"] for c in (t.get("ticket_categories") or {}).get("entities", [])}.items()},
             "expected": expected,
         })
-    GOLDEN_DIR.mkdir(parents=True, exist_ok=True)
+    out.parent.mkdir(parents=True, exist_ok=True)
     dataset = {
         "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "source": "sonar",

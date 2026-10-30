@@ -14,7 +14,8 @@ hook after every settled ticket), computes:
       -> each revert is recorded into the circuit breaker as bounce_reverted
     - breaker status             current open/closed + window failure rate
     - incident → testcase        any ticket_id passed via --incident becomes a pending
-                                 golden-set stub in evals/golden/pending/
+                                 golden-set stub in site-pack/evals/pending/ (the org's own data,
+                                 never the tracked tree)
 
 Usage:
     metrics_rollup.py [--since 2026-09-21] [--until 2026-09-28] [--no-chat]
@@ -46,6 +47,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import decision_log  # noqa: E402
 import envfile  # noqa: E402
 import gql_client  # noqa: E402
+import noc_config  # noqa: E402
 import noc_config  # noqa: E402
 import statefile  # noqa: E402
 
@@ -124,7 +126,7 @@ def send_chat(report: dict) -> None:
     if report.get("incident_testcases"):
         lines.append(f"• New golden-set stubs from incidents: {', '.join('#' + t for t in report['incident_testcases'])}")
     lines.append("")
-    lines.append("_Files: logs/metrics/ · logs/decisions/ · evals/golden/_ · _Runbook: docs/incident-runbook.md_")
+    lines.append("_Files: logs/metrics/ · logs/decisions/ · site-pack/evals/_ · _Runbook: docs/incident-runbook.md_")
     card = {
         "cardsV2": [{
             "cardId": "noc-weekly-metrics",
@@ -159,7 +161,7 @@ def send_chat(report: dict) -> None:
                     },
                     {
                         "widgets": [
-                            {"decoratedText": {"text": "Files: logs/metrics/ \u2022 logs/decisions/ \u2022 evals/golden/<br>Runbook: docs/incident-runbook.md"}},
+                            {"decoratedText": {"text": "Files: logs/metrics/ \u2022 logs/decisions/ \u2022 site-pack/evals/<br>Runbook: docs/incident-runbook.md"}},
                         ],
                     },
                 ],
@@ -175,6 +177,11 @@ def send_chat(report: dict) -> None:
             pass
     except Exception as e:  # noqa: BLE001 - report delivery is best effort; never echo the URL
         print(f"NOTE: chat delivery failed ({type(e).__name__})", file=sys.stderr)
+
+
+def incident_stub_dir() -> Path:
+    """Incident testcase stubs hold real ticket ids and outcomes, so they live in the site pack."""
+    return noc_config.eval_dir() / "pending"
 
 
 def main() -> None:
@@ -249,7 +256,7 @@ def main() -> None:
     # Incident → permanent testcase stub
     incident_stubs = []
     if args.incident:
-        golden_dir = ROOT / "evals" / "golden"
+        golden_dir = incident_stub_dir()
         golden_dir.mkdir(parents=True, exist_ok=True)
         for tid in args.incident:
             try:
