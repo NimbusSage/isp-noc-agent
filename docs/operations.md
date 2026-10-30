@@ -23,6 +23,18 @@ sudo journalctl -u noc-agent -f
 
 The unit sets `Environment=XDG_RUNTIME_DIR=/run/user/0` so headless `opencode run` processes spawned by the webhook can reach the user's runtime socket directory. If it moves, update this variable to match.
 
+### Changing the code that runs here
+
+The running checkout should always equal a reviewed commit. Make changes in a separate worktree and deploy them with a fast-forward:
+
+```bash
+git worktree add ../noc-work -b my-change     # edit, test and push from there
+git merge --ff-only my-change                 # in the production checkout, once it is on master
+python3 scripts/tree_guard.py check           # confirms the checkout matches the committed code
+```
+
+`tree_guard.py` also runs every 15 minutes (`noc-treeguard.timer`) and notifies when the checkout drifts. The reasoning and the other safeguards are in [permissions-policy.md](permissions-policy.md).
+
 ### Manual (foreground)
 
 ```bash

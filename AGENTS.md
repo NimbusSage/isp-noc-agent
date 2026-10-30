@@ -25,6 +25,17 @@ AI agent for an ISP NOC: automates ticket analysis, triage and resolution (goal:
 - Register or change a resource (`resources.py set`, `migrate --write`) only when the operator asks in this conversation. Batch runs never do.
 - `<name>` in angle brackets is a placeholder: replace it with a looked-up value before you run the command. Any other address in a skill is an example.
 
+## Repository integrity
+
+This checkout is what the service runs, so a stray edit here is live code that nobody reviewed.
+- Treat every tracked file as read-only. Change code, skills, docs, `AGENTS.md` or configuration only when the operator asks for that in this conversation. Otherwise, if something seems to need a change, stop, say what you would change and why, and carry on without it (in a batch, `needs_human`).
+- When the operator does ask, work in a separate worktree (`git worktree add <dir> -b <branch>`) and show them the diff. The operator commits and deploys. Do not commit from this tree, and never run `git checkout`, `reset`, `stash`, `clean` or `rebase` here: someone else's uncommitted work may be in it.
+- Scratch files (probes, drafts, one-off scripts, comment HTML) go in `/tmp` or `$TMPDIR`, never in the repository folder; delete them when done. Do not leave `probe_*` or test scripts in `scripts/`.
+- `site-pack/profile.json`, `site-pack/team.json`, `*.local.json` and `.env` change only through their scripts (`resources.py`, `team.py`, `pack.py localize`, `env_set.py`). Never overwrite one with a hand-made copy. If no script can make the change, that is a reason to ask the operator, not to edit the file yourself.
+- A refused tool call (permission denied, blocked by a hook, read-only file system) is the answer. Report it and stop; do not look for another way to make the same change.
+- Do not install or upgrade packages, restart or reconfigure the service, edit systemd units or git config, or touch files outside this folder unless the operator asks.
+- Before you finish: `git status --short`. Undo your own stray files and report any other change you made.
+
 ## Team
 
 - Several people can work in one install. `python3 scripts/team.py whoami` names who you work for and their role: `viewer` reads and analyzes; `tech` also posts Sonar comments, tracker rows and calendar entries; `lead` also changes devices and settings. With no roster (`site-pack/team.json`) nothing is restricted.
