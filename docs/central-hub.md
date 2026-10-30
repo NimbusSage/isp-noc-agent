@@ -30,7 +30,12 @@ The nightly timer runs without a passphrase, so its archives are plain `.tgz` fi
 
 An LXC or VM on your network. It needs `git`, `python3` (3.9 or newer), Node.js 20 or newer (22 LTS is a good choice), `openssl` and `openssh-client`. `sshpass` is only used by the device bring-up skills. The machine must reach the same devices and services the old one does: the routers and radios, UISP, LibreNMS, MyMate, Oxidized and Sonar.
 
-Install the OpenCode CLI the way its documentation describes, then check `opencode --version`.
+Install **OpenCode 2**. The default install script and `npm install -g opencode-ai` install OpenCode 1, and the unattended permission profile (`deploy/opencode-batch.json`) is written for 2.x, so a hub built that way would run its agents without it:
+
+```bash
+curl -fsSL https://opencode.ai/v2/install | bash
+opencode --version        # must print v2.x
+```
 
 ## 3. Get the code
 
@@ -86,7 +91,11 @@ opencode auth login
 opencode auth list
 ```
 
-Set the model in `.env` (`AGENT_MODEL`) to one the team account can use. The roster's approved list should name it; see step 8.
+Set the model in `.env` (`AGENT_MODEL`) to one the team account can use (`opencode models` lists them). The roster's approved list should name it; see step 8.
+
+To use OpenRouter models as well, run `opencode auth login`, choose OpenRouter and paste the API key at the hidden prompt; it is stored in `~/.local/share/opencode/auth.json` (mode 0600, never in `.env`). Check the exact model ids with `opencode models`.
+
+Free tiers are small. OpenRouter's `:free` models allow 20 requests per minute and, until you have bought $10 of credit once, 50 requests per day (1,000 after that); the daily count resets at UTC midnight. One ticket analysis takes dozens of model requests (every tool call is one), so 50 a day covers only a couple of tickets. Free models can also be served by providers that log or train on prompts, and ticket text can include customer details: read the provider's data terms and your OpenRouter privacy settings before putting customer data through a free model, and list only the models you accept in `approved_models` (step 8). When the quota runs out, the batch fails and its tickets come back as `needs_human`; watch for that after the cutover.
 
 ## 7. Check everything before it takes tickets
 
