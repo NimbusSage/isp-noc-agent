@@ -643,6 +643,25 @@ def check_team(env):
             add("team_model", "pass", f"model {model} is approved")
 
 
+def check_tree(env):
+    """Does the running checkout still match the committed code? An unreviewed edit here is live code (scripts/tree_guard.py)."""
+    import tree_guard
+    entries = tree_guard.drift(ROOT)
+    if entries is None:
+        add("tree", "unconfigured", "not a git checkout: nothing to compare with")
+        return
+    if not entries:
+        add("tree", "pass", "the checkout matches the committed code")
+        return
+    acknowledged = tree_guard.load_state().get("accepted") == tree_guard.fingerprint(ROOT, entries)
+    shown = ", ".join(p for _c, p in entries[:5]) + (f" and {len(entries) - 5} more" if len(entries) > 5 else "")
+    if acknowledged:
+        add("tree", "pass", f"{len(entries)} path(s) differ from the committed code but an operator acknowledged them: {shown}")
+        return
+    add("tree", "warn", f"{len(entries)} path(s) differ from the committed code: {shown}",
+        "review: git diff HEAD. Then commit it through a branch, discard it, or acknowledge it with: python3 scripts/tree_guard.py accept")
+
+
 def check_mymate(env):
     base = (registered(env, "mymate") or "").rstrip("/")
     user, pw = env_val(env, "MYMATE_USER"), env_val(env, "MYMATE_PASS")
@@ -999,6 +1018,7 @@ CHECKS = [
     ("harness", check_harness, 1, True),
     ("resources", check_resources, 1, False),
     ("team", check_team, 1, False),
+    ("tree", check_tree, 2, False),
     ("librenms", check_librenms, 1, False),
     ("mymate", check_mymate, 1, False),
     ("sonar_api", check_sonar, 2, True),

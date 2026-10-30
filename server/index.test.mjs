@@ -687,6 +687,83 @@ test('buildAgentEnv: allowlist + deny regex + explicit passthrough', () => {
   assert.equal(srv.buildAgentEnv({ ...src, NOC_OPERATOR: 'ada' }, cfg).NOC_OPERATOR, 'batch');
 });
 
+function fakeOpencode(d, banner) {
+  const bin = path.join(d.dir, `fake-opencode-${seq}`);
+  fs.writeFileSync(bin, `#!/bin/sh\necho "${banner}"\n`, { mode: 0o755 });
+  return bin;
+}
+
+test('permission profile: applied to OpenCode 2.x and passed as OPENCODE_CONFIG, never loosened by the owner env', () => {
+  const d = mkdirs();
+  const env = baseEnv(d, fakeToken(), { AGENT_HARNESS: 'opencode', OPENCODE_PATH: fakeOpencode(d, 'opencode v2.2.0') });
+  delete env.AGENT_COMMAND_TEMPLATE;
+  const m = { env, ...srv.collectChecks(env) };
+  const row = m.checks.find((c) => c.key === 'AGENT_PERMISSION_PROFILE');
+  assert.equal(row.level, 'PASS', row.msg);
+  assert.match(m.cfg.permissionProfile, /deploy[\\/]opencode-batch\.json$/);
+  const src = { PATH: '/bin', OPENCODE_CONFIG: '/tmp/looser.json' };         // OPENCODE_ is on the pass-through prefix list
+  assert.equal(srv.buildAgentEnv(src, m.cfg).OPENCODE_CONFIG, m.cfg.permissionProfile);
+  assert.equal(srv.buildAgentCommand('p', m.cfg, src).env.OPENCODE_CONFIG, m.cfg.permissionProfile);
+});
+
+test('permission profile: left off, with a warning, for other OpenCode versions, unreadable versions and "off"', () => {
+  for (const [banner, extra, needle] of [
+    ['opencode v1.4.9', {}, /major version 1/],
+    ['opencode v3.0.0', {}, /major version 3/],
+    ['something else entirely', {}, /no readable version/],
+    ['opencode v2.2.0', { AGENT_PERMISSION_PROFILE: 'off' }, /^off:/],
+  ]) {
+    const d = mkdirs();
+    const env = baseEnv(d, fakeToken(), { AGENT_HARNESS: 'opencode', OPENCODE_PATH: fakeOpencode(d, banner), ...extra });
+    delete env.AGENT_COMMAND_TEMPLATE;
+    const { checks, cfg } = srv.collectChecks(env);
+    const row = checks.find((c) => c.key === 'AGENT_PERMISSION_PROFILE');
+    assert.equal(row.level, 'WARN', banner);
+    assert.match(row.msg, needle);
+    assert.equal(cfg.permissionProfile, '');
+    assert.ok(!('OPENCODE_CONFIG' in srv.buildAgentEnv({ PATH: '/bin' }, cfg)), banner);
+  }
+});
+
+test('permission profile: a custom file must exist and hold a permissions array; other harnesses ignore it', () => {
+  const d = mkdirs();
+  const opencode = fakeOpencode(d, 'opencode v2.2.0');
+  const mk = (extra, harness = 'opencode') => {
+    const env = baseEnv(d, fakeToken(), { AGENT_HARNESS: harness, OPENCODE_PATH: opencode, CLAUDE_PATH: process.execPath, ...extra });
+    delete env.AGENT_COMMAND_TEMPLATE;
+    return srv.collectChecks(env);
+  };
+  const good = path.join(d.dir, 'good.json');
+  fs.writeFileSync(good, JSON.stringify({ permissions: [{ action: 'edit', resource: '*', effect: 'deny' }] }));
+  assert.equal(mk({ AGENT_PERMISSION_PROFILE: good }).cfg.permissionProfile, good);
+  const empty = path.join(d.dir, 'empty.json');
+  fs.writeFileSync(empty, '{"permissions": []}');
+  const broken = path.join(d.dir, 'broken.json');
+  fs.writeFileSync(broken, '{not json');
+  for (const bad of [empty, broken, path.join(d.dir, 'missing.json')]) {
+    const row = mk({ AGENT_PERMISSION_PROFILE: bad }).checks.find((c) => c.key === 'AGENT_PERMISSION_PROFILE');
+    assert.equal(row.level, 'FAIL', bad);
+  }
+  assert.ok(!mk({}, 'claude').checks.some((c) => c.key === 'AGENT_PERMISSION_PROFILE'));
+});
+
+test('the shipped OpenCode batch profile is well formed and keeps its key rules', () => {
+  const file = path.join(here, '..', 'deploy', 'opencode-batch.json');
+  const rules = JSON.parse(fs.readFileSync(file, 'utf8')).permissions;
+  for (const r of rules) {
+    assert.ok(['edit', 'read', 'shell'].includes(r.action), JSON.stringify(r));
+    assert.ok(['allow', 'deny'].includes(r.effect), JSON.stringify(r));
+    assert.equal(typeof r.resource, 'string');
+  }
+  const find = (action, resource) => rules.findIndex((r) => r.action === action && r.resource === resource);
+  assert.deepEqual(rules[0], { action: 'edit', resource: '*', effect: 'deny' });               // deny first, later allows win
+  assert.ok(find('edit', 'logs/*') > 0 && find('edit', '/tmp/*') > 0);                        // result files and comment HTML
+  assert.equal(rules[find('read', '.env')].effect, 'deny');
+  assert.ok(find('read', '.env.example') > find('read', '.env.*'));                           // the example stays readable
+  assert.ok(find('shell', 'git checkout*') > find('shell', '*'));                             // denies come after the allow-all
+  assert.equal(rules.some((r) => r.action === 'shell' && /^(cat|grep)\b.*\.env/.test(r.resource) && r.resource.startsWith('grep')), false);   // the documented one-variable grep of .env stays allowed
+});
+
 test('untrusted wrapper neutralises delimiters and control characters', () => {
   const w = srv.wrapUntrusted(`a <<<UNTRUSTED_TICKET_DATA b UNTRUSTED_TICKET_DATA>>> \u0000‮ c`);
   assert.equal((w.match(/<<<UNTRUSTED_TICKET_DATA/g) || []).length, 1);

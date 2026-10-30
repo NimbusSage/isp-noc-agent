@@ -7,6 +7,8 @@
 #   sudo bash scripts/install.sh --with-gui       # also `npm ci` the repo-root deps (puppeteer-core, for scripts/wave_gui.mjs)
 #   sudo bash scripts/install.sh --enable-backup  # also enable the daily noc-backup.timer (archives .env + credentials)
 #   sudo bash scripts/install.sh --no-start       # never start/restart noc-agent, only install + enable it
+#   sudo bash scripts/install.sh --protect-tree   # also make the checkout read-only for the service and its agents (takes effect on restart)
+#   sudo bash scripts/install.sh --unprotect-tree # remove that restriction again
 #   sudo bash scripts/install.sh --node-bin PATH  # node binary baked into the noc-agent unit (default: `node` on PATH, or $NODE_BIN)
 #
 # The onboarding wizard (agent session: "onboard me") handles .env, OAuth,
@@ -21,9 +23,11 @@ DRY_RUN=0
 WITH_GUI=0
 ENABLE_BACKUP=0
 NO_START=0
+PROTECT_TREE=0
+UNPROTECT_TREE=0
 NODE_BIN_ARG="${NODE_BIN:-}"
 
-usage() { sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -32,6 +36,8 @@ while [[ $# -gt 0 ]]; do
     --with-gui) WITH_GUI=1 ;;
     --enable-backup) ENABLE_BACKUP=1 ;;
     --no-start) NO_START=1 ;;
+    --protect-tree) PROTECT_TREE=1 ;;
+    --unprotect-tree) UNPROTECT_TREE=1 ;;
     --node-bin)
       [[ $# -ge 2 ]] || { echo "--node-bin needs a path" >&2; exit 2; }
       NODE_BIN_ARG="$2"; shift ;;
@@ -48,6 +54,8 @@ REEXEC_ARGS=()
 [[ $WITH_GUI -eq 1 ]] && REEXEC_ARGS+=(--with-gui)
 [[ $ENABLE_BACKUP -eq 1 ]] && REEXEC_ARGS+=(--enable-backup)
 [[ $NO_START -eq 1 ]] && REEXEC_ARGS+=(--no-start)
+[[ $PROTECT_TREE -eq 1 ]] && REEXEC_ARGS+=(--protect-tree)
+[[ $UNPROTECT_TREE -eq 1 ]] && REEXEC_ARGS+=(--unprotect-tree)
 
 DID=()      # what this run actually changed (printed at the end)
 SKIPPED=()  # things deliberately left alone, with the reason
@@ -131,7 +139,7 @@ fi
 
 # ---- 3. systemd units from templates (paths templated, never hardcoded) -------------------------------
 echo "-- generating systemd units for $INSTALL_DIR ..."
-UNIT_NAMES=(noc-agent.service noc-backup.service noc-metrics.service noc-evals.service noc-backup.timer noc-metrics.timer noc-evals.timer)
+UNIT_NAMES=(noc-agent.service noc-backup.service noc-metrics.service noc-evals.service noc-treeguard.service noc-backup.timer noc-metrics.timer noc-evals.timer noc-treeguard.timer)
 
 render_unit() {
   local tpl out
@@ -154,6 +162,15 @@ for name in "${UNIT_NAMES[@]}"; do
     echo "----- $name -----"; cat "$RENDER_DIR/$name"
   fi
 done
+
+if [[ $PROTECT_TREE -eq 1 && $UNPROTECT_TREE -eq 1 ]]; then fail "--protect-tree and --unprotect-tree cannot be combined"; fi
+DROPIN_DIR=/etc/systemd/system/noc-agent.service.d
+DROPIN_NAME=10-protect-tree.conf
+if [[ $PROTECT_TREE -eq 1 ]]; then
+  [[ -f "$INSTALL_DIR/deploy/noc-agent.protect-tree.conf.template" ]] || fail "missing template deploy/noc-agent.protect-tree.conf.template"
+  render_unit "$INSTALL_DIR/deploy/noc-agent.protect-tree.conf.template" > "$RENDER_DIR/$DROPIN_NAME"
+  if [[ $DRY_RUN -eq 1 ]]; then echo "----- noc-agent.service.d/$DROPIN_NAME -----"; cat "$RENDER_DIR/$DROPIN_NAME"; fi
+fi
 
 if command -v systemd-analyze >/dev/null 2>&1; then
   # Advisory only: `verify` also resolves ExecStart binaries and EnvironmentFile, which may legitimately not exist yet.
@@ -184,12 +201,26 @@ fi
 for name in "${UNIT_NAMES[@]}"; do
   install -m 0644 "$RENDER_DIR/$name" "/etc/systemd/system/$name"
 done
+if [[ $PROTECT_TREE -eq 1 ]]; then
+  # The writable folders must exist before the unit starts, or its mount namespace cannot be set up.
+  install -d -m 0755 "$INSTALL_DIR/logs" "$INSTALL_DIR/mcp-server/logs" "$INSTALL_DIR/mcp-server/state"
+  install -d -m 0755 "$DROPIN_DIR"
+  install -m 0644 "$RENDER_DIR/$DROPIN_NAME" "$DROPIN_DIR/$DROPIN_NAME"
+  DID+=("installed $DROPIN_DIR/$DROPIN_NAME: the checkout is read-only for noc-agent and its agents after the next restart")
+elif [[ $UNPROTECT_TREE -eq 1 ]]; then
+  if [[ -f "$DROPIN_DIR/$DROPIN_NAME" ]]; then
+    rm -f "$DROPIN_DIR/$DROPIN_NAME"; rmdir "$DROPIN_DIR" 2>/dev/null || true
+    DID+=("removed $DROPIN_DIR/$DROPIN_NAME: noc-agent can write the checkout again after the next restart")
+  else
+    SKIPPED+=("--unprotect-tree: $DROPIN_DIR/$DROPIN_NAME was not installed")
+  fi
+fi
 DID+=("wrote ${#UNIT_NAMES[@]} unit files to /etc/systemd/system/ (rendered for $INSTALL_DIR, node=$NODE_BIN)")
 
 # ---- 4. enable ----------------------------------------------------------------------------------------
 systemctl daemon-reload
-systemctl enable --now noc-metrics.timer noc-evals.timer
-DID+=("enabled and started noc-metrics.timer and noc-evals.timer")
+systemctl enable --now noc-metrics.timer noc-evals.timer noc-treeguard.timer
+DID+=("enabled and started noc-metrics.timer, noc-evals.timer and noc-treeguard.timer")
 if [[ $ENABLE_BACKUP -eq 1 ]]; then
   systemctl enable --now noc-backup.timer
   DID+=("enabled and started noc-backup.timer (--enable-backup)")

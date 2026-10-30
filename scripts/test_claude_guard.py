@@ -150,6 +150,61 @@ def run_guard(script: Path, stdin: str, project: Path):
                           text=True, env=env, timeout=60)
 
 
+class TestUnattended(GuardCase):
+    """Batch agents (NOC_UNATTENDED=1) write only under logs/ or outside the project."""
+
+    def evaluate(self, rel: str, tool: str = "Write", **kw: Any):
+        kw.setdefault("content", "hello\n")
+        return guard.evaluate(payload(self.project, tool, rel, **kw), fake_scan)
+
+    def test_attended_sessions_are_not_restricted_by_this_rule(self) -> None:
+        os.environ.pop("NOC_UNATTENDED", None)
+        for rel in ("scripts/a.py", "docs/a.md", "AGENTS.md", "site-pack/profile.json"):
+            self.assertEqual(self.evaluate(rel)[0], 0, rel)
+
+    def test_unattended_runs_cannot_write_repository_files(self) -> None:
+        os.environ["NOC_UNATTENDED"] = "1"
+        for rel in ("scripts/a.py", "docs/a.md", "AGENTS.md", ".env", ".claude/settings.json", ".git/config",
+                    "site-pack/profile.json", "site-pack/topology/map.json", "mcp-server/config/credentials.enc",
+                    "logsextra/a.json", "a-file-at-the-root.txt"):
+            code, message = self.evaluate(rel)
+            self.assertEqual(code, 2, rel)
+            self.assertIn("unattended run may not write", message)
+            self.assertIn("needs_human", message)
+
+    def test_every_editing_tool_shape_is_covered(self) -> None:
+        os.environ["NOC_UNATTENDED"] = "1"
+        self.assertEqual(self.evaluate("scripts/a.py", "Edit", old_string="a", new_string="b")[0], 2)
+        self.assertEqual(guard.evaluate({"tool_name": "MultiEdit", "cwd": str(self.project), "tool_input": {
+            "file_path": str(self.project / "scripts" / "a.py"), "edits": [{"old_string": "a", "new_string": "b"}]}}, fake_scan)[0], 2)
+        self.assertEqual(self.evaluate("scripts/a.py", "Edit", old_string="a")[0], 2)        # no new text at all
+
+    def test_logs_and_paths_outside_the_project_stay_writable(self) -> None:
+        os.environ["NOC_UNATTENDED"] = "1"
+        for rel in ("logs/result_1.json", "logs/decisions/2026-10.jsonl"):
+            self.assertEqual(self.evaluate(rel)[0], 0, rel)
+        outside = payload(self.project, "Write", "x", content="hello\n")
+        outside["tool_input"]["file_path"] = "/tmp/comment.html"
+        self.assertEqual(guard.evaluate(outside, fake_scan)[0], 0)
+
+    def test_a_relative_path_and_a_traversal_are_resolved_before_the_check(self) -> None:
+        os.environ["NOC_UNATTENDED"] = "1"
+        (self.project / "logs").mkdir()
+        tricky = payload(self.project, "Write", "x", content="hello\n")
+        tricky["tool_input"]["file_path"] = "logs/../scripts/a.py"
+        self.assertEqual(guard.evaluate(tricky, fake_scan)[0], 2)
+        relative = payload(self.project, "Write", "x", content="hello\n")
+        relative["tool_input"]["file_path"] = "logs/result.json"
+        self.assertEqual(guard.evaluate(relative, fake_scan)[0], 0)
+
+    def test_a_symlink_out_of_logs_does_not_open_the_repository(self) -> None:
+        os.environ["NOC_UNATTENDED"] = "1"
+        (self.project / "logs").mkdir()
+        (self.project / "scripts").mkdir()
+        os.symlink(str(self.project / "scripts"), str(self.project / "logs" / "link"))
+        self.assertEqual(self.evaluate("logs/link/a.py")[0], 2)
+
+
 class TestProcess(GuardCase):
     """End to end: copy the guard into a temp scripts/ tree beside a stub scanner."""
 

@@ -84,13 +84,17 @@ NocAgent/
 │       ├── wave-gui/                         # SKILL.md
 │       └── wireless-health/                  # SKILL.md
 ├── deploy/                                   # Systemd templates for the webhook service and backup, evals and metrics timers
+│   ├── noc-agent.protect-tree.conf.template
 │   ├── noc-agent.service.template
 │   ├── noc-backup.service.template
 │   ├── noc-backup.timer.template
 │   ├── noc-evals.service.template
 │   ├── noc-evals.timer.template
 │   ├── noc-metrics.service.template
-│   └── noc-metrics.timer.template
+│   ├── noc-metrics.timer.template
+│   ├── noc-treeguard.service.template
+│   ├── noc-treeguard.timer.template
+│   └── opencode-batch.json
 ├── docs/                                     # Operator manual pages
 │   ├── n8n/                                  # Importable n8n workflow JSON
 │   │   └── workflow-template.json
@@ -249,9 +253,10 @@ NocAgent/
 │   ├── temp_bgp_rollback.sh                  # Temp BGP Rollback — disable only TEMP peers created during outage
 │   ├── temp_ospf_sheet.mjs                   # Temp OSPF sheet: read-only inspector and gated row reservation for the temporary-site workflow
 │   ├── tracker_sheet.mjs                     # Tracker Sheet helper — NOC Ticket Tracker 2.1 append-only writer
+│   ├── tree_guard.py                         # Notice when the running checkout stops matching what was reviewed and committed (stdlib + git)
 │   ├── wave_gui.mjs                          # Wave radio web UI driver (puppeteer-core + system Chrome)
 │   ├── wave_rename.py                        # WaveOS rename executor: jq-filter SSID/hostname edits with snapshot/verify/rollback
-│   └── (43 test files)                       # matching *.test.mjs, test_*.py
+│   └── (45 test files)                       # matching *.test.mjs, test_*.py
 ├── server/                                   # Node.js/Express webhook server and its batch prompt template
 │   ├── batch_prompt_template.md
 │   ├── index.js

@@ -1,0 +1,11 @@
+[Unit]
+Description=NOC Agent checkout drift check, every 15 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+Persistent=true
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

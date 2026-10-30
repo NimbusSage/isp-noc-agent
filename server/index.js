@@ -15,7 +15,7 @@
 
 const express = require('express');
 const crypto = require('crypto');
-const { spawn, execFile } = require('child_process');
+const { spawn, execFile, execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -136,6 +136,47 @@ function shlexSplit(input) {
 // `$&`, `$'`, `$1` etc. in a substituted value are inserted verbatim, and substituted text is never re-scanned.
 function substitutePlaceholders(text, values) {
   return String(text).replace(PLACEHOLDER_RE, (_m, key) => values[key]);
+}
+
+// Major version of an OpenCode binary ("opencode v2.2.0" -> 2), or null when it cannot be read.
+function opencodeMajor(bin) {
+  try {
+    const out = execFileSync(bin, ['--version'], { timeout: 5000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const m = /^opencode\s+v?(\d+)\.\d+/i.exec(String(out).trim());
+    return m ? Number(m[1]) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Unattended OpenCode runs get a permission profile (deploy/opencode-batch.json): edits only in /tmp and logs/, no secret
+// reads, no git/package/service changes from the shell. It is only applied to OpenCode 2.x, whose 'permissions' array it
+// is written for; on any other version it is left off with a warning rather than risking a config the binary rejects.
+function resolvePermissionProfile(env, cfg, bin, add) {
+  cfg.permissionProfile = '';
+  const wanted = envStr(env, 'AGENT_PERMISSION_PROFILE') || '';
+  if (wanted.toLowerCase() === 'off') {
+    add('WARN', 'AGENT_PERMISSION_PROFILE', 'off: unattended agents run without the edit, read and shell restrictions (see deploy/opencode-batch.json)');
+    return;
+  }
+  const custom = wanted !== '';
+  const file = custom ? path.resolve(REPO_ROOT, wanted) : path.join(REPO_ROOT, 'deploy', 'opencode-batch.json');
+  let parsed = null;
+  try { parsed = JSON.parse(fs.readFileSync(file, 'utf8')); } catch (err) {
+    add(custom ? 'FAIL' : 'WARN', 'AGENT_PERMISSION_PROFILE', `${custom ? 'cannot use' : 'default profile not applied:'} ${file}: ${err.code === 'ENOENT' ? 'file not found' : err.message}`);
+    return;
+  }
+  if (!parsed || !Array.isArray(parsed.permissions) || parsed.permissions.length === 0) {
+    add(custom ? 'FAIL' : 'WARN', 'AGENT_PERMISSION_PROFILE', `${file} has no "permissions" array`);
+    return;
+  }
+  const major = opencodeMajor(bin);
+  if (major !== 2) {
+    add('WARN', 'AGENT_PERMISSION_PROFILE', `not applied: the permission profile is written for OpenCode 2.x and this binary reports ${major === null ? 'no readable version' : `major version ${major}`}. Unattended agents run without edit/read/shell restrictions`);
+    return;
+  }
+  cfg.permissionProfile = file;
+  add('PASS', 'AGENT_PERMISSION_PROFILE', `${path.relative(REPO_ROOT, file) || file} (${parsed.permissions.length} rules; edits only in /tmp and logs/)`);
 }
 
 function resolveExecutable(cmd, pathEnv) {
@@ -428,6 +469,7 @@ function collectChecks(env, opts = {}) {
       }
       if (found) add('PASS', binKey, 'harness binary found and executable');
       else add('FAIL', binKey, 'harness binary not found or not executable (set an absolute path; systemd PATH is minimal)');
+      if (harness === 'opencode' && found) resolvePermissionProfile(env, cfg, found, add);
     }
     if (harness === 'command') {
       if (!cfg.commandTemplate) add('FAIL', 'AGENT_COMMAND_TEMPLATE', 'required when AGENT_HARNESS=command');
@@ -743,6 +785,8 @@ function buildAgentEnv(srcEnv, cfg) {
   for (const [name, value] of Object.entries(srcEnv)) {
     if (typeof value === 'string' && envNameMatches(name, cfg.envPassthrough || [])) out[name] = value;
   }
+  // The permission profile is applied last, so a variable the owner passed through cannot loosen it.
+  if (cfg.harness === 'opencode' && cfg.permissionProfile) out.OPENCODE_CONFIG = cfg.permissionProfile;
   // Batch agents run unattended: scripts/resources.py refuses to register or change a service address for them.
   out.NOC_UNATTENDED = '1';
   // Whatever the server's own environment says, a batch agent is "batch" in every audit record, never a person.

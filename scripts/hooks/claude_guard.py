@@ -15,6 +15,11 @@ Protocol (https://code.claude.com/docs/en/hooks, checked 2026-10-23):
     Any other exit lets the call through.
 
 Behaviour
+  * Unattended runs (the webhook server's batch agents set NOC_UNATTENDED=1) may not write any file inside the
+    project except under logs/: not code, skills, docs, instructions, .env, nor the org's data files in
+    site-pack/. Scratch files belong in /tmp (outside the project, so never checked here), results in logs/.
+    Nobody can answer a permission prompt in a batch, so this is a hard stop, not a question. The block message
+    says to return needs_human instead of finding another way.
   * Only the text being WRITTEN is scanned (content / new_string), with
     scripts/secret_scan.py scan_text(text, path). The message names rules
     and line numbers only, never the matched text.
@@ -45,6 +50,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 sys.dont_write_bytecode = True
 
 SKIP_PARTS = {".git", "node_modules", "__pycache__"}
+UNATTENDED_WRITABLE = ("logs",)   # project-relative top-level folders an unattended agent may write
 Scanner = Callable[[str, str], Sequence[Any]]
 
 
@@ -151,6 +157,20 @@ def format_block(rel: Path, hits: List[Tuple[str, str, int]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def unattended_block(path_str: str, project: Path) -> Optional[str]:
+    """The block message when an unattended run targets a project file outside logs/, else None."""
+    if os.environ.get("NOC_UNATTENDED", "").strip() != "1":
+        return None
+    rel = relative_to_project(path_str, project)
+    if rel is None:                      # outside the project, for example /tmp
+        return None
+    if rel.parts and rel.parts[0] in UNATTENDED_WRITABLE:
+        return None
+    return ("BLOCKED by the NocAgent integrity guard: an unattended run may not write %s. Batch agents do not edit "
+            "repository files. Scratch files go in /tmp and results in logs/. If this change is really needed, say so "
+            "and return needs_human; do not look for another way to make it.\n" % rel.as_posix())
+
+
 def evaluate(payload: Dict[str, Any], scanner: Optional[Scanner] = None) -> Tuple[int, str]:
     """Return (exit_code, stderr_message) for one PreToolUse payload."""
     tool_input = payload.get("tool_input")
@@ -159,6 +179,9 @@ def evaluate(payload: Dict[str, Any], scanner: Optional[Scanner] = None) -> Tupl
     path_str = target_path(tool_input)
     if path_str is None:
         return 0, ""
+    blocked = unattended_block(path_str, project_dir(payload))
+    if blocked:
+        return 2, blocked
     pieces = collect_texts(tool_input)
     if not pieces:
         return 0, ""

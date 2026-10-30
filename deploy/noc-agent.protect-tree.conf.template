@@ -1,0 +1,19 @@
+# Opt-in (scripts/install.sh --protect-tree): installed as noc-agent.service.d/10-protect-tree.conf.
+#
+# Makes the checkout READ-ONLY for the ticket server and every agent it starts, whatever tool they use
+# (a file tool, a shell redirect, python3 -c, tee, git). An unattended agent can then not change code,
+# skills, AGENTS.md, .env, site-pack/ or .git even if a prompt-injected ticket asks it to. Only the places
+# the running system must write stay writable. Your own shell (deploys, git, editing) is not affected:
+# the restriction lives in the service's mount namespace only.
+#
+# Takes effect on the next `systemctl restart noc-agent`. Remove with: scripts/install.sh --unprotect-tree
+[Service]
+ReadOnlyPaths={{INSTALL_DIR}}
+ReadWritePaths={{INSTALL_DIR}}/logs
+ReadWritePaths=-{{INSTALL_DIR}}/mcp-server/logs
+ReadWritePaths=-{{INSTALL_DIR}}/mcp-server/state
+# known_hosts.json is rewritten (temp file + rename) in this folder, so the folder is writable ...
+ReadWritePaths=-{{INSTALL_DIR}}/mcp-server/config
+# ... except the credential store and the server settings, which stay read-only.
+ReadOnlyPaths=-{{INSTALL_DIR}}/mcp-server/config/credentials.enc
+ReadOnlyPaths=-{{INSTALL_DIR}}/mcp-server/config/server.json

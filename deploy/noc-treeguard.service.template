@@ -1,0 +1,23 @@
+[Unit]
+Description=NOC Agent checkout drift check (alerts when the running tree differs from the committed code)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory={{INSTALL_DIR}}
+EnvironmentFile={{INSTALL_DIR}}/.env
+ExecStart=/usr/bin/python3 {{INSTALL_DIR}}/scripts/tree_guard.py check --alert --quiet
+# Exit 1 means "drift found" and the alert is the report, so do not mark the unit failed.
+SuccessExitStatus=1
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=120
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes

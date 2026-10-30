@@ -504,6 +504,33 @@ class TeamCheckTests(DoctorCase):
         self.assertEqual(self.results(NOC_OPERATOR="ada")["team_model"]["status"], "pass")
 
 
+class TreeCheckTests(DoctorCase):
+    def row(self):
+        _, rows = self.rows("--only", "tree")
+        return next(r for r in rows["results"] if r["name"] == "tree")
+
+    def test_not_a_git_checkout_is_unconfigured(self):
+        self.assertEqual(self.row()["status"], "unconfigured")
+
+    def test_clean_edited_and_untracked(self):
+        self.git("init", "-q")
+        self.git("config", "user.email", "t@example.invalid")
+        self.git("config", "user.name", "T")
+        self.git("config", "commit.gpgsign", "false")
+        (self.root / ".gitignore").write_text("server/node_modules/\n")
+        (self.root / "scripts").mkdir(exist_ok=True)
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "init")
+        self.assertEqual(self.row()["status"], "pass")
+        (self.root / "scripts" / "demo.py").write_text("// edited\n")
+        (self.root / "probe_x.mjs").write_text("// stray\n")
+        row = self.row()
+        self.assertEqual(row["status"], "warn")
+        self.assertIn("2 path(s)", row["detail"])
+        self.assertIn("probe_x.mjs", row["detail"])
+        self.assertIn("tree_guard.py accept", row["hint"])
+
+
 class HarnessTests(unittest.TestCase):
     def test_harness_row_summarizes_harness_setup(self):
         # Keep the interpreter's runtime environment (a hosted-toolcache Python needs LD_LIBRARY_PATH to start);

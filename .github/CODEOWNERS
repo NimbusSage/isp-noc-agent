@@ -52,6 +52,14 @@ scripts/install.sh                             @NimbusSage
 opencode.json                                  @NimbusSage
 .mcp.json                                      @NimbusSage
 
+# What limits an agent's writes in the running checkout (loosening any of these lets an agent change live code)
+deploy/opencode-batch.json                     @NimbusSage
+deploy/noc-agent.protect-tree.conf.template    @NimbusSage
+scripts/tree_guard.py                          @NimbusSage
+scripts/hooks/                                 @NimbusSage
+scripts/team.py                                @NimbusSage
+scripts/pack.py                                @NimbusSage
+
 # Server entry point and the gated device-write code paths
 server/index.js                                @NimbusSage
 mcp-server/src/commands/                       @NimbusSage
