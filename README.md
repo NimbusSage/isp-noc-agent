@@ -73,6 +73,7 @@ If you build something genuinely useful for NOC work with this: *the widely-usef
 | [docs/portability-reinstall.md](docs/portability-reinstall.md) | Moving/reinstalling, credential inventory, doctor, wizard |
 | [docs/permissions-policy.md](docs/permissions-policy.md) | Autonomous / review / off-limits action tiers |
 | [docs/team.md](docs/team.md) | Several people, one setup: roster and roles, a shared private pack, who-did-what logs |
+| [docs/central-hub.md](docs/central-hub.md) | Set up a central hub or move to a new machine: pack, encrypted backup, team model login, cutover |
 | [docs/incident-runbook.md](docs/incident-runbook.md) | Operator procedures for incidents |
 
 ## Credentials & portability (essentials)

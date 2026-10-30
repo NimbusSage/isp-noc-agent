@@ -59,6 +59,16 @@ RESTORE (e.g. onto a rebuilt host):
        state__circuit_breaker.json -> <state dir>/circuit_breaker.json
        state__pending_peak_checks.json -> <state dir>/pending_peak_checks.json
   3. shred/delete /tmp/noc-restore afterwards; never commit any of it.
+
+Moving to a new machine: --install puts the members where they belong in a fresh checkout instead of
+copying them by hand.
+       python3 scripts/backup_runtime_config.py --install <archive> <repo> [--dry-run] [--force] [--with-state]
+  It places .env, credentials.enc, profile.json, profile.local.json, the topology tree and the OAuth
+  files (each at the path its *_OAUTH_FILE setting names, which must be under your home directory and
+  outside the repo) with mode 0600. A file that already exists is kept and reported (so a site pack
+  fetched with scripts/pack.py join stays authoritative); --force replaces it. State (decision log,
+  breaker, peak queue) is skipped unless --with-state. --dry-run lists the plan and writes nothing.
+  Nothing is ever printed from inside a file.
 """
 
 import argparse
@@ -325,15 +335,132 @@ def do_restore(archive: str, to_dir: str) -> None:
     print(f"restored to {dst.parent} with 0600 modes — copy files into place manually; never commit them")
 
 
+FIXED_TARGETS = {
+    ".env": ".env",
+    "profile.json": "site-pack/profile.json",
+    "profile.local.json": "site-pack/profile.local.json",
+    "credentials.enc": "mcp-server/config/credentials.enc",
+}
+
+
+def _safe_parts(name: str) -> list:
+    parts = name.split("__")
+    if not parts or any(p in ("", ".", "..") or "/" in p or "\\" in p for p in parts):
+        return []
+    return parts
+
+
+def _oauth_targets(env: dict, repo: Path) -> dict:
+    """flat archive name -> target path for each *_OAUTH_FILE in the restored .env (home-relative, outside the repo only)."""
+    home, out = Path.home().resolve(), {}
+    for key, val in sorted(env.items()):
+        if not (key.endswith("_OAUTH_FILE") and val):
+            continue
+        p = Path(val).expanduser()
+        if not p.is_absolute():
+            continue
+        resolved = p.resolve()
+        inside_home = home == resolved or home in resolved.parents
+        inside_repo = repo.resolve() == resolved or repo.resolve() in resolved.parents
+        if not inside_home or inside_repo:
+            continue
+        out.setdefault(p.name, p)
+        out.setdefault(f"{p.parent.name}__{p.name}", p)
+    return out
+
+
+def _write_private(target: Path, data: bytes) -> None:
+    target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=".restore-", dir=str(target.parent))
+    try:
+        with os.fdopen(fd, "wb") as f:
+            os.fchmod(f.fileno(), 0o600)
+            f.write(data)
+        os.replace(tmp, target)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+def do_install(archive: str, repo_dir: str, force: bool = False, dry_run: bool = False, with_state: bool = False) -> int:
+    repo = Path(repo_dir)
+    if not repo.is_dir():
+        raise SystemExit(f"{repo} is not a directory")
+    tar, cleanup = _open_archive(archive)
+    try:
+        members = {}
+        for m in tar.getmembers():
+            if m.isfile() and m.name.startswith("runtime/"):
+                flat = Path(m.name).name
+                if flat not in ("", ".", ".."):
+                    members[flat] = tar.extractfile(m).read()
+    finally:
+        tar.close()
+        cleanup()
+    env_text = members.get(".env", b"").decode("utf-8", errors="replace")
+    existing_env = repo / ".env"
+    env = envfile.parse(existing_env.read_text(encoding="utf-8", errors="replace")) if existing_env.exists() and not force else envfile.parse(env_text)
+    oauth = _oauth_targets(env, repo)
+    state_dir = noc_config.state_dir() if repo.resolve() == ROOT.resolve() else repo / "logs"
+    plan, manual = [], []
+    for flat in sorted(members):
+        if flat in FIXED_TARGETS:
+            target = repo / FIXED_TARGETS[flat]
+        elif flat.startswith("topology__"):
+            parts = _safe_parts(flat[len("topology__"):])
+            target = repo.joinpath("site-pack", "topology", *parts) if parts else None
+        elif flat.startswith("state__"):
+            if not with_state:
+                plan.append((flat, None, "skipped (state; use --with-state)"))
+                continue
+            rest = flat[len("state__"):]
+            if rest.startswith("decisions__") and _safe_parts(rest[len("decisions__"):]):
+                target = state_dir / "decisions" / rest[len("decisions__"):]
+            elif rest in ("circuit_breaker.json", "pending_peak_checks.json"):
+                target = state_dir / rest
+            else:
+                target = None
+        elif flat in oauth:
+            target = oauth[flat]
+        else:
+            target = None
+        if target is None:
+            manual.append(flat)
+            continue
+        if target.exists() and not force:
+            plan.append((flat, target, "kept (already exists)"))
+        else:
+            plan.append((flat, target, "would place" if dry_run else "placed"))
+    for flat, target, action in plan:
+        where = str(target.relative_to(repo)) if target is not None and repo.resolve() in target.resolve().parents else str(target)
+        print(f"  {action:28s} {flat}" + (f" -> {where}" if target is not None else ""))
+        if action == "placed":
+            _write_private(target, members[flat])
+    for flat in manual:
+        print(f"  {'not placed':28s} {flat} (no known destination: copy it by hand, or its *_OAUTH_FILE path is not under your home)")
+    placed = sum(1 for _f, _t, a in plan if a in ("placed", "would place"))
+    kept = sum(1 for _f, _t, a in plan if a.startswith("kept"))
+    verb = "would place" if dry_run else "placed"
+    print(f"{verb} {placed} file(s), kept {kept} existing, {len(manual)} to place by hand. Modes are 0600; never commit any of it.")
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--list", metavar="ARCHIVE")
     ap.add_argument("--restore", nargs=2, metavar=("ARCHIVE", "TO_DIR"), default=None)
+    ap.add_argument("--install", nargs=2, metavar=("ARCHIVE", "REPO"), default=None,
+                    help="place an archive's members in a fresh checkout (see the docstring)")
+    ap.add_argument("--dry-run", action="store_true", help="with --install: show the plan, write nothing")
+    ap.add_argument("--force", action="store_true", help="with --install: replace files that already exist")
+    ap.add_argument("--with-state", action="store_true", help="with --install: also place decision log, breaker and peak queue")
     args = ap.parse_args()
     if args.list:
         do_list(args.list)
     elif args.restore:
         do_restore(*args.restore)
+    elif args.install:
+        sys.exit(do_install(args.install[0], args.install[1], force=args.force, dry_run=args.dry_run, with_state=args.with_state))
     else:
         run_backup()
 

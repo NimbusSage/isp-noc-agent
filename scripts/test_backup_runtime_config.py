@@ -203,5 +203,109 @@ class TestEncrypted(BackupBase):
         self.assertNotIn("pass:", src.replace("env:BACKUP_PASSPHRASE", ""))
 
 
+class TestInstall(BackupBase):
+    """--install places an archive's members in a fresh checkout."""
+
+    def setUp(self):
+        super().setUp()
+        self.home = self.tmp / "home"
+        oauth_dir = self.home / ".config" / "nocagent"
+        oauth_dir.mkdir(parents=True)
+        self.oauth = oauth_dir / "tracker_oauth.json"
+        self.oauth.write_text('{"refresh_token": "fake-refresh-' + os.urandom(4).hex() + '"}')
+        (self.repo / ".env").write_text(f"NOC_MCP_PASSPHRASE=fake-mcp-pass\nTRACKER_OAUTH_FILE={self.oauth}\n")
+        (self.repo / "site-pack" / "profile.local.json").write_text('{"conventions": {"x": "fake-overlay-value"}}')
+        (self.repo / "site-pack" / "topology" / "temp-bgp-config.local.json").write_text('{"rr_credentials": []}')
+        (self.repo / "site-pack" / "topology" / "sub").mkdir()
+        (self.repo / "site-pack" / "topology" / "sub" / "deep.json").write_text('{"deep": true}')
+        (self.repo / "mcp-server" / "config").mkdir(parents=True, exist_ok=True)
+        (self.repo / "mcp-server" / "config" / "credentials.enc").write_bytes(os.urandom(48))
+        self.env["HOME"] = str(self.home)
+        self.assertEqual(self.run_script().returncode, 0)
+        self.archive = str(self.out / self.archives()[0])
+        self.new = self.tmp / "newrepo"
+        self.new.mkdir()
+
+    def install(self, *extra, env=None):
+        return self.run_script("--install", self.archive, str(self.new), *extra, env=env)
+
+    def test_dry_run_prints_the_plan_and_writes_nothing(self):
+        r = self.install("--dry-run")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        for want in (".env -> .env", "credentials.enc -> mcp-server/config/credentials.enc",
+                     "profile.json -> site-pack/profile.json", "profile.local.json -> site-pack/profile.local.json",
+                     "topology__sub__deep.json -> site-pack/topology/sub/deep.json", "would place"):
+            self.assertIn(want, r.stdout)
+        self.assertIn(str(self.oauth), r.stdout)
+        self.assertNotIn("fake-mcp-pass", r.stdout + r.stderr)
+        self.assertNotIn("fake-overlay-value", r.stdout + r.stderr)
+        self.assertEqual([p for p in self.new.iterdir()], [])
+
+    def test_places_every_member_privately_and_byte_for_byte(self):
+        self.oauth.rename(self.oauth.with_suffix(".moved"))                  # the new machine has no OAuth file yet
+        r = self.install()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        for rel in (".env", "mcp-server/config/credentials.enc", "site-pack/profile.json", "site-pack/profile.local.json",
+                    "site-pack/topology/temp-bgp-config.local.json", "site-pack/topology/sub/deep.json"):
+            target, source = self.new / rel, self.repo / rel
+            self.assertEqual(target.read_bytes(), source.read_bytes(), rel)
+            self.assertEqual(oct(target.stat().st_mode & 0o777), "0o600", rel)
+        self.assertTrue(self.oauth.exists())                                 # restored at the path .env names
+        self.assertEqual(oct(self.oauth.stat().st_mode & 0o777), "0o600")
+        self.assertNotIn("fake-mcp-pass", r.stdout + r.stderr)
+
+    def test_existing_files_are_kept_unless_forced(self):
+        (self.new / "site-pack").mkdir()
+        (self.new / "site-pack" / "profile.json").write_text("from the pack")
+        r = self.install()
+        self.assertIn("kept (already exists)", r.stdout)
+        self.assertEqual((self.new / "site-pack" / "profile.json").read_text(), "from the pack")
+        self.assertEqual(self.install("--force").returncode, 0)
+        self.assertEqual((self.new / "site-pack" / "profile.json").read_text(), '{"org": {}}')
+
+    def test_state_is_skipped_by_default_and_placed_on_request(self):
+        r = self.install()
+        self.assertIn("skipped (state; use --with-state)", r.stdout)
+        self.assertFalse((self.new / "logs").exists())
+        self.assertEqual(self.install("--with-state").returncode, 0)
+        self.assertEqual((self.new / "logs" / "decisions" / "2026-10.jsonl").read_text(), '{"kind":"bounce"}\n')
+        self.assertTrue((self.new / "logs" / "circuit_breaker.json").exists())
+
+    def test_an_oauth_path_outside_the_home_directory_is_never_written(self):
+        outside = self.tmp / "elsewhere"
+        outside.mkdir()
+        target = outside / "tracker_oauth.json"
+        (self.repo / ".env").write_text(f"NOC_MCP_PASSPHRASE=fake-mcp-pass\nTRACKER_OAUTH_FILE={target}\n")
+        self.assertEqual(self.run_script().returncode, 0)
+        self.archive = str(self.out / self.archives()[-1])
+        r = self.install()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse(target.exists())
+
+    def test_a_member_name_cannot_escape_the_site_pack(self):
+        evil = self.tmp / "evil.tgz"
+        with tarfile.open(evil, "w:gz") as t:
+            for name in ("runtime/topology_____evil.json", "runtime/topology__a____b.json", "runtime/topology__ok.json"):
+                data = self.tmp / "payload"
+                data.write_text("{}")
+                t.add(data, arcname=name)
+        self.archive = str(evil)
+        r = self.install()
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue((self.new / "site-pack" / "topology" / "ok.json").exists())
+        placed = [p for p in self.new.rglob("*") if p.is_file()]
+        self.assertEqual([p.name for p in placed], ["ok.json"])
+        self.assertEqual(r.stdout.count("not placed"), 2)
+
+    @unittest.skipUnless(HAVE_OPENSSL, "needs openssl")
+    def test_an_encrypted_archive_installs_with_the_passphrase(self):
+        self.assertEqual(self.run_script(env=dict(self.env, BACKUP_PASSPHRASE=self.pw)).returncode, 0)
+        enc = [n for n in self.archives() if n.endswith(".enc")][0]
+        self.archive = str(self.out / enc)
+        self.assertNotEqual(self.install().returncode, 0)                          # no passphrase
+        self.assertEqual(self.install(env=dict(self.env, BACKUP_PASSPHRASE=self.pw)).returncode, 0)
+        self.assertTrue((self.new / ".env").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

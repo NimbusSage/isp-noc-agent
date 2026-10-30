@@ -19,6 +19,8 @@ cp -n .env.example .env              # then fill credentials (or: onboard me)
 python3 scripts/doctor.py            # read-only verification per credential
 ```
 
+For a full move with secrets, the pack and a team login, follow [central-hub.md](central-hub.md); `python3 scripts/backup_runtime_config.py --install <archive> <repo>` places an archive's files in the new checkout.
+
 Nothing in the deployment is hardcoded to `<install-path>` anymore —
 systemd units are **generated from `deploy/*.service.template`** with the
 actual install path substituted at install time. Old units are overwritten,

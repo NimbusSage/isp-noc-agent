@@ -97,6 +97,7 @@ NocAgent/
 │   ├── setup/                                # NOC ticket tracker Google Sheet template
 │   │   └── tracker-sheet-template.md         # NOC Ticket Tracker Sheet Template
 │   ├── architecture.md                       # NocAgent Architecture
+│   ├── central-hub.md                        # Setting up a central hub (or moving to a new machine)
 │   ├── config.md                             # Configuration Reference
 │   ├── gh-token-setup.md                     # GitHub token setup (per user)
 │   ├── governance.md                         # Governance, Metrics & Evals
