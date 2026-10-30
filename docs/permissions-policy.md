@@ -93,7 +93,15 @@ The service runs from this checkout, so an edit made here by an agent is live co
 
 **How to change this project safely.** Do not edit in the production checkout. Make a worktree (`git worktree add <dir> -b <branch>`), change and test there, push, and deploy to the production checkout with `git merge --ff-only`. That keeps the running tree identical to reviewed, tested commits, and the drift detector then has nothing to report. If the production tree is already dirty, a fast-forward refuses, and that is the cue to look at the change rather than force it.
 
-**Turning the read-only checkout on.** `sudo bash scripts/install.sh --protect-tree` installs a systemd drop-in; run `systemctl restart noc-agent` when the queue is empty to apply it (see [operations.md](operations.md)). `sudo bash scripts/install.sh --unprotect-tree` removes it. Before relying on it, watch `python3 scripts/tree_guard.py check` for a while: anything the running system writes inside the checkout shows up there as drift, and each such path would need to be added to the writable list in `deploy/noc-agent.protect-tree.conf.template`.
+**Turning the read-only checkout on.** `bash scripts/install.sh --protect-tree` installs a systemd drop-in; run `systemctl restart noc-agent` when the queue is empty to apply it (see [operations.md](operations.md)). `bash scripts/install.sh --unprotect-tree` removes it. The installer insists on Node.js 20 or newer and reinstalls dependencies, so on a host whose service still runs an older Node, install only the drop-in by hand, from the checkout:
+
+```bash
+mkdir -p logs mcp-server/logs mcp-server/state /etc/systemd/system/noc-agent.service.d
+sed "s|{{INSTALL_DIR}}|$PWD|g" deploy/noc-agent.protect-tree.conf.template > /etc/systemd/system/noc-agent.service.d/10-protect-tree.conf
+systemctl daemon-reload
+```
+
+Delete that file and run `systemctl daemon-reload` to turn it off again. Before relying on it, watch `python3 scripts/tree_guard.py check` for a while: anything the running system writes inside the checkout shows up there as drift, and each such path would need to be added to the writable list in `deploy/noc-agent.protect-tree.conf.template`.
 
 ## Audit Trail
 
