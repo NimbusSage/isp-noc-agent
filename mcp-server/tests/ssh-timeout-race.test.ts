@@ -11,6 +11,7 @@ interface FakeConn extends EventEmitter {
   destroyed: number;
   ended: number;
   execCalls: string[];
+  shellCalls: string[];
   connectCalls: number;
 }
 
@@ -19,7 +20,7 @@ function makeFactory(behavior: (conn: FakeConn, attempt: number) => void) {
   const conns: FakeConn[] = [];
   const factory = (): Client => {
     const conn = new EventEmitter() as FakeConn;
-    conn.destroyed = 0; conn.ended = 0; conn.execCalls = []; conn.connectCalls = 0;
+    conn.destroyed = 0; conn.ended = 0; conn.execCalls = []; conn.shellCalls = []; conn.connectCalls = 0;
     const attempt = conns.length;
     conns.push(conn);
     const anyConn = conn as unknown as Record<string, unknown>;
@@ -34,6 +35,18 @@ function makeFactory(behavior: (conn: FakeConn, attempt: number) => void) {
       (stream as unknown as Record<string, unknown>).end = () => undefined;
       cb(null, stream);
       setImmediate(() => { stream.emit('data', Buffer.from('ran')); stream.emit('close', 0); });
+    };
+    // SHELL-channel stub: Ssh2Runner.write() now writes via an interactive
+    // shell (airOS dropbear stalls on exec-channel stdin), so the fake must
+    // model conn.shell too. Shell calls are recorded separately.
+    anyConn.shellCalls = [];
+    anyConn.shell = (cb: (e: Error | null, s?: EventEmitter) => void) => {
+      conn.shellCalls.push('shell');
+      const stream = new EventEmitter();
+      (stream as unknown as Record<string, unknown>).stderr = new EventEmitter();
+      (stream as unknown as Record<string, unknown>).write = () => true;
+      (stream as unknown as Record<string, unknown>).end = () => undefined;
+      cb(null, stream);
     };
     return conn as unknown as Client;
   };
@@ -62,10 +75,14 @@ describe('Ssh2Runner timeout race (late connect must never execute)', () => {
   it('applies the same protection to write() and put()', async () => {
     const { factory, conns } = makeFactory((conn) => { setTimeout(() => conn.emit('ready'), 200); });
     const runner = new Ssh2Runner(factory, 10);
-    await expect(runner.write('10.0.0.1', CRED, '/tmp/system.cfg', 'x', 50)).rejects.toThrow(/timed out/);
+    // Newline-terminated: write() refuses non-newline content before any
+    // connection (EOT-EOF guard), which would mask the race being tested.
+    await expect(runner.write('10.0.0.1', CRED, '/tmp/system.cfg', 'x\n', 50)).rejects.toThrow(/timed out/);
     await expect(runner.put('10.0.0.1', CRED, '/tmp/system.cfg', 'x', 50)).rejects.toThrow(/timed out/);
     await wait(350);
     for (const c of conns) { expect(c.execCalls).toEqual([]); expect(c.destroyed).toBeGreaterThanOrEqual(1); }
+    // The late connection was destroyed before any shell channel opened.
+    for (const c of conns) { expect(c.shellCalls).toEqual([]); }
   });
 
   it('destroys an in-flight handshake when the timeout fires', async () => {

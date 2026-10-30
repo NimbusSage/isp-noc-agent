@@ -276,22 +276,71 @@ export class Ssh2Runner implements SshRunner {
   }
 
   write(host: string, credential: DeviceTypeCredential, remotePath: string, content: string, timeoutMs: number): Promise<void> {
-    // The remote command is a fixed string; content travels on stdin, so
-    // key material never appears in command strings, ps output, or logs.
+    // The remote command is a fixed string; content travels on the shell
+    // channel, so key material never appears in command strings, ps output,
+    // or logs.
+    //
+    // CHANNEL FIX (KAMLER rollback, verified live): airOS dropbear ACCEPTS
+    // exec channels but stops consuming stdin data on them — the stream
+    // never closes and every frame-sized write stalls at any timeout (30/60/
+    // 120s; even 64 bytes; not a race — a 3s post-open delay still stalls).
+    // The same payload through an interactive SHELL channel (the path a
+    // human session uses) writes and reads back byte-exact. So the write
+    // goes: `cat > path` + payload + EOT (^D) + count probe, resolved when
+    // the radio reports exactly Buffer.byteLength(content) bytes back.
+    // SFTP put() is not an alternative: airOS ships no sftp-server
+    // (verified live — "Connection closed").
     const safePath = remotePath.replace(/[^A-Za-z0-9_./-]/g, '');
     if (!safePath || safePath !== remotePath) return Promise.reject(new Error('Refusing unsafe remote path'));
+    if (!content.endsWith('\n')) return Promise.reject(new Error('Refusing write whose content does not end in a newline: EOT-EOF depends on the final line break'));
+    const expectedBytes = Buffer.byteLength(content, 'utf8');
     return this.withConnection<void>(host, credential, timeoutMs, `Write timed out after ${timeoutMs}ms`, (conn, resolve, reject) => {
-      conn.exec(`cat > ${safePath}`, (err, stream) => {
+      conn.shell((err, stream) => {
         if (err) { reject(err); return; }
-        let stderr = '';
-        stream.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
-        stream.on('close', (code: number) => {
-          if (code !== 0) reject(new Error(`Remote write failed (exit ${code}): ${stderr.slice(0, 200)}`));
-          else resolve();
+        let out = '';
+        let sawCount = false;
+        let finished = false;
+        let countTimer: ReturnType<typeof setTimeout> | undefined;
+        const settle = (e: Error | null) => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(countTimer);
+          try { stream.end(); } catch { /* closing anyway */ }
+          if (e) reject(e); else resolve();
+        };
+        stream.stderr.on('data', () => { /* shell chatter; failures surface via count mismatch */ });
+        stream.on('data', (d: Buffer) => {
+          if (finished || sawCount) return;
+          out += d.toString();
+          // The probe line echoes, then the count. Match the digits that
+          // follow our unique marker line so shell echo cannot confuse it.
+          // Some wc builds pad the count with spaces, so allow blanks around the digits.
+          const re = new RegExp(`__NOCW__(?:\\r?\\n|\\r)[ \\t]*(${expectedBytes})[ \\t]*(?:\\r?\\n|\\r)`);
+          if (re.test(out)) {
+            sawCount = true;
+            settle(null);
+          }
         });
-        stream.on('error', (e: Error) => reject(e));
-        stream.write(content);
-        stream.end();
+        stream.on('error', (e: Error) => settle(e));
+        stream.on('close', () => settle(new Error('Remote shell closed before byte-count confirmation')));
+        // Start the consumer first; dropbear needs a beat between command
+        // start and data (verified live: immediate write also stalls on
+        // SOME images even via shell).
+        stream.write(`cat > ${safePath}\n`);
+        setTimeout(() => {
+          stream.write(content);
+          // EOT at the start of a line (content ends in \n) EOFs the cat.
+          setTimeout(() => stream.write('\u0004'), 400);
+        }, 400);
+        // Byte-count probe: unique marker, then wc — resolved only on an
+        // exact match so partial writes can never be reported as success.
+        countTimer = setTimeout(() => {
+          if (!finished) stream.write(`echo __NOCW__; wc -c < ${safePath}; echo __NOCW__\n`);
+        }, 2500) as ReturnType<typeof setTimeout>;
+        // If the probe never confirms within the window, the outer
+        // withConnection timer rejects with 'Write timed out' and destroys
+        // the connection — a partial remote file is possible only if the
+        // shell died mid-write, which the count check above cannot miss.
       });
     });
   }
