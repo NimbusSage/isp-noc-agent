@@ -26,6 +26,7 @@ import type { DeviceTypeCredential } from '../credentials/schema.js';
 export const ALLOWLISTED_KEYS = [
   'radio.1.mode',
   'radio.1.freq',
+  'radio.1.center.1.freq',
   'radio.1.chanbw',
   'wireless.1.ssid',
   'wpasupplicant.status',

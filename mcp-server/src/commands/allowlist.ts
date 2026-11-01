@@ -325,7 +325,9 @@ export const UBNT_AEROS_COMMANDS: Record<string, DeviceCommand> = {
     name: 'stations',
     category: 'wireless',
     description: 'Connected stations list',
-    template: '/sta.cgi',
+    // airOS 8 serves the station list inside the status.cgi payload; the
+    // legacy /sta.cgi endpoint 404s on 8.x (verified live 2026-11-01).
+    template: '/status.cgi',
     params: {},
     readOnly: true,
   },

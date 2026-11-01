@@ -576,10 +576,10 @@ export class NocMcpServer {
       let outputText = JSON.stringify({ ...result, deviceId, result: JSON.parse(redacted.text), redactions: redacted.count }, null, 2);
       if (outputText.length > this.config.limits.maxOutputBytes) outputText = outputText.substring(0, this.config.limits.maxOutputBytes) + `[truncated - output exceeded ${this.config.limits.maxOutputBytes} bytes]`;
       return { content: [{ type: 'text', text: outputText }] };
-    } catch {
+    } catch (e) {
       try { await client.disconnect(); } catch { /* best effort cleanup; do not retry credentials */ }
       this.auditWith(args, { timestamp: new Date().toISOString(), device: deviceId, command, category: 'auth', outcome: 'auth_failed', redactions: 0, durationMs: Date.now() - startedAt, metadata: { credentialMode: 'exact-device', attempts: 1 } });
-      return { content: [{ type: 'text', text: 'Exact-device diagnostic failed; one bound credential was attempted and no fallback was tried.' }], isError: true };
+      return { content: [{ type: 'text', text: 'Exact-device diagnostic failed; one bound credential was attempted and no fallback was tried. Reason: ' + (e instanceof Error ? e.message : 'unknown') }], isError: true };
     }
   }
 
