@@ -41,6 +41,10 @@ export interface DeviceCommand {
   template: string; // Command template with {{param}} placeholders
   params: Record<string, ParamSpec>;
   readOnly: true; // Always true in this version
+  /** [userParam, passwordParam]: a command that authenticates to a SECOND device (bandwidth-test to a btest
+   * server). When the caller omits both, run-diagnostics fills them from the encrypted pool itself, so a
+   * password never has to pass through the caller. */
+  poolAuthParams?: readonly [string, string];
 }
 
 export interface CommandResult {

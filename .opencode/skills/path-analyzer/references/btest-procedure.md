@@ -15,19 +15,18 @@ Timeout: 60s (`BTEST_TIMEOUT_MS=60000`, `mcp-server/config/server.json:13` overr
 From tower router `10.0.1.1` to fiber `10.0.5.1`:
 
 ```bash
-export PW="${BTEST_PASSWORD:?set BTEST_PASSWORD in the environment (operator-supplied, see .env.example); never read credentials.json}"
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_router_ip> "/tool bandwidth-test address=<fiber_ip> user=admin password=\"$PW\" protocol=tcp duration=5 direction=both"
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<tower_router_ip>","deviceType":"mikrotik-ssh","command":"bandwidth-test","params":{"address":"<fiber_ip>","duration":5}}'
 # status: running duration 3s tx-current 71.3Mbps rx-current 201.1Mbps ...
 # status: done tx-10s-avg 64.1Mbps rx-avg 194.2Mbps local-cpu 41% remote 24%
 ```
 
 Parse `tx-10-second-average` / `rx-10-second-average` + `local-cpu-load` / `remote-cpu-load`. `random-data: no`, `connection-count: 20`.
 
-**Without user → fails:** status `authentication failed`. Always pass user/pass.
+**Credentials:** RouterOS answers `authentication failed` without a user. Do not pass one: MCP fills `user`/`password` from the encrypted `mikrotik-ssh` pool, tries each entry until the btest server accepts one, and says which (`authenticated with pool credential #n`). Never read or pass a password yourself.
 
 ## Iterative (Step F)
 
-Same command from each hop router IP (SSH to that router). Example from `10.0.2.1` to same fiber: `46.3/156.7Mbps local-cpu 36% remote 28%` — slightly lower than tower baseline because one hop closer (variance expected, investigate if >50% drop).
+Same MCP call with `host` = each hop router IP. Example from `10.0.2.1` to same fiber: `46.3/156.7Mbps local-cpu 36% remote 28%` — slightly lower than tower baseline because one hop closer (variance expected, investigate if >50% drop).
 
 Cap 8 hops, serial only, total wall ~ `hops * (duration+startup+ssh)` ≤ 10 min for 6 hops.
 
@@ -36,12 +35,12 @@ Cap 8 hops, serial only, total wall ~ `hops * (duration+startup+ssh)` ≤ 10 min
 Get /30 peer first:
 
 ```bash
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_router_ip> '/routing ospf neighbor print'
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<tower_router_ip>","deviceType":"mikrotik-ssh","command":"routing-ospf-neighbor"}'
 # 0 D address=10.0.2.2 router-id=10.0.2.2 state Full
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_router_ip> '/ip address print where interface=ether1'
-# 10.0.2.1/30 network 10.0.2.0 → peer is 10.0.2.2
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<tower_router_ip>","deviceType":"mikrotik-ssh","command":"ip-address"}'
+# 10.0.2.1/30 ... interface=ether1 network 10.0.2.0 → peer is 10.0.2.2
 
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_router_ip> "/tool bandwidth-test address=<next_hop_ip> user=admin password=\"$PW\" protocol=tcp duration=5 direction=both"
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<tower_router_ip>","deviceType":"mikrotik-ssh","command":"bandwidth-test","params":{"address":"<next_hop_ip>","duration":5}}'
 # 919.9Mbps tx / 860.9Mbps rx local-cpu 94% remote 83% + warning "results can be limited by cpu, note that traffic generation/termination performance might not be representative of forwarding performance"
 ```
 

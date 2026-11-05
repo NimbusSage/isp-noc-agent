@@ -3,8 +3,7 @@
 ## Primary: /tool traceroute
 
 ```bash
-export PW="${BTEST_PASSWORD:?set BTEST_PASSWORD in the environment (operator-supplied, see .env.example); never read credentials.json}"
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_ip> '/tool traceroute address=8.8.8.8 count=1 use-dns=no'
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<tower_ip>","deviceType":"mikrotik-ssh","command":"tool-traceroute","params":{"address":"8.8.8.8","count":1}}'
 ```
 
 - `count=1` is enough (verified: columns ADDRESS, LOSS, SENT, LAST/AVG/BEST/WORST). Use `count=3` if loss seen.
@@ -18,8 +17,8 @@ Output parsing: extract ordered `ADDRESS` column non-empty rows. `10.` = interna
 Check if firewalled: `hide sensitive`? No — use:
 
 ```bash
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_ip> '/ip firewall filter print' 2>&1 | grep -i traceroute
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_ip> '/ip firewall filter print stats'
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<tower_ip>","deviceType":"mikrotik-ssh","command":"firewall-filter"}'
+# look for rules that drop traceroute / ICMP time-exceeded
 ```
 
 If blocked or returns empty hops beyond 1:
@@ -27,10 +26,9 @@ If blocked or returns empty hops beyond 1:
 ### Fallback 1: ip route next-hops
 
 ```bash
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_ip> '/ip route print where active and dst-address!=0.0.0.0/0'
-# shows gateway per prefix, recursive flag; build next-hop chain
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_ip> '/ip route print detail where dst-address=0.0.0.0/0 and active'
-# take gateway / immediate-gw for first hop, then SSH to that gateway and repeat
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<tower_ip>","deviceType":"mikrotik-ssh","command":"ip-route-active"}'
+# gateway per prefix, recursive flag: build the next-hop chain; for dst-address 0.0.0.0/0 take
+# gateway / immediate-gw as the first hop, then run the same call on that gateway and repeat
 ```
 
 Iterative walk: tower → gateway → traceroute from gateway → repeat until a fiber router / edge `10.` hop (e.g. `10.0.5.1` / `10.0.6.1`) is reached.
@@ -43,7 +41,7 @@ Iterative walk: tower → gateway → traceroute from gateway → repeat until a
 ### Fallback 3: OSPF neighbor walk
 
 ```bash
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_ip> '/routing ospf neighbor print'
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<tower_ip>","deviceType":"mikrotik-ssh","command":"routing-ospf-neighbor"}'
 # D address=10.0.2.2 router-id=... state Full
 ```
 

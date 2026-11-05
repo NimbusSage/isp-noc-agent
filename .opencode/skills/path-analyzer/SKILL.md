@@ -49,12 +49,29 @@ Naming: `Smith` → first, `BSmith` → second, `Barry Smith` → third if `BSmi
 
 Clamp 0-100. `<75` → post `HEALTHY but low tower confidence {n}% — needs human` + Google Chat (like `ihn-auto-return:88`). Bounce only when ≥ threshold.
 
+## Steps B-H in one call (use this first)
+
+```bash
+python3 scripts/path_probe.py --tower <tower_ip> --network <Network/Fiber>    # or --fiber <internal testing ip>
+```
+
+Give the shell call a timeout of at least 600000 ms (it runs every bandwidth test in sequence, budget 540 s). It
+runs Steps B-H through the MCP tools and prints one JSON object: `hops` (name, cpu, latency), `to_fiber` (the
+R series), `direct` (each router to the next), `flags` (`path_drop`, `unexplainable_variance`, `low_direct`,
+`cpu_high`, `latency`), `variance`, `multipath` and `errors`. Exit 3 = start router unreachable (`needs_human`,
+`Analysis: ✗ tower router unreachable`). It measures and flags only: you still judge the result, run the
+port-speed check and `wireless-health` where flagged, and write the comment. Fill in any step it reports in
+`errors` by hand with the MCP calls below; `--no-btest` gives the path without load-generating tests.
+
+**Device access is MCP only.** Every router command below is `node mcp-server/dist/tool-cli.js run-diagnostics` with JSON arguments. Never use
+`ssh`/`sshpass`, never read `mcp-server/config/credentials.json`, and never put a password in a command:
+`bandwidth-test` takes no user or password, because the MCP server authenticates it from the encrypted pool.
+
 ## Step B — Validate Reachability
 
 ```bash
-export PW="${BTEST_PASSWORD:?set BTEST_PASSWORD in the environment (operator-supplied, see .env.example); never read credentials.json}"
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 admin@<tower_ip> '/system resource print'
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_ip> '/system identity print'
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<tower_ip>","deviceType":"mikrotik-ssh","command":"system-resource"}'
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<tower_ip>","deviceType":"mikrotik-ssh","command":"system-identity"}'
 ```
 
 If unreachable → `needs_human`, `Analysis: ✗ tower router unreachable`, notify via `google-chat`.
@@ -67,18 +84,18 @@ If unreachable → `needs_human`, `Analysis: ✗ tower router unreachable`, noti
 - Default `count=1`, `address=8.8.8.8` (and `1.1.1.1` dual to catch DIA vs the upstream transit provider)
 
 ```bash
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_ip> '/tool traceroute address=8.8.8.8 count=1 use-dns=no'
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<tower_ip>","deviceType":"mikrotik-ssh","command":"tool-traceroute","params":{"address":"8.8.8.8","count":1}}'
 ```
 
 Parse ordered `ADDRESS` column (e.g., Zeta's: `10.0.1.1` → `10.0.2.1 iota pppoe` → `10.0.3.1 kappa pppoe` → `10.0.4.1` transport → `10.0.5.1 Eta Fiber` → `10.0.6.1 edge-2216-a` → `198.51.100.42` public).
 
-**Resolve router name for every hop (never show bare IP alone):** for each `10.` hop, SSH to that IP with `mikrotik-ssh` creds and run `/system identity print` (primary). Fallback: `GET $LIBRENMS_URL/api/v0/devices/<ip>` `sysName` (`librenms/SKILL.md:1`), then MyMate `GET /api/devices/<id>` `site_name`/`name` (`mymate:60`). Cache results in `map ip→name` and use `"{name} ({ip})"` for every hop line (e.g., `kappa pppoe (10.0.3.1)` not `10.0.3.1`). If name fetch fails, show last known `name` from traceroute transport comment, never bare IP.
+**Resolve router name for every hop (never show bare IP alone):** for each `10.` hop, run MCP `system-identity` on that IP (primary). Fallback: `GET $LIBRENMS_URL/api/v0/devices/<ip>` `sysName` (`librenms/SKILL.md:1`), then MyMate `GET /api/devices/<id>` `site_name`/`name` (`mymate:60`). Cache results in `map ip→name` and use `"{name} ({ip})"` for every hop line (e.g., `kappa pppoe (10.0.3.1)` not `10.0.3.1`). If name fetch fails, show last known `name` from traceroute transport comment, never bare IP.
 
 **Fallback when firewalled** (check `firewall-filter`): reconstruct via `ip-route` next-hops + MyMate `GET /api/links` (`mymate:106`) topology walk toward core. See `references/path-discovery.md`.
 
 ## Step D — Identify Fiber Router + Testing IP (table-first, traceroute fallback)
 
-**Primary: table lookup** `site-pack/topology/fiber-testing-ips.json` (and live Google Sheets when `GOOGLE_SHEETS_FIBER_URL` env set, see `site-pack/topology/fiber-testing-ips.md` if you keep one). Key = `Network/Fiber` field from first note (e.g., `romeo` → `10.0.7.77` internal, `Charlie` → `10.0.8.1` internal). Use `internal` (Loopback) for `bandwidth-test` through private network — this is the correct `address=` for Steps E/F, **not** the traceroute last-10 guess. `public` (CGNAT) is for optional public-path test; `xxx` → skip and note `test to the core 2216 edge`. `Subleased Networks N/A` → skip private btest (VPN-constrained). Where the table's Extra Notes name a dedicated btest account for a fiber router (e.g. `November 10.0.9.3`), use that `user=` and take its password from the operator-supplied `BTEST_PASSWORD` env var (runtime only; never written to a file or comment).
+**Primary: table lookup** `site-pack/topology/fiber-testing-ips.json` (and live Google Sheets when `GOOGLE_SHEETS_FIBER_URL` env set, see `site-pack/topology/fiber-testing-ips.md` if you keep one). Key = `Network/Fiber` field from first note (e.g., `romeo` → `10.0.7.77` internal, `Charlie` → `10.0.8.1` internal). Use `internal` (Loopback) for `bandwidth-test` through private network — this is the correct `address=` for Steps E/F, **not** the traceroute last-10 guess. `public` (CGNAT) is for optional public-path test; `xxx` → skip and note `test to the core 2216 edge`. `Subleased Networks N/A` → skip private btest (VPN-constrained). Where the table's Extra Notes name a dedicated btest account for a fiber router (e.g. `November 10.0.9.3`), that account belongs in the `mikrotik-ssh` credential pool (ask the operator to add it); MCP then tries it automatically. Until then see the dedicated-account call under Steps E-G.
 
 **Fallback when fiber field missing or `xxx`:** walk traceroute reversed per verified topology (`site-pack/topology/fiber-topology.md`): edges `EDGE_ROUTER_IPS` (`edge-2216-a 10.0.6.1`, `edge-2216-b 10.0.6.2` dual-homed) → optional `RDS2216` (`RDS2216_SUBNET` name `rds`/`cgnat`) → first `10.` after edge not in RR set (`site-pack/topology/bgp-rr-map.json` from `/routing/bgp/connection print`, not `peer print`, e.g. `alpha-bgprr1 10.0.20.1`), name `*fiber*` or owns `/24`. Then also try static `site-pack/topology/fiber-map.json`.
 
@@ -90,37 +107,38 @@ Resolves `fiber_target = internal` (loopback) for btest; traceroute `FIBER_ROUTE
 
 ## Steps E-G — Bandwidth Tests
 
-All `bandwidth-test` use **same `mikrotik-ssh` creds** for `user`/`password` (verified: missing user → `authentication failed`, with `user=admin password=$PW` → success). `$PW` is the pool credential resolved at runtime from the MCP encrypted store; a dedicated btest account's password comes from the operator-supplied `BTEST_PASSWORD` env var. Template:
+`bandwidth-test` runs through MCP (`diagnostic`, `readOnly:true`, audit logged) **without** `user`/`password`: the MCP server authenticates the test with the `mikrotik-ssh` pool itself, trying each pool entry until the btest server accepts one, and reports which entry (`authenticated with pool credential #n`) or `no pool credential was accepted by the test server`.
 
-- `bandwidth-test` `/tool bandwidth-test address={{address}} protocol={{protocol}} duration={{duration}} direction={{direction}} user={{user}} password={{password}}` `diagnostic` `readOnly:true` (load-generating but intended diagnostic; audit logged via `mcp-server/src/server.ts:82`).
+Env: `BTEST_DURATION` default 10s, `BTEST_PROTOCOL=tcp`, `BTEST_TIMEOUT_MS=60000` (btest blocks; `mcp-server/config/server.json:13` override). MCP caps `duration` at 30 s.
 
-Env: `BTEST_DURATION` default 10s, `BTEST_PROTOCOL=tcp`, `BTEST_TIMEOUT_MS=60000` (btest blocks; `mcp-server/config/server.json:13` override).
-
-- **E Baseline:** tower → fiber `protocol=tcp duration=10 direction=both user=admin password=$PW` — **address = `internal` from `fiber-testing-ips.json` / Sheets for that `Network/Fiber`**, not traceroute guess (fixes cases like `romeo` where the traceroute guess `10.0.7.5` failed but table `10.0.7.77` succeeds; `Charlie` table `10.0.8.1` internal vs `10.0.8.200` public)
+- **E Baseline:** tower → fiber, **address = `internal` from `fiber-testing-ips.json` / Sheets for that `Network/Fiber`**, not the traceroute guess (fixes cases like `romeo` where the traceroute guess `10.0.7.5` failed but table `10.0.7.77` succeeds; `Charlie` table `10.0.8.1` internal vs `10.0.8.200` public)
   ```bash
-  # romeo example (Network/Fiber: romeo)
   FIBER=$(python3 -c "import json; m=json.load(open('site-pack/topology/fiber-testing-ips.json')); print(m['<network>']['internal'])")   # the internal address of that Network/Fiber
-  SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_router_ip> "/tool bandwidth-test address=$FIBER user=admin password=\"$PW\" protocol=tcp duration=5 direction=both"
+  node mcp-server/dist/tool-cli.js run-diagnostics "{\"host\":\"<tower_router_ip>\",\"deviceType\":\"mikrotik-ssh\",\"command\":\"bandwidth-test\",\"params\":{\"address\":\"$FIBER\",\"duration\":10}}"
   # Zeta baseline: 47-71Mbps tx, 168-205 rx local-cpu 40-41% (not CPU-limited)
   ```
-  For a fiber router whose Extra Notes name a dedicated btest account (e.g. `November`) use `user=btest password="$BTEST_PASSWORD"` (operator-supplied env var). For `xxx` public (core edge etc.) skip private btest and note the core 2216 edge.
+  Dedicated btest account not yet in the pool: build the arguments from the environment so the password never reaches a command line, the transcript or the audit log (`BTEST_PASSWORD` is operator-supplied):
+  ```bash
+  python3 -c 'import json,os; print(json.dumps({"host":"<tower_router_ip>","deviceType":"mikrotik-ssh","command":"bandwidth-test","params":{"address":"<fiber_ip>","user":"btest","password":os.environ["BTEST_PASSWORD"]}}))' | node mcp-server/dist/tool-cli.js run-diagnostics --stdin
+  ```
+  For `xxx` public (core edge etc.) skip private btest and note the core 2216 edge.
 
-- **F Iterative:** for each hop router IP in traceroute, SSH to that router and repeat btest to same fiber router. Yields series `R_N … R_1` where drop `R_{k+1}-R_k` localizes bottleneck to link `k↔k+1`.
+- **F Iterative:** for each hop router IP in traceroute, run the same MCP `bandwidth-test` with `host` = that router and the same fiber address. Yields series `R_N … R_1` where drop `R_{k+1}-R_k` localizes bottleneck to link `k↔k+1`.
 
 - **G Direct /30:** for each adjacent `(k,k+1)`:
-  1. Primary: `/routing ospf neighbor print` on outer router → peer `address` = /30 peer IP
+  1. Primary: MCP `routing-ospf-neighbor` on the outer router → peer `address` = /30 peer IP; MCP `ip-address` shows the subnet.
      ```bash
-     SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_router_ip> '/routing ospf neighbor print'
+     node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<tower_router_ip>","deviceType":"mikrotik-ssh","command":"routing-ospf-neighbor"}'
      # 0 D address=10.0.2.2 router-id=10.0.2.2 state=Full
-     SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_router_ip> '/ip address print where interface=ether1'
+     node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<tower_router_ip>","deviceType":"mikrotik-ssh","command":"ip-address"}'
      # 10.0.2.0/30 network 10.0.2.0
      ```
   2. Fallback: traceroute hop IP (usually OSPF /30 as you noted).
-  3. Bridges rare `/29/28/24`: `/ip address print` subnet determines — use whatever peer IP present.
+  3. Bridges rare `/29/28/24`: `ip-address` subnet determines — use whatever peer IP present.
 
   Direct btest:
   ```bash
-  SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_router_ip> "/tool bandwidth-test address=<next_hop_ip> user=admin password=\"$PW\" protocol=tcp duration=5 direction=both"
+  node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<tower_router_ip>","deviceType":"mikrotik-ssh","command":"bandwidth-test","params":{"address":"<next_hop_ip>","duration":5}}'
   # verified 919.9Mbps tx / 860.9Mbps rx local-cpu 94% remote 83% — CPU-limited caveat "traffic generation ... might not be representative of forwarding performance"
   ```
 
@@ -133,8 +151,8 @@ Env: `BTEST_DURATION` default 10s, `BTEST_PROTOCOL=tcp`, `BTEST_TIMEOUT_MS=60000
 **Multipath (true NOC method, not interface RX packet inference):**
 
 ```bash
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_ip> '/ip route print where dst-address=0.0.0.0/0 and active'
-# Zeta: single DAo 0.0.0.0/0 gateway=10.0.2.2%ether1 distance=110 → not multipath → OMIT multipath line entirely
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<tower_ip>","deviceType":"mikrotik-ssh","command":"ip-route-active"}'
+# look only at dst-address 0.0.0.0/0. Zeta: single DAo 0.0.0.0/0 gateway=10.0.2.2%ether1 distance=110 → not multipath → OMIT multipath line entirely
 # multipath = count distinct gateways >1 active → ONLY then note load-balanced and list gateways
 ```
 
@@ -151,9 +169,9 @@ half-duplex) port in a gigabit path caps + drops under load and mimics wireless 
 (an airFiber link between two towers was once misdiagnosed as bad wireless; the true cause was a 100M ethernet port).
 
 ```bash
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<hop_ip> '/interface ethernet monitor <iface> once'
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<hop_ip>","deviceType":"mikrotik-ssh","command":"interface-ethernet-monitor","params":{"interface":"<iface>"}}'
 # require: rate: 1Gbps (or higher) + full-duplex: yes on both ends of every hand-off
-# try all mikrotik-ssh creds in priority order — some devices (some routers and switches) only accept non-first creds
+# MCP already tries every mikrotik-ssh pool credential in priority order (some routers and switches only accept non-first ones)
 # then the switch in between (/system identity confirms, /interface print comments name the peer)
 # then radio-reported rate via UISP/radio UI when router+switch ports are all 1G but loss persists
 ```

@@ -47,6 +47,7 @@ describe('CommandValidator', () => {
     const commands = validator.listCommands('mikrotik-ssh');
     expect(commands).toContain('system-resource');
     expect(commands).toContain('interface-list');
+    expect(commands).toContain('system-identity');
     expect(commands).not.toContain('system-reboot');
   });
 

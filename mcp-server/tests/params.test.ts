@@ -71,6 +71,9 @@ describe('command parameter validation (injection)', () => {
     expect(validator.validate('mikrotik-ssh', 'bandwidth-test', { ...ok, duration: 3600 }).valid).toBe(false);
     expect(validator.validate('mikrotik-ssh', 'bandwidth-test', { ...ok, duration: Number.NaN }).valid).toBe(false);
     expect(validator.validate('mikrotik-ssh', 'bandwidth-test', { ...ok, user: 'admin ; /user add' }).valid).toBe(false);
+    // Credentials may be left out: the server then fills them from the pool (run-diagnostics, poolAuthParams).
+    expect(validator.validate('mikrotik-ssh', 'bandwidth-test', { address: '10.0.0.2' }).valid).toBe(true);
+    expect(validator.getCommand('mikrotik-ssh', 'bandwidth-test')!.poolAuthParams).toEqual(['user', 'password']);
     for (const password of ['pa ss', 'pa;ss', 'p$a', 'p"a', "p'a", 'p[a]', 'p\\a', 'p|a', 'p\na', 'p`a', 'p(a)']) {
       expect(validator.validate('mikrotik-ssh', 'bandwidth-test', { ...ok, password }).valid, JSON.stringify(password)).toBe(false);
     }

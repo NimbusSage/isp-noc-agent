@@ -217,3 +217,64 @@ describe('errors returned to the agent / audit log do not leak secrets', () => {
     expect(runRaw.mock.calls.filter((c) => String(c[0]).includes('forced-on')).length).toBe(2);
   }, 10000);
 });
+
+describe('bandwidth-test credentials come from the pool, never from the caller', () => {
+  const PW_A = 'Pool-A-secret-1';
+  const PW_B = 'Pool-B-secret-2';
+  beforeEach(() => {
+    vi.doMock('../src/credentials/store.js', () => ({
+      CredentialStore: vi.fn().mockImplementation(() => ({
+        load: vi.fn().mockResolvedValue({
+          version: 1,
+          deviceTypes: [{ deviceType: 'mikrotik-ssh', credentials: [
+            { name: 'a', username: 'admin', password: PW_A, priority: 10, tags: [] },
+            { name: 'b', username: 'btest', password: PW_B, priority: 5, tags: [] },
+          ] }],
+          exactDeviceCredentials: [],
+        }),
+      })),
+    }));
+  });
+
+  it('tries the session credential, then the next pool entry, and never returns or audits a password', async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    createDeviceClient.mockImplementation(() => ({
+      connect: async () => undefined,
+      disconnect: vi.fn().mockResolvedValue(undefined),
+      execute: vi.fn().mockImplementation(async (_c: unknown, p: Record<string, unknown>) => {
+        calls.push(p);
+        const accepted = p.password === PW_B;
+        return { device: '10.0.0.5', command: 'bandwidth-test', category: 'diagnostic', status: 'success',
+          result: accepted ? 'status: done testing tx-10-second-average: 90Mbps' : 'status: authentication failed', warnings: [], redactions: 0, timestamp: 't', durationMs: 1 };
+      }),
+    }));
+    const server = await makeServer();
+    const r = await server.handleToolCall('run-diagnostics', { host: '10.0.0.5', deviceType: 'mikrotik-ssh', command: 'bandwidth-test', params: { address: '10.0.0.9', duration: 5 } });
+    expect(r.isError).toBeFalsy();
+    expect(calls.map((p) => p.user)).toEqual(['admin', 'btest']);
+    const text = r.content[0].text;
+    expect(text).toContain('90Mbps');
+    expect(text).toContain('authenticated with pool credential #1');
+    expect(text).not.toContain(PW_A);
+    expect(text).not.toContain(PW_B);
+    const audit = readFileSync(join(dir, 'audit.log'), 'utf8');
+    expect(audit).not.toContain(PW_A);
+    expect(audit).not.toContain(PW_B);
+  });
+
+  it('says so when no pool entry is accepted, and refuses a user without a password', async () => {
+    createDeviceClient.mockImplementation(() => ({
+      connect: async () => undefined,
+      disconnect: vi.fn().mockResolvedValue(undefined),
+      execute: vi.fn().mockResolvedValue({ device: '10.0.0.5', command: 'bandwidth-test', category: 'diagnostic', status: 'success', result: 'authentication failed', warnings: [], redactions: 0, timestamp: 't', durationMs: 1 }),
+    }));
+    const server = await makeServer();
+    const r = await server.handleToolCall('run-diagnostics', { host: '10.0.0.5', deviceType: 'mikrotik-ssh', command: 'bandwidth-test', params: { address: '10.0.0.9' } });
+    expect(r.content[0].text).toContain('no pool credential was accepted by the test server');
+    const before = createDeviceClient.mock.calls.length;
+    const partial = await server.handleToolCall('run-diagnostics', { host: '10.0.0.5', deviceType: 'mikrotik-ssh', command: 'bandwidth-test', params: { address: '10.0.0.9', user: 'admin' } });
+    expect(partial.isError).toBe(true);
+    expect(partial.content[0].text).toMatch(/pass both user and password or neither/);
+    expect(createDeviceClient.mock.calls.length).toBe(before);
+  });
+});

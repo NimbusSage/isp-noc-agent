@@ -235,6 +235,7 @@ NocAgent/
 │   ├── opencode_usage.py                     # How many model requests and tokens OpenCode runs used, from OpenCode's own session store
 │   ├── oxidized_fetch.mjs                    # Deterministic Oxidized backup-config fetch for the agent
 │   ├── pack.py                               # Share the organization's site pack between colleagues through a private git repository (stdlib + git)
+│   ├── path_probe.py                         # Path-analyzer Steps B-H (reachability, traceroute, hop names, bandwidth series, direct links, variance…
 │   ├── provision_exact_binding.mjs           # Provision (or remove) an exact-device credential binding in the encrypted MCP store by pinning an…
 │   ├── rain_fade_model.py                    # Predict the rain rate that kills a fading-prone link
 │   ├── rain_fade_readiness.py                # One-command rain-fade readiness for a Wave (WaveOS gen3) 60 GHz link
@@ -263,7 +264,7 @@ NocAgent/
 │   ├── tree_guard.py                         # Notice when the running checkout stops matching what was reviewed and committed (stdlib + git)
 │   ├── wave_gui.mjs                          # Wave radio web UI driver (puppeteer-core + system Chrome)
 │   ├── wave_rename.py                        # WaveOS rename executor: jq-filter SSID/hostname edits with snapshot/verify/rollback
-│   └── (48 test files)                       # matching *.test.mjs, test_*.py
+│   └── (49 test files)                       # matching *.test.mjs, test_*.py
 ├── server/                                   # Node.js/Express webhook server and its batch prompt template
 │   ├── batch_prompt_template.md
 │   ├── index.js

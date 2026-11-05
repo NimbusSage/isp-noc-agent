@@ -37,6 +37,14 @@ export const MIKROTIK_SSH_COMMANDS: Record<string, DeviceCommand> = {
     params: {},
     readOnly: true,
   },
+  'system-identity': {
+    name: 'system-identity',
+    category: 'system',
+    description: 'Router name (/system identity print), used to label path hops',
+    template: '/system identity print',
+    params: {},
+    readOnly: true,
+  },
   'system-clock': {
     name: 'system-clock',
     category: 'system',
@@ -170,7 +178,7 @@ export const MIKROTIK_SSH_COMMANDS: Record<string, DeviceCommand> = {
   'bandwidth-test': {
     name: 'bandwidth-test',
     category: 'diagnostic',
-    description: 'MikroTik bandwidth-test to fiber router (user/password required, same as mikrotik-ssh creds; tcp 10s both verified)',
+    description: 'MikroTik bandwidth-test to a btest server such as the fiber router (tcp 10s both verified). Leave out user and password: the server authenticates the test with the pool credentials itself, trying each until the btest server accepts one, so no password passes through the caller. Pass both only for a dedicated btest account.',
     template: '/tool bandwidth-test address={{address}} protocol={{protocol}} duration={{duration}} direction={{direction}} user={{user}} password={{password}}',
     params: {
       address: ADDRESS_PARAM,
@@ -178,9 +186,10 @@ export const MIKROTIK_SSH_COMMANDS: Record<string, DeviceCommand> = {
       // The command timeout is 30s by default, so longer tests could never finish.
       duration: { type: 'number', required: false, default: 10, integer: true, min: 1, max: 30 },
       direction: { type: 'string', required: false, default: 'both', enum: ['both', 'send', 'receive'] },
-      user: BTEST_USER_PARAM,
-      password: BTEST_PASSWORD_PARAM,
+      user: { ...BTEST_USER_PARAM, required: false },
+      password: { ...BTEST_PASSWORD_PARAM, required: false },
     },
+    poolAuthParams: ['user', 'password'],
     readOnly: true,
   },
   'routing-ospf-neighbor': {

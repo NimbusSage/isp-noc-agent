@@ -25,23 +25,18 @@ Helper invoked **by** `path-analyzer` (not standalone posting). Investigates a s
 
 MyMate today has **ping + outages live** but `samples/metric-samples/interfaces/samples empty` (`mymate:52`) — CCQ/signal may be null; handle gracefully.
 
-### 2. MikroTik live (via `mikrotik-ssh` creds)
+### 2. MikroTik live (MCP, `mikrotik-ssh` pool)
 
-For each side that is a MikroTik AP/backhaul (not UBNT):
+For each side that is a MikroTik AP/backhaul (not UBNT), through MCP only (never `ssh`/`sshpass`, never a password in a command):
 
 ```bash
-export PW="${BTEST_PASSWORD:?set BTEST_PASSWORD in the environment (operator-supplied, see .env.example); never read credentials.json}"
 # registration table (MikroTik wireless)
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<radio_ip> '/interface wireless registration-table print detail'
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<tower_ip> '/interface wireless registration-table print where interface~"wlan"'
-# ethernet/phys
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<ip> '/interface wireless print detail'
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<ip> '/interface print detail where name~"wlan|ether"'
-# logs
-SSHPASS="$PW" sshpass -e ssh -o StrictHostKeyChecking=accept-new admin@<ip> '/log print without-paging where topics~"wireless"'
-```
-
-New MCP templates for these are in `path-analyzer` allowlist additions (`wireless-registration-table`, `wireless-print`). If device is UBNT `ubnt-uisp`/`ubnt-airos` (`allowlist.ts:152-251`), use `device-detail`/`device-statistics` + `status`/`stations`.
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<radio_ip>","deviceType":"mikrotik-ssh","command":"wireless-registration-table"}'
+# interfaces (wlan and ether state, rates)
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<ip>","deviceType":"mikrotik-ssh","command":"interface-list"}'
+# recent log (filter the wireless topics yourself)
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<ip>","deviceType":"mikrotik-ssh","command":"log-recent"}'
+``` If device is UBNT `ubnt-uisp`/`ubnt-airos` (`allowlist.ts:152-251`), use `device-detail`/`device-statistics` + `status`/`stations`.
 
 ### 3. LibreNMS ports
 

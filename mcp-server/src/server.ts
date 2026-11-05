@@ -22,6 +22,7 @@ import { stripControl } from './security/validators.js';
 import { setHostKeyEventSink } from './security/hostkeys.js';
 import { readSnapshotFile, removeSnapshotFile, snapshotName, writeSnapshotFile } from './temp-site/snapshots.js';
 import type { DeviceTypeCredential } from './credentials/schema.js';
+import type { DeviceCommand, CommandResult } from './devices/types.js';
 
 // The schemas below are derived from the SAME shapes the MCP transport
 // registers (tool-schemas.ts), so a direct handleToolCall (tool-cli) is
@@ -630,6 +631,27 @@ export class NocMcpServer {
       };
     }
 
+    // A command that authenticates to a second device takes both of its credential params or neither (neither =
+    // the pool fills them below). One without the other is refused before the store is touched.
+    const poolAuth = validation.command!.poolAuthParams;
+    const suppliedAuth = poolAuth ? poolAuth.filter((p) => params[p] !== undefined).length : 0;
+    if (poolAuth && suppliedAuth === 1) {
+      this.auditWith(args, {
+        timestamp: new Date().toISOString(),
+        device: host,
+        command,
+        category: 'validation',
+        outcome: 'blocked',
+        redactions: 0,
+        durationMs: 0,
+        metadata: { reason: 'partial credential params' },
+      });
+      return {
+        content: [{ type: 'text', text: `Validation error: pass both ${poolAuth.join(' and ')} or neither (neither = the server uses the pool credentials)` }],
+        isError: true,
+      };
+    }
+
     const storeData = await this.getStoreData();
     const resolver = new CredentialResolver(storeData);
     const credentials = resolver.resolveByType(deviceType);
@@ -661,7 +683,9 @@ export class NocMcpServer {
       const client = createDeviceClient(host, credential, deviceType, this.config.limits.commandTimeoutMs);
       try {
         await client.connect();
-        const result = await client.execute(validation.command!, params);
+        const result = poolAuth && suppliedAuth === 0
+          ? await this.executeWithPoolAuth(client, validation.command!, params, credentials, i, maxAttempts)
+          : await client.execute(validation.command!, params);
         await client.disconnect();
 
         const redacted = this.redaction.redact(JSON.stringify(result.result));
@@ -716,6 +740,40 @@ export class NocMcpServer {
     return {
       content: [{ type: 'text', text: lastError }],
       isError: true,
+    };
+  }
+
+  /** Runs a poolAuthParams command (bandwidth-test) on an open session, filling its credential params from the
+   * pool: the credential that opened the session first, then the others in priority order, until the second
+   * device stops answering "authentication failed". The passwords stay inside this process: they are neither
+   * returned, logged nor audited, and the result only names which pool entry was accepted. */
+  private async executeWithPoolAuth(
+    client: { execute: (c: DeviceCommand, p: Record<string, unknown>) => Promise<CommandResult> },
+    command: DeviceCommand,
+    params: Record<string, unknown>,
+    credentials: DeviceTypeCredential[],
+    sessionIndex: number,
+    maxAttempts: number,
+  ): Promise<CommandResult> {
+    const [userParam, passwordParam] = command.poolAuthParams!;
+    const order = [sessionIndex, ...credentials.map((_, k) => k).filter((k) => k !== sessionIndex)].slice(0, Math.max(1, maxAttempts));
+    let last: CommandResult | null = null;
+    const skipped: number[] = [];
+    for (const k of order) {
+      const cred = credentials[k];
+      const r = await client.execute(command, { ...params, [userParam]: cred.username, [passwordParam]: cred.password });
+      if (r.status === 'error' && r.warnings.some((w) => /invalid format/.test(w))) { skipped.push(k); continue; }
+      last = r;
+      if (r.status === 'success' && !/authentication failed/i.test(JSON.stringify(r.result))) {
+        return { ...r, warnings: [...r.warnings, `authenticated with pool credential #${k}`] };
+      }
+    }
+    const note = skipped.length ? `; ${skipped.length} pool credential(s) have characters this command cannot pass` : '';
+    if (last) return { ...last, warnings: [...last.warnings, `no pool credential was accepted by the test server${note}`] };
+    return {
+      device: '', command: command.name, category: command.category, status: 'error', result: null,
+      warnings: [`no pool credential can be passed to ${command.name}${note}`], redactions: 0,
+      timestamp: new Date().toISOString(), durationMs: 0,
     };
   }
 
