@@ -52,7 +52,7 @@ H=(-H "Accept: application/json" -H "Origin: $MYMATE_URL" -H "Referer: $MYMATE_U
 
 ## Critical gotchas (verified live)
 
-1. **`GET /api/devices` is huge — ~35 MB, 2+ min, tens of thousands of devices. Do NOT fetch it wholesale.** Prefer `GET /api/devices/{id}` (once you have the ID) or `GET /api/outages`. If you must pull the full list, fetch once and cache to disk with a timestamp; never fetch it per ticket. The index is the ONLY response that reliably carries `site_name`/`site_id` (device `show` sometimes omits them).
+1. **`GET /api/devices` is paginated (50 per page by default, `per_page` up to 100, ~37k devices) — never page through it per ticket.** Find a site's devices with the server-side search `GET /api/devices?q=<name>&per_page=100` (what `mymate_query.mjs site` does), then `GET /api/devices/{id}`. Only fleet-wide scripts walk every page (`inventory_resolve.mjs --refresh`, cached a day). Verified 2026-11-04 on 1.7.2: without paging, the old one-shot fetch silently returned only the first 50 devices.
 2. **Deployed version is 1.4.0.** Upstream `main` has more endpoints, but on THIS server these 404: `tools/ping|trace|sweep|portscan|bgp`, `devices/{id}/trace`, `devices/{id}/probes`, `devices/{id}/icon`, `graphs`. Do not call them until the server is upgraded.
 3. **Throughput/metric/sensor/alert history is currently empty** on this instance — `devices/{id}/samples`, `devices/{id}/metric-samples`, `interfaces/{id}/samples`, `devices/{id}/sensors`, `sensors`, `alert-events`, `maintenance-windows` all return `{"data":[]}`. Only **ping history** (`ping-samples`) and **outages** have live data today.
 4. **Writes now succeed — stay disciplined.** The account is admin, so the old
@@ -68,14 +68,14 @@ Each command below logs in, asks, filters and prints compact JSON in one step; r
 something these do not cover. All are read-only GETs, and the output never carries credentials.
 
 ```bash
-node scripts/mymate_query.mjs site <name-fragment>          # devices (cached index) + open outages for a site
+node scripts/mymate_query.mjs site <name-fragment>          # devices (server-side search) + open outages for a site
 node scripts/mymate_query.mjs outages --match <fragment>    # open outages (add --closed for history)
 node scripts/mymate_query.mjs device <device-id>            # live status: status, rtt, loss, signal, ccq, cpu ...
 node scripts/mymate_query.mjs ping <device-id> --hours 6    # rtt/loss/jitter min/avg/max, not the raw series
 node scripts/mymate_query.mjs links <device-id>             # topology links touching the device
 ```
 
-`site` reads the day-old device index cache (`node scripts/inventory_resolve.mjs <name> --refresh` re-pulls it).
+`site` uses MyMate's server-side device search (`?q=`), so it is one or two requests whatever the fleet size.
 
 ### What's down right now (per site)
 
@@ -182,7 +182,7 @@ itself (same-value PATCH 200s and changes nothing — proven on both
 ### Finding a device ID for a site (e.g. "golf")
 
 1. `GET /api/outages?state=open` and filter by `site_name`/`device_name` — outages carry `device_id` and `mgmt_ip`.
-2. No outage? The only name→ID map is the heavy `/api/devices` index. Fetch once, cache to disk, and match on `site_name` substring, `name` substring, and `mgmt_ip`. Don't re-pull per ticket.
+2. No outage? `GET /api/devices?q=<site>&per_page=100` (server-side search on name and site) gives `id` and `mgmt_ip`; `node scripts/mymate_query.mjs site <site>` does both steps in one call.
 
 ## Endpoint quick reference (verified on v1.4.0; sonar-tickets rows on v1.7.2)
 
@@ -191,7 +191,7 @@ itself (same-value PATCH 200s and changes nothing — proven on both
 | `GET /api/health` | Public; DB + Redis status |
 | `GET /api/system-status` | Engine health board |
 | `GET /api/user` | Current operator (`is_admin`) |
-| `GET /api/devices` | **HEAVY ~35 MB** — avoid wholesale, cache |
+| `GET /api/devices?q=<text>&per_page=100` | Paginated device list; `q` searches name and site — use it, never walk all pages per ticket |
 | `GET /api/devices/{id}` | Live status fields |
 | `GET /api/devices/{id}/interfaces` | Interface list (`if_index`, `name`, `speed_mbps`, `util_in/out`, `bps_in/out`) |
 | `GET /api/devices/{id}/ping-samples?from&to` | rtt/loss/jitter history — **has data** |
@@ -219,7 +219,7 @@ Useful admin endpoints the `nocagent` account can now use, but only when a skill
 
 - Forgetting `Origin`/`Referer` headers → `401 Unauthenticated` (session not treated as stateful).
 - Forgetting `X-XSRF-TOKEN` on writes → `419` CSRF mismatch.
-- Fetching the full `/api/devices` per ticket → 35 MB / 2+ min download. Cache it.
+- Reading `/api/devices` without `q` → only the first 50 of ~37k devices (it is paginated). Search with `q`.
 - Calling upstream-only endpoints (`tools/*`, `trace`, `probes`, `graphs`) → `404` on this server.
 - Expecting samples/sensor/alert data → currently empty; use outages + ping-samples + device status instead.
 - Treating MyMate like a write source → every write is `403`; it is a read-only monitoring source for the agent.

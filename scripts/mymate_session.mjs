@@ -86,9 +86,26 @@ export async function apiGet(session, apiPath, timeoutMs = 60000) {
   try { return JSON.parse(res.text); } catch { throw new Error(`MyMate GET ${apiPath.split('?')[0]} returned non-JSON`); }
 }
 
-// The device index (/api/devices) is ~35 MB and the only name -> id map, so it is fetched once and cached for a day
-// in <log dir>/mymate-device-index.json (id, name, mgmt_ip, status, site only). The log dir is NOC_AGENT_LOG_DIR
-// (set by the server for its agents), else <repo>/logs.
+const compactDevice = (d) => ({ id: d.id, name: d.name, mgmt_ip: d.mgmt_ip, status: d.status, site: d.site_name || null });
+
+// Server-side device search (/api/devices?q=, MyMate 1.7: name/site substring), paged 100 at a time. The device list
+// is paginated (50 per page by default, ~37k devices), so this is the way to find a site's devices: one or two
+// requests instead of the whole catalogue.
+export async function searchDevices(session, q, { maxPages = 5 } = {}) {
+  const devices = [];
+  let total = 0;
+  for (let page = 1; page <= maxPages; page++) {
+    const body = await apiGet(session, `/api/devices?q=${encodeURIComponent(q)}&per_page=100&page=${page}`);
+    for (const d of body.data || []) devices.push(compactDevice(d));
+    total = body.meta?.total ?? devices.length;
+    if (!body.meta || page >= (body.meta.last_page || 1)) break;
+  }
+  return { devices, total };
+}
+
+// The full device index (every page of /api/devices, ~37k rows) for fleet-wide scripts, cached for a day in
+// <log dir>/mymate-device-index.json (id, name, mgmt_ip, status, site only). The log dir is NOC_AGENT_LOG_DIR (set by
+// the server for its agents), else <repo>/logs. Per-ticket lookups use searchDevices instead.
 export const INDEX_MAX_AGE_MS = 24 * 3600 * 1000;
 export function logDir() {
   return (process.env.NOC_AGENT_LOG_DIR || '').trim() || resolve(ROOT, 'logs');
@@ -100,17 +117,22 @@ export async function loadDeviceIndex({ refresh = false, session = null, cacheFi
       const st = statSync(cacheFile);
       if (Date.now() - st.mtimeMs < INDEX_MAX_AGE_MS) {
         const cache = JSON.parse(readFileSync(cacheFile, 'utf8'));
+        if (!cache.complete) throw new Error('partial cache from a single-page fetch');
         return { devices: cache.devices || [], fetchedAt: cache.fetchedAt || null, fresh: false };
       }
     } catch { /* refetch */ }
   }
   const s = session || await login();
-  log('Fetching full device index (~35 MB, one-time)...');
-  const body = await apiGet(s, '/api/devices', 300000);
-  const devices = (body.data || []).map((d) => ({ id: d.id, name: d.name, mgmt_ip: d.mgmt_ip, status: d.status, site: d.site_name || null }));
+  log('Fetching the full device index, 100 per page (a few minutes, once a day)...');
+  const devices = [];
+  for (let page = 1; ; page++) {
+    const body = await apiGet(s, `/api/devices?per_page=100&page=${page}`, 120000);
+    for (const d of body.data || []) devices.push(compactDevice(d));
+    if (!body.meta || page >= (body.meta.last_page || 1) || !(body.data || []).length) break;
+  }
   const fetchedAt = new Date().toISOString();
   mkdirSync(dirname(cacheFile), { recursive: true });
-  writeFileSync(cacheFile, JSON.stringify({ fetchedAt, count: devices.length, devices }));
+  writeFileSync(cacheFile, JSON.stringify({ fetchedAt, count: devices.length, complete: true, devices }));
   log(`Cached ${devices.length} devices.`);
   return { devices, fetchedAt, fresh: true };
 }

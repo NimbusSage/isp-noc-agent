@@ -220,7 +220,7 @@ NocAgent/
 │   ├── harness_setup.py                      # Harness portability setup for NocAgent (stdlib only, Python 3.9+)
 │   ├── hermetic_env.py                       # Import this from any test that runs git: it removes repository-local GIT_* variables
 │   ├── install.sh                            # Deploy NocAgent at ANY path (no hardcoded install location)
-│   ├── inventory_resolve.mjs                 # Resolve a radio/site name to device IDs + management IPs via a cached MyMate device index
+│   ├── inventory_resolve.mjs                 # Resolve a radio/site name to device IDs + management IPs with MyMate's server-side device search…
 │   ├── leak_denylist.sha256
 │   ├── mcp_launch.mjs                        # Harness-neutral stdio launcher for the NOC MCP server
 │   ├── metrics_rollup.py                     # Weekly NOC agent metrics from the decision log

@@ -29,7 +29,20 @@ function fakeMyMate() {
       }
       if (!String(req.headers.cookie || '').includes('mymate_session=good') || req.headers.origin === undefined) return json(401, { message: 'Unauthenticated.' });
       if (req.method !== 'GET') return json(405, {});
-      if (req.url === '/api/devices') return json(200, { data: [
+      if (req.url.startsWith('/api/devices?')) {
+        const u = new URL(req.url, 'http://x');
+        const all = [
+          { id: 1, name: 'golf-ap-5n', mgmt_ip: '<ip-a>', status: 'up', site_name: 'Golf', extra: 'x' },
+          { id: 2, name: 'golf-bh', mgmt_ip: '<ip-b>', status: 'down', site_name: 'Golf' },
+          { id: 3, name: 'hotel-ap', mgmt_ip: '<ip-c>', status: 'up', site_name: 'Hotel' },
+        ];
+        const q = (u.searchParams.get('q') || '').toLowerCase();
+        const rows = q ? all.filter((d) => d.name.includes(q) || d.site_name.toLowerCase().includes(q)) : all;
+        const per = 2;
+        const page = Number(u.searchParams.get('page') || 1);
+        return json(200, { data: rows.slice((page - 1) * per, page * per), meta: { total: rows.length, last_page: Math.ceil(rows.length / per) || 1, current_page: page } });
+      }
+      if (req.url === '/api/devices-unused') return json(200, { data: [
         { id: 1, name: 'golf-ap-5n', mgmt_ip: '<ip-a>', status: 'up', site_name: 'Golf', extra: 'x' },
         { id: 2, name: 'golf-bh', mgmt_ip: '<ip-b>', status: 'down', site_name: 'Golf' },
         { id: 3, name: 'hotel-ap', mgmt_ip: '<ip-c>', status: 'up', site_name: 'Hotel' },
@@ -53,8 +66,12 @@ function fakeMyMate() {
 
 // Async on purpose: the fake server lives in this process, so a synchronous spawn would block it.
 function runNode(args, env) {
+  return runNodeScript(SCRIPT, args, env);
+}
+
+function runNodeScript(script, args, env) {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [SCRIPT, ...args], { env });
+    const child = spawn(process.execPath, [script, ...args], { env });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (c) => { stdout += c; });
@@ -76,22 +93,31 @@ async function withServer(fn) {
   try { await fn({ q, seen, dir, env }); } finally { server.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 }
 
-test('site: devices from the cached index plus matching open outages, in one call; the index is cached', async () => {
-  await withServer(async ({ q, seen, dir }) => {
+test('site: devices from the server-side search (all pages) plus matching open outages, in one call', async () => {
+  await withServer(async ({ q, seen }) => {
     const r = await q('site', 'golf');
     assert.equal(r.status, 0, r.stderr);
     const out = JSON.parse(r.stdout);
     assert.equal(out.devices_total, 2);
     assert.equal(out.devices_down, 1);
     assert.deepEqual(out.devices.map((d) => d.id), [1, 2]);
-    assert.equal(out.devices[0].extra, undefined, 'index rows keep only id/name/mgmt_ip/status/site');
+    assert.equal(out.devices[0].extra, undefined, 'rows keep only id/name/mgmt_ip/status/site');
     assert.equal(out.open_outages_total, 1);
     assert.equal(out.open_outages[0].secret_field, undefined);
-    assert.ok(fs.existsSync(path.join(dir, 'mymate-device-index.json')));
-    const before = seen.filter((s) => s.url === '/api/devices').length;
-    assert.equal((await q('site', 'hotel')).status, 0);
-    assert.equal(seen.filter((s) => s.url === '/api/devices').length, before, 'second call uses the cache');
+    assert.ok(seen.some((s) => /^\/api\/devices\?q=golf&per_page=100&page=1$/.test(s.url)));
+    assert.ok(!seen.some((s) => s.url === '/api/devices'), 'never the whole catalogue');
     assert.ok(seen.every((s) => s.method === 'GET' || s.url === '/login'), 'read-only apart from the login');
+  });
+});
+
+test('the full index (fleet scripts) walks every page and marks itself complete', async () => {
+  await withServer(async ({ env, dir }) => {
+    const r = await runNodeScript(path.join(here, 'inventory_resolve.mjs'), ['hotel', '--refresh'], env);
+    assert.equal(r.status, 0, r.stderr);
+    assert.deepEqual(JSON.parse(r.stdout).matches.map((d) => d.id), [3]);
+    const cache = JSON.parse(fs.readFileSync(path.join(dir, 'mymate-device-index.json'), 'utf8'));
+    assert.equal(cache.complete, true);
+    assert.deepEqual(cache.devices.map((d) => d.id), [1, 2, 3]);
   });
 });
 

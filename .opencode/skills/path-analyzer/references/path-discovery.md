@@ -36,7 +36,7 @@ Iterative walk: tower → gateway → traceroute from gateway → repeat until a
 ### Fallback 2: MyMate links
 
 - `node scripts/mymate_query.mjs links <device-id>` (`a_device_id/b_device_id` + `bw_*`, one call per device) — graph walk from tower device_id toward core.
-- Requires cached `/api/devices` to map IPs → device_ids (see Step A). Inaccurate for separate fiber networks per user note — use only when traceroute unavailable.
+- Map IPs → device_ids with `node scripts/mymate_query.mjs site <site>` (see Step A). Inaccurate for separate fiber networks per user note — use only when traceroute unavailable.
 
 ### Fallback 3: OSPF neighbor walk
 

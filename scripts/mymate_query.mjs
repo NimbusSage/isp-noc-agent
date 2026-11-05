@@ -6,15 +6,14 @@
 // the answer in one call. Read-only: GET requests only.
 //
 // Usage:
-//   node scripts/mymate_query.mjs site <name-fragment>          devices (cached index) + open outages for a site
+//   node scripts/mymate_query.mjs site <name-fragment>          devices (server-side search) + open outages for a site
 //   node scripts/mymate_query.mjs outages [--match <fragment>] [--closed]
 //   node scripts/mymate_query.mjs device <device-id>             live status fields
 //   node scripts/mymate_query.mjs ping <device-id> [--hours N]   rtt/loss/jitter summary (default 6 h)
 //   node scripts/mymate_query.mjs links <device-id>              topology links touching the device
-// Add --refresh to re-pull the device index (~35 MB; otherwise cached for a day).
 // Status is MyMate's monitoring state, not proof of reachability. Output never carries credentials.
 import { pathToFileURL } from 'node:url';
-import { loadProjectEnv, login, apiGet, loadDeviceIndex } from './mymate_session.mjs';
+import { loadProjectEnv, login, apiGet, searchDevices } from './mymate_session.mjs';
 
 const CAP = 15;
 const DEVICE_FIELDS = ['id', 'name', 'status', 'mgmt_ip', 'site_id', 'site_name', 'device_type', 'vendor', 'model',
@@ -38,7 +37,6 @@ function deviceId(raw) {
 
 export async function run(argv) {
   const [cmd, arg] = argv;
-  const refresh = argv.includes('--refresh');
   if (!['site', 'outages', 'device', 'ping', 'links'].includes(cmd)) {
     throw new Error('usage: mymate_query.mjs site|outages|device|ping|links ... (see the header of this file)');
   }
@@ -47,8 +45,8 @@ export async function run(argv) {
   const session = await login();
   if (cmd === 'site') {
     const needle = arg.toLowerCase();
-    const index = await loadDeviceIndex({ refresh, session });
-    const devices = index.devices.filter((d) => has(d.name, needle) || has(d.site, needle));
+    const found = await searchDevices(session, arg);
+    const devices = found.devices.filter((d) => has(d.name, needle) || has(d.site, needle));
     const outages = rows(await apiGet(session, '/api/outages?state=open')).filter((o) => has(o.site_name, needle) || has(o.device_name, needle));
     return {
       fragment: arg,
@@ -57,7 +55,7 @@ export async function run(argv) {
       devices_down: devices.filter((d) => d.status === 'down').length,
       open_outages: outages.slice(0, CAP).map((o) => pick(o, OUTAGE_FIELDS)),
       open_outages_total: outages.length,
-      index_fetched_at: index.fetchedAt,
+      search_total: found.total,
     };
   }
   if (cmd === 'outages') {
