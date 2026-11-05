@@ -75,6 +75,8 @@ python3 scripts/chat_alert.py ticket --ticket-id 1 --dry-run
 python3 scripts/chat_alert.py --selftest
 ```
 
+**Send each alert once.** A send prints `sent: ticket #<id> <status> to <provider>` and exits 0; a failure exits non-zero with the reason on stderr. Never run a send again to check whether it worked: read the line it printed. The same ticket and status again within 30 minutes is not sent (it prints `already sent: ...` and exits 0). `--resend` sends a second alert; use it only when the operator asks.
+
 What it does for you:
 - Reads `NOC_TICKETS_GOOGLE_CHAT_WEBHOOK_URL` from env, or parses `.env` directly (tolerates CRLF endings and quoting)
 - Resolves the Sonar base URL from `site-pack/profile.json` (`org.sonar_base_url`) so the **VIEW TICKET** button is a real link — override with `ORG_SONAR_BASE_URL` if running outside the pack

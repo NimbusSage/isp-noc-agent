@@ -86,7 +86,10 @@ class Hook:
 
 class NotifyCase(unittest.TestCase):
     def setUp(self):
-        env = {"PATH": os.environ.get("PATH", ""), "NOC_DOTENV": os.devnull, "CHAT_ICON_VERIFY": "0"}
+        state = tempfile.mkdtemp(prefix="notify-state-")
+        self.addCleanup(shutil.rmtree, state, True)
+        env = {"PATH": os.environ.get("PATH", ""), "NOC_DOTENV": os.devnull, "CHAT_ICON_VERIFY": "0",
+               "NOC_STATE_DIR": state}
         patcher = mock.patch.dict(os.environ, env, clear=True)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -250,6 +253,8 @@ class GchatCompat(NotifyCase):
         for provider in (None, "gchat", "GChat"):
             if provider:
                 os.environ["NOTIFY_PROVIDER"] = provider
+            sent = Path(os.environ["NOC_STATE_DIR"]) / chat_alert.SENT_FILE
+            sent.unlink(missing_ok=True)  # the same ticket alert again would be skipped as a repeat
             for argv, golden in cases:
                 h.requests.clear()
                 with mock.patch.object(sys, "argv", ["chat_alert.py"] + argv):
@@ -321,6 +326,78 @@ class ChatAlertRouting(NotifyCase):
         self.assertEqual(h.requests, [])
         self.assertNotIn(h.secret, out + err)
         self.assertEqual(json.loads(out)["provider"], "discord")
+
+
+class ChatAlertOnce(NotifyCase):
+    """An agent that sees no output re-runs the send to check it; that must not post a second alert."""
+
+    def setUp(self):
+        super().setUp()
+        self.chat = self.hook()
+        os.environ["NOC_TICKETS_GOOGLE_CHAT_WEBHOOK_URL"] = self.chat.url
+
+    def run_cli(self, *argv):
+        with mock.patch.object(sys, "argv", ["chat_alert.py"] + list(argv)):
+            return self.capture(chat_alert.main)
+
+    def test_a_send_says_it_was_sent(self):
+        rc, out, err = self.run_cli("ticket", "--ticket-id", "12", "--subject", "s")
+        self.assertEqual(rc, 0)
+        self.assertEqual(out.strip(), "sent: ticket #12 needs_human to gchat")
+        self.assertNotIn(self.chat.secret, out + err)
+        rc, out, _ = self.run_cli("alert", "--title", "Breaker open")
+        self.assertEqual(rc, 0)
+        self.assertEqual(out.strip(), "sent: alert 'Breaker open' to gchat")
+        self.assertEqual(len(self.chat.requests), 2)
+
+    def test_the_same_ticket_alert_is_sent_once(self):
+        self.run_cli("ticket", "--ticket-id", "12", "--subject", "s")
+        rc, out, _ = self.run_cli("ticket", "--ticket-id", "12", "--subject", "other words", "--confidence", "88")
+        self.assertEqual(rc, 0)
+        self.assertTrue(out.startswith("already sent: ticket #12 needs_human at "), out)
+        self.assertIn("--resend", out)
+        self.assertEqual(len(self.chat.requests), 1)
+
+    def test_resend_another_status_or_ticket_still_sends(self):
+        self.run_cli("ticket", "--ticket-id", "12")
+        self.run_cli("ticket", "--ticket-id", "12", "--resend")
+        self.run_cli("ticket", "--ticket-id", "12", "--status", "pbs_failure")
+        self.run_cli("ticket", "--ticket-id", "13")
+        self.assertEqual(len(self.chat.requests), 4)
+
+    def test_a_failed_send_or_a_dry_run_is_not_recorded(self):
+        os.environ["NOC_TICKETS_GOOGLE_CHAT_WEBHOOK_URL"] = self.hook(status=500).url
+        rc, _, _ = self.run_cli("ticket", "--ticket-id", "12")
+        self.assertEqual(rc, 2)
+        os.environ["NOC_TICKETS_GOOGLE_CHAT_WEBHOOK_URL"] = self.chat.url
+        rc, _, _ = self.run_cli("ticket", "--ticket-id", "12", "--dry-run")
+        self.assertEqual(rc, 0)
+        rc, out, _ = self.run_cli("ticket", "--ticket-id", "12")
+        self.assertEqual((rc, out.split(":")[0]), (0, "sent"))
+        self.assertEqual(len(self.chat.requests), 1)
+
+    def test_a_record_older_than_the_window_does_not_block(self):
+        sent = Path(os.environ["NOC_STATE_DIR"]) / chat_alert.SENT_FILE
+        sent.write_text(json.dumps({"12:needs_human": 1.0}))
+        self.run_cli("ticket", "--ticket-id", "12")
+        self.assertEqual(len(self.chat.requests), 1)
+
+    def test_a_broken_record_never_blocks_or_fails_a_send(self):
+        sent = Path(os.environ["NOC_STATE_DIR"]) / chat_alert.SENT_FILE
+        sent.write_text("{not json")
+        rc, _, _ = self.run_cli("ticket", "--ticket-id", "12")
+        self.assertEqual(rc, 0)
+        self.assertEqual(len(self.chat.requests), 1)
+
+    def test_other_providers_are_sent_once_too(self):
+        slack = self.hook()
+        self.use(slack, "slack")
+        rc, out, _ = self.run_cli("ticket", "--ticket-id", "12")
+        self.assertEqual((rc, out.strip()), (0, "sent: ticket #12 needs_human to slack"))
+        rc, out, _ = self.run_cli("ticket", "--ticket-id", "12")
+        self.assertEqual(rc, 0)
+        self.assertTrue(out.startswith("already sent:"), out)
+        self.assertEqual(len(slack.requests), 1)
 
 
 class Safety(NotifyCase):

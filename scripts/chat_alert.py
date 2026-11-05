@@ -14,7 +14,7 @@ Usage from the agent (preferred over hand-rolling cards):
 
   python3 scripts/chat_alert.py ticket --ticket-id 12345 \
       --subject "(town) ap pppoe - slow tower" --priority HIGH \
-      --source "Transferred to" \
+      --ticket-created false \
       --issue "Unable to determine tower site from subject" \
       --reason "Subject does not match expected format" \
       --analysis "N/A (tower site unknown)" \
@@ -39,8 +39,14 @@ Env
 --ticket-id must be an integer (it is embedded in a link). Button URLs must be
 http(s). The webhook must be https:// (loopback http is allowed for tests).
 
-Exit codes: 0 sent, 1 usage/build error, 2 HTTP/transport error, 4 webhook unconfigured
-(also when NOTIFY_PROVIDER names another provider whose URL is not set).
+A send prints one line: `sent: ticket #ID STATUS to PROVIDER` (or `sent: alert 'TITLE' to ...`).
+A ticket alert is sent once per ticket and status: the same one again within 30 minutes is not
+sent, prints `already sent: ...` and exits 0 (an agent that saw no output used to re-run the send
+to check it, which posted a second card). `--resend` sends it anyway; use it only when the
+operator asks. The record is `chat_alert_sent.json` in NOC_STATE_DIR (default <repo>/logs).
+
+Exit codes: 0 sent (or already sent), 1 usage/build error, 2 HTTP/transport error, 4 webhook
+unconfigured (also when NOTIFY_PROVIDER names another provider whose URL is not set).
 """
 
 from __future__ import annotations
@@ -52,6 +58,7 @@ import json
 import os
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -123,6 +130,63 @@ STATUS_TITLES = {
 }
 
 _icon_cache: dict = {}
+
+# One ticket alert per ticket and status within RESEND_WINDOW_S (see the module docstring).
+SENT_FILE = "chat_alert_sent.json"
+RESEND_WINDOW_S = 1800
+
+
+def _sent_key(args):
+    if args.mode != "ticket":
+        return None
+    return f"{str(args.ticket_id).strip()}:{str(args.status).strip().lower()}"
+
+
+def _load_sent() -> dict:
+    try:
+        data = json.loads((noc_config.state_dir() / SENT_FILE).read_text())
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {k: v for k, v in data.items() if isinstance(v, (int, float))}
+
+
+def already_sent(args) -> str:
+    """'' when this alert may go out, else the line to print instead of sending it again."""
+    key = _sent_key(args)
+    if key is None or getattr(args, "resend", False):
+        return ""
+    at = _load_sent().get(key)
+    if at is None or time.time() - at > RESEND_WINDOW_S:
+        return ""
+    when = time.strftime("%H:%M:%SZ", time.gmtime(at))
+    return (f"already sent: ticket #{args.ticket_id} {args.status} at {when}; not sending it again "
+            "(--resend sends a second alert; use it only when the operator asks)")
+
+
+def record_sent(args) -> None:
+    """Remember a delivered ticket alert. Never fails the send."""
+    key = _sent_key(args)
+    if key is None:
+        return
+    now = time.time()
+    sent = {k: v for k, v in _load_sent().items() if now - v <= RESEND_WINDOW_S}
+    sent[key] = now
+    path = noc_config.state_dir() / SENT_FILE
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(sent))
+        os.replace(tmp, path)
+    except OSError as e:
+        print(f"warning: sent, but could not record it ({type(e).__name__})", file=sys.stderr)
+
+
+def sent_line(args, provider: str) -> str:
+    if args.mode == "ticket":
+        return f"sent: ticket #{args.ticket_id} {args.status} to {provider}"
+    return f"sent: alert {args.title!r} to {provider}"
 
 
 def load_webhook_url() -> str:
@@ -395,10 +459,16 @@ def _main_via_notify(args, provider: str, parser) -> int:
         else:
             print("NOTIFY_PROVIDER is not a known provider (use: " + ", ".join(notify.PROVIDERS) + ")", file=sys.stderr)
         return 4
+    repeat = already_sent(args)
+    if repeat:
+        print(repeat)
+        return 0
     ok, detail = notify.deliver(title, body, level=level, provider=provider, link=link)
     if not ok:
         print(f"send failed: provider={provider} {detail}", file=sys.stderr)
         return 2
+    record_sent(args)
+    print(sent_line(args, provider))
     return 0
 
 
@@ -471,6 +541,8 @@ def main() -> int:
     t.add_argument("--button", action="append", default=[], help="Label:url; repeatable")
     t.add_argument("--link", default=None, help="url for default button if no site-pack org URL known")
     t.add_argument("--dry-run", action="store_true", help="print payload, don't send")
+    t.add_argument("--resend", action="store_true",
+                   help="send even if this ticket and status were alerted in the last 30 minutes")
 
     a = sub.add_parser("alert", help="generic operational alert (breaker, fallback, weekly notes)")
     a.add_argument("--title", required=True)
@@ -529,11 +601,17 @@ def main() -> int:
         print(json.dumps(payload, indent=2))
         return 0
 
+    repeat = already_sent(args)
+    if repeat:
+        print(repeat)
+        return 0
     try:
         send(payload, webhook)
     except RuntimeError as e:
         print(f"send failed: {e}", file=sys.stderr)
         return 2
+    record_sent(args)
+    print(sent_line(args, provider))
     return 0
 
 
