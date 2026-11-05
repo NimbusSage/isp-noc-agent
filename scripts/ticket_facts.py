@@ -67,6 +67,7 @@ def comments_query() -> str:
 def plain(text: Any) -> str:
     """HTML to plain text: tags dropped (block tags become line breaks), entities decoded, whitespace collapsed."""
     s = str(text or "")
+    s = re.sub(r"(?i)<\s*img\b[^>]*>", " [image] ", s)   # screenshots (speed tests) would otherwise read as empty
     s = re.sub(r"(?i)<\s*(br|/p|/div|/li|/tr|/h\d)\s*/?\s*>", "\n", s)
     s = html.unescape(_TAG_RE.sub("", s))
     s = _WS_RE.sub(" ", s)

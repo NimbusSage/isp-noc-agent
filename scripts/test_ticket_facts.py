@@ -80,6 +80,8 @@ class BuildFacts(unittest.TestCase):
         self.assertTrue(newest[0]["body"].startswith("Direct Path Analysis - Alpha"))
         self.assertLessEqual(len(newest[0]["body"]), ticket_facts.COMMENT_CHARS)
         self.assertEqual(f["first_note"]["created_at"], "2026-01-01")
+        shot = self.facts([{"created_at": "2026-01-10", "body": '<img src="files/1" alt="1"><img src="files/2" alt="2">'}])
+        self.assertEqual(shot["comments"]["newest_first"][0]["body"], "[image] [image]")
 
     def test_step0_flags(self):
         f = self.facts([], subject="Automatic reply: Out of Office", description="I am currently traveling",

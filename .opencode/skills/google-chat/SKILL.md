@@ -53,7 +53,7 @@ python3 scripts/chat_alert.py ticket \
   --subject "$SUBJECT" \
   --group "NOC" \
   --priority "$PRIORITY" \
-  --source "Transferred to" \
+  --ticket-created false \
   --issue "Unable to determine tower site from subject" \
   --reason "Subject does not match expected format [Network] Site pppoe - <desc>" \
   --analysis "N/A (tower site unknown)" \
