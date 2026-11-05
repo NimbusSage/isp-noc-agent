@@ -18,6 +18,7 @@ CI  # set by CI runners
 NODE_ENV  # set to production by the systemd unit template
 XDG_RUNTIME_DIR  # systemd user runtime dir in the unit template
 XDG_CACHE_HOME  # standard XDG variable used to place the known_hosts cache
+XDG_DATA_HOME  # standard XDG variable; opencode_usage.py finds OpenCode's session store under it
 NO_COLOR  # standard terminal convention
 PYTHONDONTWRITEBYTECODE  # set by the demo stub for its child processes
 HTTP_PROXY  # standard proxy variable, passed through to the agent
