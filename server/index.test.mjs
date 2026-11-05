@@ -81,6 +81,7 @@ function baseEnv(d, token, extra = {}) {
     NOC_SITE_PACK_DIR: path.join(d.dir, 'no-site-pack'),
     PEAK_SCHEDULER_ENABLED: 'false',
     WINDOW_DURATION_MS: '150',
+    AGENT_TICKET_FACTS: 'off',   // never let a test reach a real Sonar through the checkout's .env
     ...extra,
   };
 }
@@ -1035,6 +1036,41 @@ fs.renameSync(rf + '.tmp', rf);
   assert.ok(fs.existsSync(path.join(stateDir, 'circuit_breaker.json')), 'breaker state follows NOC_STATE_DIR');
   assert.ok(!fs.existsSync(path.join(s.logs, 'decisions')), 'nothing leaks into the log dir');
   assert.match(fs.readFileSync(path.join(s.logs, 'webhook.log'), 'utf8'), /Parsed batch results from result file/);
+});
+
+test('ticket facts: the facts script enriches the batch file first and the prompt says so; a failing script changes nothing else', async () => {
+  const facts = path.join(ROOT, 'facts-ok.py');
+  fs.writeFileSync(facts, [
+    'import json, sys',
+    'p = sys.argv[sys.argv.index("--batch-file") + 1]',
+    'items = json.load(open(p))',
+    'for it in items: it["facts"] = {"flags": {"weather_hits": ["storm"]}}',
+    'json.dump(items, open(p, "w"))',
+    'print(json.dumps({"tickets": len(items), "with_facts": len(items), "failed": 0}))',
+  ].join('\n'));
+  const bad = path.join(ROOT, 'facts-bad.py');
+  fs.writeFileSync(bad, 'import sys\nsys.stderr.write("SONAR_TOKEN is not set")\nsys.exit(2)\n');
+  const reader = path.join(ROOT, 'facts-reader.js');
+  fs.writeFileSync(reader, `
+const fs = require('fs');
+const [out] = process.argv.slice(2);
+const prompt = process.argv[process.argv.length - 1];
+const BT = String.fromCharCode(96);
+const bf = new RegExp('batch_file' + BT + ': ' + BT + '([^' + BT + ']+)' + BT).exec(prompt)[1];
+fs.writeFileSync(out, JSON.stringify({ prompt, batch: JSON.parse(fs.readFileSync(bf, 'utf8')) }));
+`);
+  for (const [script, expectFacts] of [[facts, true], [bad, false]]) {
+    const d = mkdirs();
+    const s = await startServer({ AGENT_TICKET_FACTS: script, AGENT_COMMAND_TEMPLATE: `${sq(process.execPath)} ${sq(reader)} ${sq(d.out)} {prompt}` }, { d });
+    assert.equal((await post(s, '/webhook/ticket', { body: { ticket_id: '424242', subject: 'slow' } })).status, 202);
+    await until(() => fs.existsSync(d.out), 15000);
+    const seen = JSON.parse(fs.readFileSync(d.out, 'utf8'));
+    assert.equal(/Ticket facts: before this run the server fetched/.test(seen.prompt), expectFacts, script);
+    assert.equal(Boolean(seen.batch[0].facts), expectFacts);
+    assert.equal(seen.batch[0].ticket_id, '424242');
+    assert.match(seen.prompt, /load it once with the skill tool/);
+    assert.match(fs.readFileSync(path.join(s.logs, 'webhook.log'), 'utf8'), expectFacts ? /Ticket facts added/ : /Ticket facts unavailable/);
+  }
 });
 
 test('failure card is HTML-escaped and the webhook URL secret never reaches the log', async () => {
