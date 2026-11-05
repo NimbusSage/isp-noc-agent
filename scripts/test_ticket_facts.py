@@ -28,7 +28,8 @@ class Rules(unittest.TestCase):
         text = (REPO / "AGENTS.md").read_text(encoding="utf-8").lower()
         terms = [*ticket_rules.OOO_SUBJECT, *ticket_rules.OOO_BODY, *ticket_rules.WEATHER, *ticket_rules.NIGHT_PEAK,
                  ticket_rules.PBS_SUBJECT, ticket_rules.NIGHT_CHECK_SUBJECT, ticket_rules.MAINTENANCE_SUBJECT,
-                 ticket_rules.SYS_ADMIN_NAME, *(lits[0] for lits in ticket_rules.MARKERS.values())]
+                 ticket_rules.SYS_ADMIN_NAME, ticket_rules.BLACKLIST_SUBJECT, ticket_rules.BLACKLIST_SENDER,
+                 *(lits[0] for lits in ticket_rules.MARKERS.values())]
         missing = [t for t in terms if t.lower() not in text]
         self.assertEqual(missing, [], "AGENTS.md no longer names these; update scripts/ticket_rules.py to match")
 
@@ -37,6 +38,27 @@ class Rules(unittest.TestCase):
         self.assertEqual(ticket_rules.hits("the drain and the train", ["rain"]), [])
         self.assertEqual(ticket_rules.hits("checked at 7PM, an  check", ["7pm", "n check"]), ["7pm"])
         self.assertEqual(ticket_rules.hits("wet\n weather", ["wet weather"]), ["wet weather"])
+
+    def test_blacklist_counts(self):
+        text = hetrix(("192.0.2.10", "Alpha CGNAT", 4, 2), ("192.0.2.11", "Bravo", 1, 0))
+        self.assertEqual(ticket_rules.blacklist_counts(text), [(4, 2), (1, 0)])
+        self.assertEqual(ticket_rules.blacklist_counts("no monitor lines"), [])
+        self.assertIsNone(ticket_rules.blacklist_counts(text + " 192.0.2.12[Charlie] | Before: ? | Now: 3"))
+
+
+def hetrix(*monitors):
+    """A HetrixTools blacklist email body (HTML, as Sonar stores it) for (ip, label, before, now) monitors."""
+    lines = "".join(f"<p>{ip}[{label}] | Before: {b} | Now: {n} | Report: https://reports.example/bl/{i}</p>"
+                    for i, (ip, label, b, n) in enumerate(monitors))
+    return ("<p>Changes detected on your blacklist monitors:</p>" + lines +
+            "<p>To unsubscribe from Blacklist Monitoring Notifications, please use this link: https://reports.example/u</p>")
+
+
+HETRIX_FROM = "no-reply" + "@" + ticket_rules.BLACKLIST_SENDER   # built at runtime: no address literal in the file
+
+
+def reply(body, sender=HETRIX_FROM, incoming=True, at="2026-11-05T05:00:13+00:00"):
+    return {"created_at": at, "incoming": incoming, "author_email": sender, "body": body}
 
 
 class BuildFacts(unittest.TestCase):
@@ -52,11 +74,11 @@ class BuildFacts(unittest.TestCase):
         self.addCleanup(p.stop)
 
     def facts(self, comments, subject="[Alpha] alpha1 pppoe - slow tower", description="<p>Slow &amp; laggy</p>",
-              group=None, cats=(201,), now=None):
+              group=None, cats=(201,), now=None, replies=None):
         ticket = {"id": 91001, "subject": subject, "status": "OPEN", "priority": "MEDIUM", "description": description,
                   "ticket_group": group or {"id": 41, "name": "NOC"},
                   "ticket_categories": {"entities": [{"id": c, "name": str(c)} for c in cats]}}
-        return ticket_facts.build_facts(91001, ticket, comments, self.PROFILE, now=now)
+        return ticket_facts.build_facts(91001, ticket, comments, self.PROFILE, now=now, replies=replies)
 
     def test_flags_markers_fields_and_trimming(self):
         old = {"created_at": "2026-01-01", "body": "Tower: Alpha | 10.0.0.1<br>Network/Fiber: Charlie<br>"
@@ -94,6 +116,45 @@ class BuildFacts(unittest.TestCase):
         self.assertFalse(f["flags"]["pbs_failed"])
         self.assertTrue(self.facts([], subject="Scheduled Maintenance: splice")["flags"]["maintenance_subject"])
         self.assertIsNone(self.facts([])["first_note"])
+
+    def blacklist(self, *replies, subject="Blacklist Monitoring Notification"):
+        return self.facts([], subject=subject, description=subject, cats=(), replies=list(replies))
+
+    def test_a_blacklist_email_where_every_count_dropped_is_drop_only(self):
+        f = self.blacklist(reply(hetrix(("192.0.2.10", "Alpha CGNAT", 4, 2))),
+                           reply(hetrix(("192.0.2.11", "Bravo", 2, 0), ("192.0.2.12", "Charlie", 7, 5)),
+                                 at="2026-11-06T05:00:13+00:00"))
+        bl = f["flags"]["blacklist"]
+        self.assertTrue(bl["drop_only"])
+        self.assertEqual(bl["counts"], [{"before": 4, "now": 2}, {"before": 2, "now": 0}, {"before": 7, "now": 5}])
+        self.assertTrue(bl["from_sender_only"] and bl["all_lines_parsed"])
+        newest = f["replies"]["newest_first"]
+        self.assertEqual((f["replies"]["total"], newest[0]["created_at"]), (2, "2026-11-06T05:00:13+00:00"))
+        self.assertTrue(newest[1]["body"].startswith("Changes detected on your blacklist monitors:\n192.0.2.10[Alpha"))
+        self.assertEqual(newest[0]["from"], "hetrixtools.com")
+
+    def test_any_rise_or_unchanged_count_needs_review(self):
+        up = self.blacklist(reply(hetrix(("192.0.2.10", "Alpha", 2, 4))))["flags"]["blacklist"]
+        self.assertFalse(up["drop_only"])
+        self.assertEqual(up["counts"], [{"before": 2, "now": 4}])
+        mixed = reply(hetrix(("192.0.2.10", "Alpha", 4, 3), ("192.0.2.11", "Bravo", 0, 2)))
+        self.assertFalse(self.blacklist(mixed)["flags"]["blacklist"]["drop_only"])
+        later_rise = [reply(hetrix(("192.0.2.10", "Alpha", 4, 2))), reply(hetrix(("192.0.2.10", "Alpha", 2, 3)))]
+        self.assertFalse(self.blacklist(*later_rise)["flags"]["blacklist"]["drop_only"])
+        same = reply(hetrix(("192.0.2.10", "Alpha", 3, 3)))
+        self.assertFalse(self.blacklist(same)["flags"]["blacklist"]["drop_only"])
+
+    def test_only_a_parsed_email_from_hetrixtools_can_be_drop_only(self):
+        body = hetrix(("192.0.2.10", "Alpha", 4, 2))
+        for r in (reply(body, sender="someone" + "@customer.example"),
+                  reply(body, sender=HETRIX_FROM + ".evil.example"),
+                  reply(body, incoming=False), reply(body + "<p>192.0.2.11[B] | Before: lots | Now: 1</p>")):
+            bl = self.blacklist(r)["flags"]["blacklist"]
+            self.assertFalse(bl["drop_only"], r)
+        self.assertTrue(self.blacklist(reply(body, sender=HETRIX_FROM.upper()))["flags"]["blacklist"]["drop_only"])
+        none = self.blacklist()["flags"]["blacklist"]
+        self.assertEqual((none["drop_only"], none["counts"]), (False, []))
+        self.assertIsNone(self.blacklist(reply(body), subject="Slow speeds")["flags"]["blacklist"])
 
     def test_peak_window_uses_the_configured_zone(self):
         inside = dt.datetime(2026, 11, 5, 2, 30, tzinfo=dt.timezone.utc)    # 20:30 CST
@@ -146,6 +207,20 @@ class AgainstMockSonar(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(batch.stat().st_mode), 0o600)
         self.assertNotIn(self.token, batch.read_text())
         self.assertEqual([a for a in self.srv.engine.audit_snapshot()["audit"] if a.get("kind") == "mutation"], [])
+
+    def test_replies_come_from_sonar(self):
+        self.srv.engine.tickets[91001]["replies"] = [
+            {"id": 1, "ticket_id": 91001, "created_at": "2026-11-05T05:00:13+00:00", "incoming": True,
+             "author": "HetrixTools", "author_email": HETRIX_FROM,
+             "body": hetrix(("192.0.2.10", "Alpha", 5, 1))}]
+        self.srv.engine.tickets[91001]["subject"] = "Blacklist Monitoring Notification"
+        r = self.run_facts("--ticket", "91001")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        f = json.loads(r.stdout)
+        self.assertEqual(f["replies"]["total"], 1)
+        self.assertTrue(f["flags"]["blacklist"]["drop_only"])
+        r = self.run_facts("--ticket", "91006")
+        self.assertEqual(json.loads(r.stdout)["replies"], {"total": 0, "newest_first": []})
 
     def test_single_ticket_and_missing_token(self):
         r = self.run_facts("--ticket", "91006")

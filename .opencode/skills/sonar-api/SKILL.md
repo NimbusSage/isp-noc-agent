@@ -54,6 +54,7 @@ CX-side, routing, web access, weather) mapped per-install in the site-pack profi
 - `SearchIntegerField` uses `operator` (EQ/GTE/LTE etc.) + `search_value`
 - Ticket has `user` (creator), NOT `assignee`
 - Ticket has `ticket_categories` (connection), NOT `ticket_category`
+- A ticket opened by email (monitoring alerts, customer mail) keeps the email in `ticket_replies { entities { created_at incoming author_email body } }`; its `description` often only repeats the subject. `ticket_comments` are the internal notes.
 - Pagination fields: `page_info { total_count, page, total_pages, records_per_page }` (snake_case)
 - Enum values are uppercase: status = `OPEN`/`CLOSED`/etc., priority = `LOW`/`MEDIUM`/`HIGH`/`CRITICAL`
 

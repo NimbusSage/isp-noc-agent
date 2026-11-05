@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""ticket_facts.py - fetch each batch ticket's record and comments once, before the agent starts.
+"""ticket_facts.py - fetch each batch ticket's record, email replies and comments once, before the agent starts.
 
 The server runs this on the batch file before it spawns the agent. For every ticket it adds a `facts` object:
-the Sonar ticket (subject, status, priority, group, categories, description), its first note and newest comments
-(HTML stripped, trimmed), and deterministic flags from scripts/ticket_rules.py: Step 0 matches, weather and
+the Sonar ticket (subject, status, priority, group, categories, description), its newest email replies (a ticket
+opened by email keeps the email there, not in the description), its first note and newest comments (HTML
+stripped, trimmed), and deterministic flags from scripts/ticket_rules.py: Step 0 matches (including the
+HetrixTools blacklist counts), weather and
 night/peak keyword hits over the whole trail, the comment markers present (anti-loop and one-per-ticket rules),
 whether "now" is inside the peak window, and the `Tower:` / `Network/Fiber:` fields. The agent then reads all of
 it with the batch file instead of spending a dozen model requests fetching and re-reading it.
@@ -37,6 +39,8 @@ COMMENTS_SHOWN = 15         # newest comments copied into the batch file
 COMMENT_CHARS = 600
 DESCRIPTION_CHARS = 2000
 FIRST_NOTE_CHARS = 1500
+REPLIES_SHOWN = 5
+REPLY_CHARS = 1500
 
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"[ \t\r\f\v]+")
@@ -53,7 +57,8 @@ def ticket_query() -> str:
     sc = gql_client.id_scalar()
     return (f"query TicketFacts($id: {sc}!) {{ tickets(search: {{ integer_fields: "
             "[{ attribute: \"id\", operator: EQ, search_value: $id }] }) { entities { id subject status priority "
-            "description created_at ticket_group { id name } ticket_categories { entities { id name } } } } }")
+            "description created_at ticket_group { id name } ticket_categories { entities { id name } } "
+            "ticket_replies { entities { created_at incoming author_email body } page_info { total_count } } } } }")
 
 
 def comments_query() -> str:
@@ -108,8 +113,35 @@ def fields(text: str) -> Dict[str, Optional[str]]:
     return out
 
 
+def _sender_domain(reply: dict) -> str:
+    return str(reply.get("author_email") or "").strip().lower().rpartition("@")[2]
+
+
+def blacklist_fact(subject: str, replies: List[dict]) -> Optional[Dict[str, Any]]:
+    """Step 0 HetrixTools rule: drop_only when every monitor line in every reply went down. None for other tickets."""
+    if subject.strip().lower() != rules.BLACKLIST_SUBJECT.lower():
+        return None
+    counts: List[tuple] = []
+    parsed = True
+    sender_only = bool(replies)
+    for r in replies:
+        if r.get("incoming") is not True or _sender_domain(r) != rules.BLACKLIST_SENDER:
+            sender_only = False
+        pairs = rules.blacklist_counts(plain(r.get("body")))
+        if pairs is None:
+            parsed = False
+        else:
+            counts.extend(pairs)
+    return {
+        "counts": [{"before": b, "now": n} for b, n in counts],
+        "from_sender_only": sender_only,
+        "all_lines_parsed": parsed,
+        "drop_only": sender_only and parsed and bool(counts) and all(n < b for b, n in counts),
+    }
+
+
 def build_facts(ticket_id: int, ticket: dict, comments: List[dict], profile: Optional[dict],
-                now: Optional[dt.datetime] = None) -> Dict[str, Any]:
+                now: Optional[dt.datetime] = None, replies: Optional[List[dict]] = None) -> Dict[str, Any]:
     subject = str(ticket.get("subject") or "")
     description = plain(ticket.get("description"))
     group = ticket.get("ticket_group") or {}
@@ -141,6 +173,7 @@ def build_facts(ticket_id: int, ticket: dict, comments: List[dict], profile: Opt
     first_text = plain(first.get("body")) if first else ""
     prefix = _PREFIX_RE.match(subject)
     newest = list(zip(comments, bodies))[-COMMENTS_SHOWN:][::-1]
+    replies = sorted((r for r in (replies or []) if isinstance(r, dict)), key=lambda r: str(r.get("created_at") or ""))
     return {
         "source": "scripts/ticket_facts.py",
         "fetched_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -153,6 +186,12 @@ def build_facts(ticket_id: int, ticket: dict, comments: List[dict], profile: Opt
             "group": {"id": group.get("id"), "name": group.get("name")},
             "categories": cats,
             "description": clip(description, DESCRIPTION_CHARS),
+        },
+        "replies": {
+            "total": len(replies),
+            "newest_first": [{"created_at": r.get("created_at"), "incoming": r.get("incoming"),
+                              "from": _sender_domain(r), "body": clip(plain(r.get("body")), REPLY_CHARS)}
+                             for r in replies[-REPLIES_SHOWN:][::-1]],
         },
         "first_note": ({"created_at": first.get("created_at"), "body": clip(first_text, FIRST_NOTE_CHARS)}
                        if first else None),
@@ -170,6 +209,7 @@ def build_facts(ticket_id: int, ticket: dict, comments: List[dict], profile: Opt
             "pbs_successful": "successful" in subject.lower() and "successful" in description.lower(),
             "pbs_failed": "failed" in subject.lower() or "failed" in description.lower(),
             "maintenance_subject": rules.MAINTENANCE_SUBJECT.lower() in subject.lower(),
+            "blacklist": blacklist_fact(subject, replies),
             "weather_hits": rules.hits(trail, rules.WEATHER),
             "night_peak_hits": rules.hits(trail, rules.NIGHT_PEAK),
             "night_check_subject": rules.NIGHT_CHECK_SUBJECT.lower() in subject.lower(),
@@ -196,9 +236,14 @@ def fetch(ticket_id: int, **kw: Any) -> Dict[str, Any]:
     comments = gql_client.dig(cdata, "ticket_comments", "entities")
     if not isinstance(comments, list):
         raise gql_client.GraphQLError("shape", "ticket_comments.entities is not a list")
-    facts = build_facts(ticket_id, ticket, comments, noc_config.load_profile())
+    replies = gql_client.dig(ticket, "ticket_replies", "entities")
+    facts = build_facts(ticket_id, ticket, comments, noc_config.load_profile(),
+                        replies=replies if isinstance(replies, list) else [])
     total = gql_client.dig(cdata, "ticket_comments", "page_info", "total_count")
     facts["comments"]["total"] = total if isinstance(total, int) else None
+    rtotal = gql_client.dig(ticket, "ticket_replies", "page_info", "total_count")
+    if isinstance(rtotal, int):
+        facts["replies"]["total"] = rtotal
     return facts
 
 

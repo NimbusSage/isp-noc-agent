@@ -7,7 +7,7 @@ be mirrored here. These are keyword HITS only: whether a ticket is weather-relat
 tower it names, stays the agent's judgment.
 """
 import re
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple
 
 # Step 0: out-of-office auto-reply (Sys Admin only). Subject terms AND body terms must both hit.
 OOO_SUBJECT = ("out of office", "of office", "automatic reply", "auto reply", "auto-reply", "autoreply", "ooo")
@@ -17,6 +17,12 @@ OOO_BODY = ("currently traveling", "will respond as time permits", "on vacation"
 PBS_SUBJECT = "Garbage Collect Datastore 'backups' successful"
 MAINTENANCE_SUBJECT = "Maintenance"
 SYS_ADMIN_NAME = "sys admin"
+# Step 0: HetrixTools blacklist monitor email. The email is an incoming ticket reply, not the description; each
+# monitored IP is one line "<ip>[<label>] | Before: N | Now: M | Report: <url>".
+BLACKLIST_SUBJECT = "Blacklist Monitoring Notification"
+BLACKLIST_SENDER = "hetrixtools.com"
+_BL_PAIR = re.compile(r"\bBefore:\s*(\d+)\s*\|\s*Now:\s*(\d+)", re.IGNORECASE)
+_BL_LINE = re.compile(r"\bBefore:", re.IGNORECASE)
 
 # Step 3.7 gate 2 (and Step 3.5b): weather terms over subject, description and every comment.
 WEATHER = ("rain", "storm", "weather", "precipitation", "rain fade", "weather fade", "wet weather", "bad weather",
@@ -58,6 +64,13 @@ def hits(text: str, terms: Iterable[str]) -> List[str]:
         if rx.search(text):
             found.append(term)
     return found
+
+
+def blacklist_counts(text: str) -> Optional[List[Tuple[int, int]]]:
+    """(before, now) for every monitor line in a HetrixTools email, or None when a `Before:` line does not parse."""
+    text = text or ""
+    pairs = [(int(b), int(n)) for b, n in _BL_PAIR.findall(text)]
+    return pairs if len(pairs) == len(_BL_LINE.findall(text)) else None
 
 
 def markers_in(text: str) -> List[str]:

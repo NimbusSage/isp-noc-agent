@@ -35,12 +35,12 @@ _OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 ALLOWED_STATUSES = {
     "handled_duplicate", "categorized", "needs_human", "passthrough", "auto_closed", "auto_closed_ooo",
-    "auto_closed_maintenance", "pbs_failure", "auto_bounced_ihn", "auto_bounced_ihn_peak",
+    "auto_closed_maintenance", "auto_closed_blacklist", "pbs_failure", "auto_bounced_ihn", "auto_bounced_ihn_peak",
     "correlated_bounced", "queued_for_peak",
 }
 ALLOWED_CATEGORIES = {
     "slow_speeds", "rain_fade", "outage", "duplicate", "passthrough_ooo", "passthrough_pbs",
-    "passthrough_maintenance", "sys_admin", "other",
+    "passthrough_maintenance", "passthrough_blacklist", "sys_admin", "other",
 }
 
 

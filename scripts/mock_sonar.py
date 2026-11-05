@@ -27,7 +27,8 @@ Endpoints
     POST /chat/webhook                   unauthenticated Google-Chat-style incoming webhook sink
 
 GraphQL support (anything else returns a well-formed `errors` array, never a crash):
-    Query     tickets, ticket_comments, ticket_groups, ticket_categories, accounts (always empty)
+    Query     tickets (with ticket_replies from a fixture's "replies"), ticket_comments, ticket_groups,
+              ticket_categories, accounts (always empty)
     Mutation  createTicketComment(input: {ticket_id, body}), updateTicket(id, input: {...})
     Search    integer_fields / string_fields / date_fields, general_search, sorter, paginator,
               variables, aliases, fragments, @skip/@include.
@@ -443,7 +444,12 @@ SCHEMA: Dict[str, Dict[str, str]] = {
         "description": "String", "created_at": "String", "updated_at": "String",
         "ticket_group_id": "Int", "ticket_group": "TicketGroup",
         "ticket_categories": "TicketCategoryConnection",
-        "ticket_comments": "TicketCommentConnection", "user": "User",
+        "ticket_comments": "TicketCommentConnection", "ticket_replies": "TicketReplyConnection",
+        "user": "User",
+    },
+    "TicketReply": {
+        "id": "Int", "ticket_id": "Int", "body": "String", "created_at": "String", "incoming": "Boolean",
+        "author": "String", "author_email": "String",
     },
     "TicketComment": {
         "id": "Int", "ticket_id": "Int", "body": "String", "created_at": "String",
@@ -457,6 +463,7 @@ SCHEMA: Dict[str, Dict[str, str]] = {
     "PageInfo": {"total_count": "Int", "page": "Int", "total_pages": "Int", "records_per_page": "Int"},
 }
 for _conn, _item in (("TicketConnection", "Ticket"), ("TicketCommentConnection", "TicketComment"),
+                     ("TicketReplyConnection", "TicketReply"),
                      ("TicketGroupConnection", "TicketGroup"),
                      ("TicketCategoryConnection", "TicketCategory"),
                      ("AccountConnection", "Account")):
@@ -512,6 +519,7 @@ class Engine:
                     "created_at": raw.get("created_at", now_iso()),
                     "updated_at": raw.get("updated_at", raw.get("created_at", now_iso())),
                     "user": raw.get("user") or {"id": 1, "name": "Demo User"},
+                    "replies": [dict(r, ticket_id=tid) for r in raw.get("replies", [])],
                 }
                 for c in raw.get("comments", []):
                     self.comments.append({
@@ -711,6 +719,9 @@ class Engine:
             if f.name == "ticket_comments":
                 rows = [c for c in self.comments if c["ticket_id"] == obj["id"]]
                 return self._comment_connection(rows, args)
+            if f.name == "ticket_replies":
+                return self._connection(list(obj.get("replies") or []), args, {"id", "created_at"},
+                                        lambda it, a: it.get(a))
         return obj.get(f.name)
 
     def _root_query(self, f: Field, ctx: "_Ctx") -> Any:

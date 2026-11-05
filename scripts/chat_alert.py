@@ -122,6 +122,7 @@ STATUS_TITLES = {
     "auto_closed": "Auto-Closed",
     "auto_closed_ooo": "Auto-Closed (Out of Office)",
     "auto_closed_maintenance": "Auto-Closed (Maintenance)",
+    "auto_closed_blacklist": "Auto-Closed (Blacklist Drop)",
     "pbs_failure": "PBS Failure",
     "auto_bounced_ihn": "Auto-Bounced to CS (IHN)",
     "auto_bounced_ihn_peak": "Auto-Bounced to CS (IHN, peak)",

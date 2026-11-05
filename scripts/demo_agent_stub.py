@@ -306,7 +306,7 @@ def handle(ctx: Context, tid: str, canned: dict, ticket: dict) -> dict:
     base = ctx.env["SONAR_BASE_URL"]
     notify = False
 
-    if status in ("auto_closed", "auto_closed_ooo", "auto_closed_maintenance"):
+    if status in ("auto_closed", "auto_closed_ooo", "auto_closed_maintenance", "auto_closed_blacklist"):
         updated = ctx.sonar.update_ticket(int(tid), status="CLOSED")
         if updated.get("status") != "CLOSED":
             escalate(result, "close_not_verified")

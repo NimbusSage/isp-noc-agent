@@ -1201,6 +1201,7 @@ const OUTCOME_TO_BREAKER = {
   auto_closed: 'auto_actions_ok',
   auto_closed_ooo: 'auto_actions_ok',
   auto_closed_maintenance: 'auto_actions_ok',
+  auto_closed_blacklist: 'auto_actions_ok',
   auto_bounced_ihn: 'bounce_success',
   auto_bounced_ihn_peak: 'bounce_success',
   correlated_bounced: 'bounce_success',
@@ -1750,7 +1751,7 @@ function extractJsonArrays(text) {
 
 function isValidBatchResult(arr, batch) {
   if (!Array.isArray(arr) || arr.length === 0) return false;
-  const allowed = new Set(['handled_duplicate', 'categorized', 'needs_human', 'passthrough', 'auto_closed', 'auto_closed_ooo', 'auto_closed_maintenance', 'pbs_failure', 'auto_bounced_ihn', 'auto_bounced_ihn_peak', 'correlated_bounced', 'queued_for_peak', 'processed']);
+  const allowed = new Set(['handled_duplicate', 'categorized', 'needs_human', 'passthrough', 'auto_closed', 'auto_closed_ooo', 'auto_closed_maintenance', 'auto_closed_blacklist', 'pbs_failure', 'auto_bounced_ihn', 'auto_bounced_ihn_peak', 'correlated_bounced', 'queued_for_peak', 'processed']);
   const ids = new Set(batch.map((b) => String(b.ticketData.ticket_id)));
   for (const r of arr) {
     if (!r || typeof r.ticket_id === 'undefined') return false;
@@ -1944,7 +1945,7 @@ function addTicketFacts(batchFile, jobId) {
   });
 }
 
-const FACTS_NOTE = `Ticket facts: before this run the server fetched each ticket's Sonar record and comments into its \`facts\` object in the batch file (\`fetched_at\` says when; an entry with \`facts_error\` has none, so fetch that ticket yourself). Use them and do not fetch the ticket, its categories or its comments again. \`facts.flags\` are literal hits of the AGENTS.md rules: Step 0 matches, weather and night/peak terms over the whole trail, the workflow markers in the last 5 and 20 comments, and whether now is inside the peak window. You still judge meaning yourself (weather said in other words, which tower the ticket names), and \`facts.comments\` holds only the newest comments, trimmed: fetch more only when a decision needs them.`;
+const FACTS_NOTE = `Ticket facts: before this run the server fetched each ticket's Sonar record, email replies and comments into its \`facts\` object in the batch file (\`fetched_at\` says when; an entry with \`facts_error\` has none, so fetch that ticket yourself). Use them and do not fetch the ticket, its replies, categories or comments again. \`facts.flags\` are literal hits of the AGENTS.md rules: Step 0 matches, weather and night/peak terms over the whole trail, the workflow markers in the last 5 and 20 comments, and whether now is inside the peak window. You still judge meaning yourself (weather said in other words, which tower the ticket names), and \`facts.comments\` holds only the newest comments, trimmed: fetch more only when a decision needs them.`;
 
 function processBatchWithAgent(batch) {
   if (batch.length === 0) return Promise.resolve();

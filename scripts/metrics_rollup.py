@@ -68,7 +68,7 @@ NOC_GROUP_ID = _group_id(["NOC_GROUP_ID"], "noc")
 
 HANDLED_STATUSES = {
     "handled_duplicate", "categorized", "passthrough", "auto_closed",
-    "auto_closed_ooo", "auto_closed_maintenance",
+    "auto_closed_ooo", "auto_closed_maintenance", "auto_closed_blacklist",
     "auto_bounced_ihn", "auto_bounced_ihn_peak", "correlated_bounced",
 }
 ESCALATED_STATUSES = {"needs_human", "queued_for_peak", "pbs_failure"}

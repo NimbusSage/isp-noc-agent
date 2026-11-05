@@ -258,7 +258,7 @@ NocAgent/
 │   ├── temp_bgp_peering.py                   # Temp BGP Peering — Emergency Fiber Failover Usage: python3 scripts/temp_bgp_peering.py --network…
 │   ├── temp_bgp_rollback.sh                  # Temp BGP Rollback — disable only TEMP peers created during outage
 │   ├── temp_ospf_sheet.mjs                   # Temp OSPF sheet: read-only inspector and gated row reservation for the temporary-site workflow
-│   ├── ticket_facts.py                       # Fetch each batch ticket's record and comments once, before the agent starts
+│   ├── ticket_facts.py                       # Fetch each batch ticket's record, email replies and comments once, before the agent starts
 │   ├── ticket_rules.py                       # The literal keyword rules of the AGENTS.md ticket workflow, in one place
 │   ├── tracker_sheet.mjs                     # Tracker Sheet helper — NOC Ticket Tracker 2.1 append-only writer
 │   ├── tree_guard.py                         # Notice when the running checkout stops matching what was reviewed and committed (stdlib + git)

@@ -84,6 +84,12 @@ Tickets arrive in batches (the batch prompt names the batch and result files). P
 
 "Sys Admin" = `ticket_group_id` equals `sonar.groups.sys_admin.id` (`site-pack/profile.json`), or `ticket_group_name` contains "sys admin".
 
+**HetrixTools blacklist drop (any group; checked first).** The email is the ticket's incoming reply (`ticket_replies`), not its description: one line per monitored IP, `<ip>[<label>] | Before: N | Now: M | Report: <url>`. `facts.flags.blacklist.drop_only` computes this rule. ALL must hold:
+- Subject is `Blacklist Monitoring Notification` (case-insensitive).
+- Every reply is an incoming email from `hetrixtools.com`, and every `Before:` line parses.
+- On every line of every reply, M is lower than N: the IP is on fewer blacklists.
+Then: set status CLOSED via `updateTicket`; NO Google Chat; NO comment. Return `auto_closed_blacklist`. If any count rose or stayed the same, do not close: NOC reviews it. Return `needs_human` without categorizing or checking duplicates, and name each IP, label and Before/Now count in the Chat alert.
+
 **Out-of-office auto-reply (Sys Admin only; checked before the general forward).** ALL must hold:
 - Subject contains (case-insensitive) any of: `out of office`, `of office` (catches the `Our of Office` typo), `automatic reply`, `auto reply`, `auto-reply`, `autoreply`, `ooo`.
 - Body/description contains (case-insensitive) any of: `currently traveling`, `will respond as time permits`, `on vacation`, `on leave`, `away from the office`, `will be out of the office`, `out of the office`, `currently away`.
@@ -100,7 +106,7 @@ Then: set status CLOSED via `updateTicket`; NO Google Chat; NO comment. Return `
 
 ### Step 1: Fetch ticket details
 
-Use the webhook's details; if missing, fetch with the `sonar-api` ticket query (`id subject status priority description ticket_group{id name} ticket_categories{entities{id name}} created_at`). The token stays in the environment, never on a command line (`scripts/gql_client.py`).
+Use the webhook's details; if missing, fetch with the `sonar-api` ticket query (`id subject status priority description ticket_group{id name} ticket_categories{entities{id name}} created_at ticket_replies{entities{created_at incoming author_email body}}`). A ticket opened by email keeps the email in `ticket_replies`, not in `description`. The token stays in the environment, never on a command line (`scripts/gql_client.py`).
 
 ### Step 2: Duplicate detection
 
@@ -182,7 +188,7 @@ The server drains `logs/pending_peak_checks.json` 5 minutes into the next peak w
 ### Step 4: Notification
 
 Load `google-chat`.
-- **No notification:** `handled_duplicate` (Rule 1); `auto_bounced_ihn`, `auto_bounced_ihn_peak`, `correlated_bounced` (1b); `queued_for_peak` (1c; the scheduler notifies after the retest if still not bounced); `auto_closed`, `auto_closed_ooo`, `auto_closed_maintenance` (Rule 2).
+- **No notification:** `handled_duplicate` (Rule 1); `auto_bounced_ihn`, `auto_bounced_ihn_peak`, `correlated_bounced` (1b); `queued_for_peak` (1c; the scheduler notifies after the retest if still not bounced); `auto_closed`, `auto_closed_ooo`, `auto_closed_maintenance`, `auto_closed_blacklist` (Rule 2).
 - **Rule 3:** Sys Admin passthrough: send.
 - **Rule 4:** everything else: send, e.g. `needs_human`, `categorized` with warnings, API errors, undetermined tower site, medium-confidence duplicate (50-84%), healthy but low tower confidence (include the %), conflicting categories, `pbs_failure`, any uncertainty.
 
@@ -190,7 +196,7 @@ Add the analysis status: `<b>Analysis:</b> âœ“ Bottleneck analysis complete`, `â
 
 ### Step 5: Return status
 
-One per ticket: `handled_duplicate`, `categorized`, `needs_human`, `passthrough` (Sys Admin forwarded), `auto_closed` (PBS success), `auto_closed_ooo`, `auto_closed_maintenance`, `pbs_failure`, `auto_bounced_ihn`, `auto_bounced_ihn_peak`, `correlated_bounced`, `queued_for_peak` (counts as needs_human for the batch).
+One per ticket: `handled_duplicate`, `categorized`, `needs_human`, `passthrough` (Sys Admin forwarded), `auto_closed` (PBS success), `auto_closed_ooo`, `auto_closed_maintenance`, `auto_closed_blacklist` (HetrixTools counts all dropped), `pbs_failure`, `auto_bounced_ihn`, `auto_bounced_ihn_peak`, `correlated_bounced`, `queued_for_peak` (counts as needs_human for the batch).
 
 Every entry also carries `classification {category, complexity, priority}`, `confidence` (0-100, the decisive score), `requires_human_review`, `escalation_reason` (null or machine-friendly, e.g. `low_tower_confidence`, `weather_excluded`, `circuit_breaker_open`, `suspected_prompt_injection`) and `evidence[]`, as the Output Contract in `server/batch_prompt_template.md` defines.
 

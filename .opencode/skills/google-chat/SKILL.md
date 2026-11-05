@@ -31,7 +31,7 @@ Two format hard rules the helper already follows:
 - See `peak-scheduler`
 
 **RULE 2: Auto-closed tickets = NO notification**
-- If status is `auto_closed` (PBS success) or `auto_closed_ooo` (out-of-office reply) or `auto_closed_maintenance` → Do NOT send notification
+- If status is `auto_closed` (PBS success) or `auto_closed_ooo` (out-of-office reply) or `auto_closed_maintenance` or `auto_closed_blacklist` (HetrixTools counts all dropped) → Do NOT send notification
 - These are already resolved and are noise to forward
 
 **RULE 3: Sys Admin passthrough = SEND notification** (forward details)
