@@ -62,6 +62,28 @@
     { "action": "shell", "resource": "sed -i*", "effect": "deny" },
     { "action": "shell", "resource": "perl -pi*", "effect": "deny" },
     { "action": "shell", "resource": "chmod *", "effect": "deny" },
-    { "action": "shell", "resource": "chown *", "effect": "deny" }
-  ]
+    { "action": "shell", "resource": "chown *", "effect": "deny" },
+
+    { "action": "skill", "resource": "*", "effect": "deny" },
+    { "action": "skill", "resource": "comment-formatting", "effect": "allow" },
+    { "action": "skill", "resource": "correlated-auto-return", "effect": "allow" },
+    { "action": "skill", "resource": "correlated-issues", "effect": "allow" },
+    { "action": "skill", "resource": "duplicate-detection", "effect": "allow" },
+    { "action": "skill", "resource": "google-chat", "effect": "allow" },
+    { "action": "skill", "resource": "ihn-auto-return", "effect": "allow" },
+    { "action": "skill", "resource": "librenms", "effect": "allow" },
+    { "action": "skill", "resource": "mymate", "effect": "allow" },
+    { "action": "skill", "resource": "path-analyzer", "effect": "allow" },
+    { "action": "skill", "resource": "peak-scheduler", "effect": "allow" },
+    { "action": "skill", "resource": "sonar-api", "effect": "allow" },
+    { "action": "skill", "resource": "ticket-context", "effect": "allow" },
+    { "action": "skill", "resource": "tracker-sheet", "effect": "allow" },
+    { "action": "skill", "resource": "wave-gui", "effect": "allow" },
+    { "action": "skill", "resource": "wireless-health", "effect": "allow" }
+  ],
+  "_comment_skills": "Batch runs see only the skills the AGENTS.md ticket workflow uses (and the skills those name). OpenCode drops a denied skill from the catalog it sends with every request, so the operator's global skills (~/.agents/skills, OpenCode's built-in ones) and the operator-led project skills (device programming, temporary connections, onboarding) stay out of unattended runs. server/index.test.mjs keeps this list in step with AGENTS.md.",
+  "_comment_agents": "The session-title agent is off for batch runs: a title only labels the session list, which nobody reads for unattended runs, and with no title model configured OpenCode 2.x picks a paid small model on the session's provider (gpt-6-luna on opencode and opencode-go), one extra request per run.",
+  "agents": {
+    "title": { "disabled": true }
+  }
 }

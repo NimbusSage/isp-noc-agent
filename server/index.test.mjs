@@ -343,7 +343,8 @@ test('/health and /healthz are unauthenticated and leak nothing sensitive; /heal
   const z = await fetch(`${s.base}/healthz`);
   assert.equal(z.status, 200);
   const zj = await z.json();
-  assert.deepEqual(Object.keys(zj).sort(), ['breaker_open', 'last_batch_age_s', 'processing', 'queue_depth', 'status', 'uptime_s']);
+  assert.deepEqual(Object.keys(zj).sort(), ['breaker_open', 'last_batch_age_s', 'processing', 'queue_depth', 'quota_paused', 'status', 'uptime_s']);
+  assert.equal(zj.quota_paused, false);
   const all = JSON.stringify(zj) + JSON.stringify(h);
   for (const secret of [s.token, s.env.SONAR_TOKEN, s.env.NOC_MCP_PASSPHRASE, s.ws, s.logs]) assert.ok(!all.includes(secret));
   assert.equal((await fetch(`${s.base}/nonexistent`)).status, 404);
@@ -648,7 +649,7 @@ test('harness adapters: exact argv for opencode and claude (today\'s defaults), 
   assert.ok(!m.checks.some((c) => c.level === 'FAIL'));
   let spec = srv.buildAgentCommand(prompt, m.cfg, m.env);
   assert.equal(spec.cmd, process.execPath);
-  assert.deepEqual(spec.args, ['run', '--model', 'opencode/test-model', '--auto', prompt]);
+  assert.deepEqual(spec.args, ['run', '--standalone', '--model', 'opencode/test-model', '--auto', prompt]);   // never the background service
 
   m = mk({ AGENT_HARNESS: 'claude' });
   spec = srv.buildAgentCommand(prompt, m.cfg, m.env);
@@ -706,6 +707,43 @@ test('permission profile: applied to OpenCode 2.x and passed as OPENCODE_CONFIG,
   assert.equal(srv.buildAgentCommand('p', m.cfg, src).env.OPENCODE_CONFIG, m.cfg.permissionProfile);
 });
 
+test('batch OpenCode config dir: repo default replaces ~/.config/opencode, owner env cannot loosen it, "off" and bad paths', () => {
+  const d = mkdirs();
+  const mk = (extra) => {
+    const env = baseEnv(d, fakeToken(), { AGENT_HARNESS: 'opencode', OPENCODE_PATH: fakeOpencode(d, 'opencode v2.2.0'), ...extra });
+    delete env.AGENT_COMMAND_TEMPLATE;
+    return srv.collectChecks(env);
+  };
+  const m = mk({});
+  const row = m.checks.find((c) => c.key === 'AGENT_OPENCODE_CONFIG_DIR');
+  assert.equal(row.level, 'PASS', row.msg);
+  assert.match(m.cfg.opencodeConfigDir, /deploy[\\/]opencode-batch-home$/);
+  const home = JSON.parse(fs.readFileSync(path.join(m.cfg.opencodeConfigDir, 'opencode.json'), 'utf8'));
+  assert.deepEqual(Object.keys(home).filter((k) => k !== '$schema'), [], 'the batch home config adds nothing of its own');
+  const src = { PATH: '/bin', OPENCODE_CONFIG_DIR: '/root/.config/opencode', OPENCODE_DISABLE_CLAUDE_CODE: '' };   // OPENCODE_ prefix passes through
+  const env = srv.buildAgentEnv(src, m.cfg);
+  assert.equal(env.OPENCODE_CONFIG_DIR, m.cfg.opencodeConfigDir);
+  assert.equal(env.OPENCODE_DISABLE_CLAUDE_CODE, '1');
+  const off = mk({ AGENT_OPENCODE_CONFIG_DIR: 'off' });
+  assert.equal(off.checks.find((c) => c.key === 'AGENT_OPENCODE_CONFIG_DIR').level, 'WARN');
+  assert.ok(!('OPENCODE_DISABLE_CLAUDE_CODE' in srv.buildAgentEnv({ PATH: '/bin' }, off.cfg)));
+  assert.equal(srv.buildAgentEnv({ PATH: '/bin', OPENCODE_CONFIG_DIR: '/x' }, off.cfg).OPENCODE_CONFIG_DIR, '/x');   // off = today's behaviour
+  assert.equal(mk({ AGENT_OPENCODE_CONFIG_DIR: path.join(d.dir, 'missing') }).checks.find((c) => c.key === 'AGENT_OPENCODE_CONFIG_DIR').level, 'FAIL');
+  const claude = srv.collectChecks((() => { const e = baseEnv(d, fakeToken(), { AGENT_HARNESS: 'claude', CLAUDE_PATH: process.execPath }); delete e.AGENT_COMMAND_TEMPLATE; return e; })());
+  assert.ok(!claude.checks.some((c) => c.key === 'AGENT_OPENCODE_CONFIG_DIR'));
+  assert.ok(!('OPENCODE_CONFIG_DIR' in srv.buildAgentEnv({ PATH: '/bin' }, claude.cfg)));
+});
+
+test('detectQuotaError: only the harness\'s final error line counts', () => {
+  const esc = String.fromCharCode(27);
+  assert.equal(srv.detectQuotaError(`> build · big-pickle\n${esc}[91m${esc}[1mError: ${esc}[0mFree usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models.\n`), 'usage_limit');
+  assert.equal(srv.detectQuotaError('> build\nError: Rate limit exceeded. Please try again later.'), 'rate_limit');
+  assert.equal(srv.detectQuotaError('Error: AI_APICallError: Upstream request failed: Insufficient account funds'), 'insufficient_funds');
+  assert.equal(srv.detectQuotaError('Error: Free usage limit reached\n$ cat a\nb\nc\nd'), null, 'an old line far above the end is not the final error');
+  assert.equal(srv.detectQuotaError('ticket says: our alert quota hit the usage limit reached state\nError: boom'), null);
+  assert.equal(srv.detectQuotaError(''), null);
+});
+
 test('permission profile: left off, with a warning, for other OpenCode versions, unreadable versions and "off"', () => {
   for (const [banner, extra, needle] of [
     ['opencode v1.4.9', {}, /major version 1/],
@@ -751,7 +789,7 @@ test('the shipped OpenCode batch profile is well formed and keeps its key rules'
   const file = path.join(here, '..', 'deploy', 'opencode-batch.json');
   const rules = JSON.parse(fs.readFileSync(file, 'utf8')).permissions;
   for (const r of rules) {
-    assert.ok(['edit', 'read', 'shell'].includes(r.action), JSON.stringify(r));
+    assert.ok(['edit', 'read', 'shell', 'skill'].includes(r.action), JSON.stringify(r));
     assert.ok(['allow', 'deny'].includes(r.effect), JSON.stringify(r));
     assert.equal(typeof r.resource, 'string');
   }
@@ -762,6 +800,24 @@ test('the shipped OpenCode batch profile is well formed and keeps its key rules'
   assert.ok(find('read', '.env.example') > find('read', '.env.*'));                           // the example stays readable
   assert.ok(find('shell', 'git checkout*') > find('shell', '*'));                             // denies come after the allow-all
   assert.equal(rules.some((r) => r.action === 'shell' && /^(cat|grep)\b.*\.env/.test(r.resource) && r.resource.startsWith('grep')), false);   // the documented one-variable grep of .env stays allowed
+  const agents = JSON.parse(fs.readFileSync(file, 'utf8')).agents;
+  assert.deepEqual(agents && agents.title, { disabled: true });   // no session-title request (a paid small model) per batch run
+});
+
+test('batch skill allow list = the AGENTS.md ticket-workflow skills plus the skills they name; everything else denied', () => {
+  const repo = path.join(here, '..');
+  const rules = JSON.parse(fs.readFileSync(path.join(repo, 'deploy', 'opencode-batch.json'), 'utf8')).permissions.filter((r) => r.action === 'skill');
+  assert.deepEqual(rules[0], { action: 'skill', resource: '*', effect: 'deny' });
+  assert.ok(rules.slice(1).every((r) => r.effect === 'allow'), 'only allows after the deny-all');
+  const allowed = new Set(rules.slice(1).map((r) => r.resource));
+  const project = new Set(fs.readdirSync(path.join(repo, '.opencode', 'skills')).filter((n) => fs.existsSync(path.join(repo, '.opencode', 'skills', n, 'SKILL.md'))));
+  const named = (text) => new Set([...text.matchAll(/`([a-z0-9-]+)`/g)].map((m) => m[1]).filter((n) => project.has(n)));
+  const agentsMd = fs.readFileSync(path.join(repo, 'AGENTS.md'), 'utf8');
+  const workflow = agentsMd.slice(agentsMd.indexOf('## Ticket Processing Workflow'), agentsMd.indexOf('## Network device access'));
+  const want = new Set(named(workflow));
+  assert.ok(want.size >= 10, 'the workflow section was found');
+  for (const s of [...want]) for (const n of named(fs.readFileSync(path.join(repo, '.opencode', 'skills', s, 'SKILL.md'), 'utf8'))) want.add(n);
+  assert.deepEqual([...allowed].sort(), [...want].sort());
 });
 
 test('untrusted wrapper neutralises delimiters and control characters', () => {
@@ -1055,6 +1111,67 @@ test('NOTIFY_PROVIDER routes the failure alert to that provider and never to Goo
   } finally {
     notify.close();
     chat.close();
+  }
+});
+
+test('provider usage limit: one failed run pauses the queue, tickets are held (not dropped), one alert, retried after the cooldown', async () => {
+  const chat = [];
+  const hook = http.createServer((req, res) => {
+    let data = '';
+    req.on('data', (c) => { data += c; });
+    req.on('end', () => { chat.push(data); res.end('{}'); });
+  });
+  await new Promise((r) => hook.listen(0, '127.0.0.1', r));
+  const d = mkdirs();
+  const flag = path.join(d.dir, 'quota-ok');
+  const runs = path.join(d.dir, 'runs.jsonl');
+  const stub = path.join(ROOT, 'quota-stub.js');
+  fs.writeFileSync(stub, `
+const fs = require('fs');
+const [flag, runs] = process.argv.slice(2, 4);
+const prompt = process.argv[process.argv.length - 1];
+const ok = fs.existsSync(flag);
+fs.appendFileSync(runs, JSON.stringify({ ok, prompt }) + '\\n');
+if (!ok) {
+  process.stderr.write('> build · big-pickle\\n' + String.fromCharCode(27) + '[91mError: ' + String.fromCharCode(27) + '[0mFree usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models.\\n');
+  process.exit(1);
+}
+const BT = String.fromCharCode(96);
+const rf = new RegExp('result_file' + BT + ': ' + BT + '([^' + BT + ']+)' + BT).exec(prompt)[1];
+const ids = [...prompt.matchAll(/^\\d+\\. #(\\S+) /gm)].map((m) => m[1]);
+fs.writeFileSync(rf, JSON.stringify(ids.map((id) => ({ ticket_id: id, status: 'categorized', tower_site: 'T', bottleneck_analysis: 'n/a', notification_sent: false, confidence: 90 }))));
+`);
+  const readRuns = () => (fs.existsSync(runs) ? fs.readFileSync(runs, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
+  try {
+    const s = await startServer({
+      AGENT_COMMAND_TEMPLATE: `${sq(process.execPath)} ${sq(stub)} ${sq(flag)} ${sq(runs)} {prompt}`,
+      AGENT_QUOTA_COOLDOWN_MS: '2500',
+      MAX_BATCH_SIZE: '1',
+      NOC_TICKETS_GOOGLE_CHAT_WEBHOOK_URL: `http://127.0.0.1:${hook.address().port}/hook`,
+    }, { d });
+    assert.equal((await post(s, '/webhook/ticket', { body: { ticket_id: 'Q1', subject: 'first' } })).status, 202);
+    await until(() => readRuns().length === 1 && chat.some((m) => /paused: model usage limit/.test(m)), 10000);
+    assert.equal((await post(s, '/webhook/ticket', { body: { ticket_id: 'Q2', subject: 'second' } })).status, 202);
+    await sleep(900);
+    assert.equal(readRuns().length, 1, 'no run starts while paused');
+    assert.equal((await (await fetch(`${s.base}/healthz`)).json()).quota_paused, true);
+    const state = JSON.parse(fs.readFileSync(path.join(s.logs, 'agent_quota_state.json'), 'utf8'));
+    assert.equal(state.kind, 'usage_limit');
+    assert.ok(Date.parse(state.paused_until) > Date.now());
+    fs.writeFileSync(flag, '');
+    await until(() => readRuns().filter((r) => r.ok).length >= 2, 15000);
+    await until(() => chat.some((m) => /runs resumed/.test(m)), 5000);
+    const okRuns = readRuns().filter((r) => r.ok);
+    const q1 = okRuns.find((r) => /#Q1 /.test(r.prompt));
+    assert.ok(q1, 'the held ticket ran after the cooldown');
+    assert.match(q1.prompt, /Retried after a model usage limit stopped an earlier run: #Q1\b/);
+    assert.ok(okRuns.some((r) => /#Q2 /.test(r.prompt)), 'the ticket that arrived during the pause ran too');
+    assert.equal(chat.filter((m) => /paused: model usage limit/.test(m)).length, 1, 'one alert per episode');
+    assert.ok(!chat.some((m) => /Agent Processing Failed|not processed/.test(m)), 'no per-ticket failure card for a quota stop');
+    assert.equal(readRuns().filter((r) => !r.ok).length, 1, 'exactly one failed run');
+    await until(() => JSON.parse(fs.readFileSync(path.join(s.logs, 'agent_quota_state.json'), 'utf8')).paused_until === null, 5000);
+  } finally {
+    hook.close();
   }
 });
 
