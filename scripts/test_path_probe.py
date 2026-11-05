@@ -70,14 +70,25 @@ class Parsers(unittest.TestCase):
         self.assertEqual((b["tx_mbps"], b["rx_mbps"], b["effective_mbps"], b["status"]), (64.1, 194.2, 64.1, "done"))
         self.assertTrue(b["cpu_limited"])
         self.assertTrue(path_probe.parse_btest("status: authentication failed")["auth_failed"])
+        b = path_probe.parse_btest("status: can't connect tx-10-second-average: 0bps rx-10-second-average: 0bps")
+        self.assertEqual((b["status"], b["effective_mbps"]), ("can't", 0.0))   # the parser reads; Probe.btest rejects it
         self.assertEqual(path_probe.parse_btest("tx-10-second-average: 1.2Gbps rx-10-second-average: 900kbps")["effective_mbps"], 0.9)
 
     def test_traceroute_and_gateways(self):
         hops = path_probe.parse_traceroute(TRACE)
         self.assertEqual([h["ip"] for h in hops], [H1, H2, FIBER, "198.51.100.42"])
         self.assertEqual(hops[1]["rtt_ms"], 4.4)
+        redrawn = TRACE.replace(" 1 10.0.2.1", " 0 10.0.2.1").replace(" 2 10.0.3.1", " 1 10.0.3.1")
+        redrawn = redrawn.replace(" 3 10.0.9.1", " 2 10.0.9.1").replace(" 4 198.", " 3 198.")
+        self.assertEqual([h["ip"] for h in path_probe.parse_traceroute(redrawn + redrawn)], [H1, H2, FIBER, "198.51.100.42"])
         self.assertEqual(path_probe.parse_default_gateways("DAo dst-address=0.0.0.0/0 gateway=10.0.2.1%ether1\n"
                                                            "DAo 0.0.0.0/0 10.0.4.1%ether2 110"), ["10.0.2.1", "10.0.4.1"])
+
+    def test_wrapped_routeros_values_are_joined(self):
+        wrapped = "name: j\r\n        o\r\n        r\r\n         \r\n        p\r\n        p"
+        self.assertEqual(path_probe.field_value(wrapped, "name"), "jor pp")
+        self.assertEqual(path_probe.field_value("  name: walerak backhauls\r\n", "name"), "walerak backhauls")
+        self.assertEqual(path_probe.field_value("uptime: 1w\n cpu-load: 5%\n", "cpu-load"), "5%")
 
     def test_fiber_table_lookup(self):
         import tempfile
@@ -111,6 +122,17 @@ class Probe(unittest.TestCase):
         btests = [a for t, a in fake.calls if t == "run-diagnostics" and a["command"] == "bandwidth-test"]
         self.assertEqual(len(btests), 6)
         self.assertTrue(all(set(a["params"]) == {"address", "duration", "protocol", "direction"} for a in btests))
+
+    def test_path_stops_at_a_router_named_fiber_even_without_its_testing_ip_in_the_trace(self):
+        class Named(FakeMcp):
+            def __call__(self, tool, args, timeout):
+                if tool == "run-diagnostics" and args["command"] == "system-identity" and args["host"] == H2:
+                    return {"ok": True, "data": {"status": "success", "result": "name: Walerak Fiber", "warnings": []}, "text": ""}
+                return super().__call__(tool, args, timeout)
+        fake = Named(rates={}, direct={})
+        out = path_probe.probe(args(fiber="10.0.77.1", no_btest=True), run=fake)
+        self.assertEqual([h["ip"] for h in out["hops"]], [TOWER, H1, H2])
+        self.assertTrue(out["hops"][-1]["fiber_router"])
 
     def test_unreachable_start_router_stops_early(self):
         fake = FakeMcp(rates={}, direct={}, unreachable={TOWER})

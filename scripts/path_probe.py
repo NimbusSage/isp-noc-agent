@@ -75,6 +75,25 @@ def warnings_of(res: Dict[str, Any]) -> List[str]:
     return [str(w) for w in (data.get("warnings") or [])] if isinstance(data, dict) else []
 
 
+def field_value(text: str, key: str) -> Optional[str]:
+    """`key: value` from RouterOS print output. Without a terminal width RouterOS can wrap a value one character per
+    line ("name: j\\r\\n        o\\r\\n ..."); the indented continuation lines are joined back."""
+    m = re.search(rf"(?m)^\s*{re.escape(key)}\s*[:=]\s*(.*)$", text)
+    if not m:
+        return None
+    first = m.group(1).rstrip("\r")
+    cont = []
+    for line in text[m.end():].split("\n")[1:]:
+        line = line.rstrip("\r")
+        if re.match(r"^\s*[\w-]+\s*:", line) or not line.startswith(" "):
+            break
+        cont.append(line)
+    if cont:
+        indent = min((len(c) - len(c.lstrip(" ")) for c in cont if c.strip()), default=0)
+        first += "".join(c[indent:] for c in cont)
+    return first.strip().strip('"') or None
+
+
 def _num(pattern: str, text: str) -> Optional[float]:
     found = re.findall(pattern, text)
     return float(found[-1]) if found else None
@@ -110,7 +129,9 @@ def parse_btest(text: str) -> Dict[str, Any]:
 
 
 def parse_traceroute(text: str) -> List[Dict[str, Any]]:
-    hops = []
+    """Ordered hops. RouterOS redraws the table while it runs (numbered from 0 or 1), so the LAST row seen for each
+    hop number wins."""
+    by_n: Dict[int, Dict[str, Any]] = {}
     for line in text.splitlines():
         m = re.match(rf"^\s*(\d+)\s+({IP_RE})\b(.*)$", line)
         if not m:
@@ -118,9 +139,9 @@ def parse_traceroute(text: str) -> List[Dict[str, Any]]:
         rest = m.group(3)
         ms = re.search(r"([\d.]+)\s*ms", rest)
         loss = re.search(r"(\d+)%", rest)
-        hops.append({"n": int(m.group(1)), "ip": m.group(2), "rtt_ms": float(ms.group(1)) if ms else None,
-                     "loss_pct": int(loss.group(1)) if loss else None})
-    return hops
+        by_n[int(m.group(1))] = {"n": int(m.group(1)), "ip": m.group(2), "rtt_ms": float(ms.group(1)) if ms else None,
+                                 "loss_pct": int(loss.group(1)) if loss else None}
+    return [by_n[n] for n in sorted(by_n)]
 
 
 def parse_default_gateways(text: str) -> List[str]:
@@ -182,9 +203,9 @@ class Probe:
 
     def name_of(self, ip: str) -> Dict[str, Any]:
         r = self.diag(ip, "system-identity", timeout=30)
-        m = re.search(r"name\s*[:=]\s*(.+)", result_text(r)) if r["ok"] else None
-        if m:
-            return {"name": m.group(1).strip().strip('"')[:60], "source": "identity"}
+        name = field_value(result_text(r), "name") if r["ok"] else None
+        if name:
+            return {"name": name[:60], "source": "identity"}
         try:
             self.calls += 1
             lr = self.run("lookup-device-by-exact-ip", {"ip": ip}, min(30, max(self.left(), 1)))
@@ -208,6 +229,8 @@ class Probe:
         notes = [w for w in warnings_of(r) if "pool credential" in w]
         if notes:
             out["auth"] = notes[-1]
+        if out["status"] and out["status"].lower() not in ("done", "running"):
+            out["effective_mbps"] = None   # e.g. "can't connect": no measurement, not 0 Mbps
         if not r["ok"] or out["effective_mbps"] is None:
             out["error"] = (r.get("text") or "; ".join(warnings_of(r)) or out.get("status") or "no result")[:160]
         return out
@@ -265,18 +288,19 @@ def probe(args: argparse.Namespace, run=run_tool_cli, clock=time.monotonic) -> D
         p.errors.append("traceroute returned no hops" if tr["ok"] else f"traceroute failed: {(tr.get('text') or '')[:120]}")
     fiber = {"ip": args.fiber, "source": "argument", "note": None} if args.fiber else (
         fiber_from_table(args.network) if args.network else {"ip": None, "source": None, "note": "no --fiber or --network"})
-    hop_ips: List[str] = []
-    for h in trace:
-        if not is_private(h["ip"]) or h["ip"] == args.tower:
-            continue
-        hop_ips.append(h["ip"])
-        if h["ip"] == fiber["ip"] or len(hop_ips) >= args.max_hops:
-            break
+    # The path ends at the fiber router: its testing address, or the first hop whose name says fiber (Step D).
     tower_name = p.name_of(args.tower)
     hops = [{"k": 0, "ip": args.tower, **tower_name, "cpu_load": tower_cpu, "rtt_ms": None}]
-    by_ip = {h["ip"]: h for h in trace}
-    for i, ip in enumerate(hop_ips, start=1):
-        hops.append({"k": i, "ip": ip, **p.name_of(ip), "cpu_load": p.cpu_of(ip), "rtt_ms": by_ip.get(ip, {}).get("rtt_ms")})
+    seen = {args.tower}
+    for h in trace:
+        if not is_private(h["ip"]) or h["ip"] in seen:
+            continue
+        seen.add(h["ip"])
+        hop = {"k": len(hops), "ip": h["ip"], **p.name_of(h["ip"]), "cpu_load": p.cpu_of(h["ip"]), "rtt_ms": h["rtt_ms"]}
+        hop["fiber_router"] = h["ip"] == fiber["ip"] or bool(re.search(r"fiber", hop.get("name") or "", re.I))
+        hops.append(hop)
+        if hop["fiber_router"] or len(hops) > args.max_hops:
+            break
 
     # Multipath: distinct active default gateways on the start router (omit the line in the comment unless > 1)
     rt = p.diag(args.tower, "ip-route-active", timeout=30)
@@ -291,7 +315,7 @@ def probe(args: argparse.Namespace, run=run_tool_cli, clock=time.monotonic) -> D
         out["bandwidth"] = f"skipped: {fiber['note']}"
     else:
         # Steps E-F: every router (start router first) to the fiber router, then Step G: each router to the next
-        routers = [h for h in hops if h["ip"] != fiber["ip"]]
+        routers = [h for h in hops if not h.get("fiber_router") and h["ip"] != fiber["ip"]]
         for h in routers:
             series.append({"k": h["k"], **p.btest(h["ip"], fiber["ip"], args.duration)})
         for a, b in zip(hops, hops[1:]):
