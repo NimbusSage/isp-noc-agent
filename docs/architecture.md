@@ -227,6 +227,8 @@ NocAgent/
 │   ├── mk.sh                                 # Run a RouterOS command on a MikroTik using stored credentials (tried in order)
 │   ├── mock_sonar.py                         # In-memory Sonar GraphQL mock for NocAgent demo mode
 │   ├── mt_mactelnet.mjs                      # SSH -> near RouterOS -> /tool mac-telnet -> far RouterOS
+│   ├── mymate_query.mjs                      # One read-only MyMate question per call, compact JSON out
+│   ├── mymate_session.mjs                    # MyMate session helpers shared by the MyMate scripts: project .env loading, the Sanctum SPA login and a…
 │   ├── new_skill.py                          # Scaffold a new skill and register it in the two places that list skills (stdlib only)
 │   ├── noc_config.py                         # Shared config resolution for the ops scripts
 │   ├── notify.py                             # Provider-neutral notifications for NocAgent (stdlib only)
@@ -255,11 +257,13 @@ NocAgent/
 │   ├── temp_bgp_peering.py                   # Temp BGP Peering — Emergency Fiber Failover Usage: python3 scripts/temp_bgp_peering.py --network…
 │   ├── temp_bgp_rollback.sh                  # Temp BGP Rollback — disable only TEMP peers created during outage
 │   ├── temp_ospf_sheet.mjs                   # Temp OSPF sheet: read-only inspector and gated row reservation for the temporary-site workflow
+│   ├── ticket_facts.py                       # Fetch each batch ticket's record and comments once, before the agent starts
+│   ├── ticket_rules.py                       # The literal keyword rules of the AGENTS.md ticket workflow, in one place
 │   ├── tracker_sheet.mjs                     # Tracker Sheet helper — NOC Ticket Tracker 2.1 append-only writer
 │   ├── tree_guard.py                         # Notice when the running checkout stops matching what was reviewed and committed (stdlib + git)
 │   ├── wave_gui.mjs                          # Wave radio web UI driver (puppeteer-core + system Chrome)
 │   ├── wave_rename.py                        # WaveOS rename executor: jq-filter SSID/hostname edits with snapshot/verify/rollback
-│   └── (46 test files)                       # matching *.test.mjs, test_*.py
+│   └── (48 test files)                       # matching *.test.mjs, test_*.py
 ├── server/                                   # Node.js/Express webhook server and its batch prompt template
 │   ├── batch_prompt_template.md
 │   ├── index.js

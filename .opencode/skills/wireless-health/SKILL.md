@@ -19,9 +19,9 @@ Helper invoked **by** `path-analyzer` (not standalone posting). Investigates a s
 
 ### 1. MyMate (primary, when devices indexed)
 
-- `GET /api/devices/{id}` for each side after mapping `ip → device_id` via cached `/api/devices` or `GET /api/outages?state=open` (`mymate:69` `signal_dbm/snr_db/ccq_pct/freq_mhz/cpu_pct`).
-- `GET /api/devices/{id}/ping-samples?from=6hAgo` → `rtt_ms/jitter_ms/loss_pct` series (`mymate:72`).
-- `GET /api/links` (`mymate:106`) interface bindings for link name.
+- `node scripts/mymate_query.mjs device <device-id>` for each side after mapping `ip → device_id` with `node scripts/mymate_query.mjs site <site>` (`signal_dbm/snr_db/ccq_pct/freq_mhz/cpu_pct`).
+- `node scripts/mymate_query.mjs ping <device-id> --hours 6` → `rtt_ms/jitter_ms/loss_pct` min/avg/max.
+- `node scripts/mymate_query.mjs links <device-id>` interface bindings for link name.
 
 MyMate today has **ping + outages live** but `samples/metric-samples/interfaces/samples empty` (`mymate:52`) — CCQ/signal may be null; handle gracefully.
 

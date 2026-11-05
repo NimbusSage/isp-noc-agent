@@ -62,6 +62,21 @@ H=(-H "Accept: application/json" -H "Origin: $MYMATE_URL" -H "Referer: $MYMATE_U
 
 ## NOC workflows
 
+### One call per question (use this first)
+
+Each command below logs in, asks, filters and prints compact JSON in one step; reach for the curl recipes only for
+something these do not cover. All are read-only GETs, and the output never carries credentials.
+
+```bash
+node scripts/mymate_query.mjs site <name-fragment>          # devices (cached index) + open outages for a site
+node scripts/mymate_query.mjs outages --match <fragment>    # open outages (add --closed for history)
+node scripts/mymate_query.mjs device <device-id>            # live status: status, rtt, loss, signal, ccq, cpu ...
+node scripts/mymate_query.mjs ping <device-id> --hours 6    # rtt/loss/jitter min/avg/max, not the raw series
+node scripts/mymate_query.mjs links <device-id>             # topology links touching the device
+```
+
+`site` reads the day-old device index cache (`node scripts/inventory_resolve.mjs <name> --refresh` re-pulls it).
+
 ### What's down right now (per site)
 
 ```bash

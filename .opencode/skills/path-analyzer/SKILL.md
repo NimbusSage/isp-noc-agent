@@ -29,9 +29,9 @@ Naming: `Smith` → first, `BSmith` → second, `Barry Smith` → third if `BSmi
 
 **Cascade (Sonar truth first, case-insensitive):**
 
-1. Fetch first note `ticket_comments ASC 1` and subject. If `Tower: X` → canonical site (`ticket-context:118`). Else `TH:`/`Tower Host:`/`Relayed from` + subject parsing `[Fiber] site pppoe` (`ticket-context:92`). Expand a tech-initials host abbreviation (e.g. `<tech-initials>`) via the TH field.
+1. Fetch first note `ticket_comments ASC 1` and subject (in a batch run they are already in the batch file: `facts.first_note`, `facts.tower_hints`). If `Tower: X` → canonical site (`ticket-context:118`). Else `TH:`/`Tower Host:`/`Relayed from` + subject parsing `[Fiber] site pppoe` (`ticket-context:92`). Expand a tech-initials host abbreviation (e.g. `<tech-initials>`) via the TH field.
 2. **Sonar sanity:** keep abbreviation literal for search if no TH; don't guess host.
-3. **MyMate (cheapest):** `GET /api/outages?state=open` filter `site_name`/`device_name` — carries `device_id`+`mgmt_ip` (`mymate:60`). If miss, use **cached** `GET /api/devices` index (fetched once/24h to `/tmp/mymate_devices.json`, never per ticket — 35MB, `mymate:51` guard). Match `site_name` exact → `name` substring → `mgmt_ip`.
+3. **MyMate (cheapest):** `node scripts/mymate_query.mjs site <site>` — one call returning the open outages for the site (`device_id`+`mgmt_ip`) and its devices from the cached index (fetched once/24h, never per ticket — 35MB, `mymate:51` guard). Match `site_name` exact → `name` substring → `mgmt_ip`.
 4. **LibreNMS corroboration only:** `GET $LIBRENMS_URL/api/v0/devices` or `/api/v0/devices/:hostname` with `X-Auth-Token: $LIBRENMS_TOKEN` (`<LIBRENMS_URL>/api/v0` from `python3 scripts/resources.py get librenms`; docs https://docs.librenms.org/API/). sysName/geolocation confirms hardware/OS but is **not** source of truth for tower site (geolocation grouped). Timeout 10s.
 5. **Oxidized existence:** `GET <OXIDIZED_URL>/node/fetch/<ip>` (`python3 scripts/resources.py get oxidized`) (`reprogram-device:46`).
 
