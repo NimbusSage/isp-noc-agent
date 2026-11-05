@@ -84,6 +84,8 @@ NocAgent/
 │       ├── wave-gui/                         # SKILL.md
 │       └── wireless-health/                  # SKILL.md
 ├── deploy/                                   # Systemd templates for the webhook service and backup, evals and metrics timers
+│   ├── opencode-batch-home/                  # Empty OpenCode config directory for batch runs, so the operator's global plugins and skills stay out
+│   │   └── opencode.json
 │   ├── noc-agent.protect-tree.conf.template
 │   ├── noc-agent.service.template
 │   ├── noc-backup.service.template
@@ -228,6 +230,7 @@ NocAgent/
 │   ├── new_skill.py                          # Scaffold a new skill and register it in the two places that list skills (stdlib only)
 │   ├── noc_config.py                         # Shared config resolution for the ops scripts
 │   ├── notify.py                             # Provider-neutral notifications for NocAgent (stdlib only)
+│   ├── opencode_usage.py                     # How many model requests and tokens OpenCode runs used, from OpenCode's own session store
 │   ├── oxidized_fetch.mjs                    # Deterministic Oxidized backup-config fetch for the agent
 │   ├── pack.py                               # Share the organization's site pack between colleagues through a private git repository (stdlib + git)
 │   ├── provision_exact_binding.mjs           # Provision (or remove) an exact-device credential binding in the encrypted MCP store by pinning an…
@@ -256,7 +259,7 @@ NocAgent/
 │   ├── tree_guard.py                         # Notice when the running checkout stops matching what was reviewed and committed (stdlib + git)
 │   ├── wave_gui.mjs                          # Wave radio web UI driver (puppeteer-core + system Chrome)
 │   ├── wave_rename.py                        # WaveOS rename executor: jq-filter SSID/hostname edits with snapshot/verify/rollback
-│   └── (45 test files)                       # matching *.test.mjs, test_*.py
+│   └── (46 test files)                       # matching *.test.mjs, test_*.py
 ├── server/                                   # Node.js/Express webhook server and its batch prompt template
 │   ├── batch_prompt_template.md
 │   ├── index.js

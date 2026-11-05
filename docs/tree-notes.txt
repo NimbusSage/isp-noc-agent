@@ -18,6 +18,7 @@ LICENSE :: GPL-3.0
 README.md :: Entry point: two run modes, prerequisites and documentation index
 SECURITY.md :: How to report a vulnerability or a leaked secret
 deploy/ :: systemd templates for the webhook service and backup, evals and metrics timers
+deploy/opencode-batch-home/ :: Empty OpenCode config directory for batch runs, so the operator's global plugins and skills stay out
 docs/ :: Operator manual pages
 docs/n8n/ :: Importable n8n workflow JSON
 docs/setup/ :: NOC ticket tracker Google Sheet template
