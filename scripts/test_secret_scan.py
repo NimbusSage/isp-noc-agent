@@ -81,6 +81,11 @@ class StructuralRules(unittest.TestCase):
         self.assertIn("slack-token", rules(cat("xo", "xb-", "123456789012-abcdefgh", "\n")))
         self.assertIn("google-api-key", rules(cat("AI", "za", "A" * 35, "\n")))
         self.assertIn("bearer-token", rules(cat("Authorization: Bear", "er ", "q" * 8, "Z" * 8, "7" * 8, "\n")))
+        header = cat('curl -s -H "X-Auth', '-Token: ', "4f03e1ab" * 4, '" http://host/api/v0/devices\n')
+        self.assertIn("auth-header", rules(header))
+        self.assertIn("auth-header", rules(header, "site-pack/topology/notes.md"))       # Markdown notes too
+        self.assertEqual(rules(cat('-H "X-Auth', '-Token: $LIBRENMS_TOKEN"\n'), "notes.md"), [])
+        self.assertEqual(rules(cat('X-API', '-Key: <your-api-key>\n'), "notes.md"), [])
         self.assertIn("api-key", rules(cat("s", "k-", "a1B2" * 9, "\n")))
         jwt = cat("ey", "Jhbgcio1234", ".", "ey", "Jzdwi123456", ".", "abcdefgh1234")
         self.assertIn("jwt", rules(jwt + "\n"))

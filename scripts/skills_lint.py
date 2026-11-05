@@ -61,7 +61,7 @@ SKILLS_REL = ".opencode/skills"
 BASELINE_REL = "scripts/skills_lint.baseline.json"
 NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 SECRET_RULES = {
-    "api-key", "aws-key", "bearer-token", "github-token", "google-api-key", "google-oauth",
+    "api-key", "auth-header", "aws-key", "bearer-token", "github-token", "google-api-key", "google-oauth",
     "literal-secret", "private-key", "slack-token", "sshpass-literal", "url-credentials",
     "url-secret-param",
 }

@@ -10,7 +10,7 @@ AI agent for an ISP NOC: automates ticket analysis, triage and resolution (goal:
 
 ## Credential rules
 
-- Never write secrets, passwords, tokens, API keys, SNMP communities or real hostnames/addresses into tracked files, skills, docs, tests, commits, logs or chat. Name a secret by its env var or `<PLACEHOLDER>`.
+- Never write secrets, passwords, tokens, API keys, SNMP communities or real hostnames/addresses into tracked files, skills, docs, tests, commits, logs or chat. Name a secret by its env var or `<PLACEHOLDER>`. The site pack is shared with the whole team through its pack repository: its notes may name the org's own hosts, but never a secret, including inside a copied command (`-H "X-Auth-Token: $LIBRENMS_TOKEN"`, not the value).
 - Never read `.env`, `.secrets/`, `mcp-server/config/credentials*` or `backups/` unless the owner asks. The scripts read `.env` themselves; do not load it into your shell. If a tool needs one variable, load only that one (`set -a; . <(grep '^NAME=' .env); set +a`) and never print it.
 - Never put a secret on a command line (visible in `ps` and logs); use the environment or stdin.
 - Never skip hooks (`--no-verify`); pre-commit runs `python3 scripts/secret_scan.py --staged`.

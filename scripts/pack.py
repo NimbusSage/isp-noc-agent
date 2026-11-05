@@ -77,7 +77,7 @@ MIN_SECRET = 4
 SCRUB_PLACEHOLDER = "<secret kept locally>"
 CREDENTIAL_RULES = frozenset({
     "aws-key", "github-token", "slack-token", "google-api-key", "google-oauth", "api-key", "jwt", "private-key",
-    "bearer-token", "sshpass-literal", "url-credentials", "url-secret-param", "literal-secret",
+    "bearer-token", "auth-header", "sshpass-literal", "url-credentials", "url-secret-param", "literal-secret",
 })
 KEEP_GIT_ENV = {"GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM", "GIT_CONFIG_NOSYSTEM", "GIT_TERMINAL_PROMPT"}
 NO_PACK = "no pack repository here (%s). A lead creates one with pack.py init; a colleague joins with pack.py join <url>."

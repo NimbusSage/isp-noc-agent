@@ -361,6 +361,11 @@ _RE_GOOGLE_OAUTH = re.compile(
 _RE_OPENAI = re.compile(r"\bsk-(?:proj-|ant-[a-z0-9]+-)?[A-Za-z0-9_-]{32,}")
 _RE_JWT = re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}")
 _RE_BEARER = re.compile(r"\bBearer[ \t]+([A-Za-z0-9._-]{20,})")
+# API-key style request headers (curl -H "X-Auth-Token: ..."). Matched in every file type: in a Markdown note
+# the doc-mode leniency of literal-secret ("Password: required" is prose) let a live LibreNMS token through.
+_RE_AUTH_HEADER = re.compile(
+    r"(?i)\b(?:X-Auth-Token|X-API-Key|X-Api-Token|X-Access-Token|X-Auth-Key|Private-Token|Api-Key)"
+    r"[ \t]*[:=][ \t]*[\"']?([A-Za-z0-9._~+/=-]{16,})")
 _RE_PEM = re.compile(r"-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----")
 _RE_SSHPASS = re.compile(r"\bsshpass[ \t]+-p[ \t]*(\S+)")
 _RE_REMOTE_AS = re.compile(r"\bremote[.-]as(?:[ \t]*=[ \t]*|[ \t]+)(\d+)", re.I)
@@ -698,6 +703,9 @@ def _scan_core(text: str, path: str, cfg: ScanConfig,
     for m in _RE_BEARER.finditer(text):
         if not is_placeholder(m.group(1)) and not (is_test and _FAKE_IN_TESTS.search(m.group(1))):
             add(m.start(), "bearer-token", m.group())
+    for m in _RE_AUTH_HEADER.finditer(text):
+        if not is_placeholder(m.group(1)) and not (is_test and _FAKE_IN_TESTS.search(m.group(1))):
+            add(m.start(), "auth-header", m.group())
     for m in _RE_SSHPASS.finditer(text):
         pw = m.group(1).strip("\"'")
         if not is_placeholder(pw) and pw.lower() not in _ALWAYS_OK_LITERALS:
