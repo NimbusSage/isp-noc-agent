@@ -80,7 +80,7 @@ NocAgent/
 │       ├── temp-site-connection/             # SKILL.md, references/ (4 files)
 │       ├── temp-site-connection-undo/        # SKILL.md
 │       ├── ticket-context/                   # SKILL.md
-│       ├── tracker-sheet/                    # SKILL.md, references/ (3 files)
+│       ├── tracker-sheet/                    # SKILL.md, references/ (4 files)
 │       ├── wave-gui/                         # SKILL.md
 │       └── wireless-health/                  # SKILL.md
 ├── deploy/                                   # Systemd templates for the webhook service and backup, evals and metrics timers

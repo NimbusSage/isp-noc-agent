@@ -15,6 +15,7 @@ import {
   parseRowArg,
   parseMsArg,
   planAppend,
+  setNotes,
   validateTicket,
   waitForTicket,
 } from './tracker_sheet.mjs';
@@ -364,4 +365,62 @@ test('waitForTicket times out, audits the miss, reports seconds', async () => {
   const lines = readFileSync(join(dir, 'audit.jsonl'), 'utf8').trim().split('\n');
   assert.equal(lines.length, 1);
   assert.deepEqual(JSON.parse(lines[0]), { ts: JSON.parse(lines[0]).ts, sheet_row: 5, waited_s: JSON.parse(lines[0]).waited_s, result: 'timeout' });
+});
+
+// set-notes — the post-filing Notes-cell update (multi-link checklist heading
+// reformat lives in §7a of the skill: one ticket, several links on one site).
+// Gates mirror append; it only touches Q on a row that already sent (Send
+// Count set) and never re-fires the alert or fights the automation.
+test('setNotes enforces the three gates + non-empty notes', async () => {
+  const f = mockFetch({ single: FULL_ROW });
+  const NOTES = 'LINK #1 heading block, plenty of content for a real note.';
+  await assert.rejects(setNotes({ ...CFG, access: 'readonly' }, 3, NOTES, { confirmWrite: true }, f), /ACCESS/);
+  await assert.rejects(setNotes({ ...CFG, writeEnabled: false }, 3, NOTES, { confirmWrite: true }, f), /kill switch/);
+  await assert.rejects(setNotes(CFG, 3, NOTES, { confirmWrite: false }, f), /--confirm-write/);
+  await assert.rejects(setNotes(CFG, 3, '   ', { confirmWrite: true }, f), /empty notes/);
+});
+
+test('setNotes refuses an empty row and an unsent row', async () => {
+  await assert.rejects(setNotes(CFG, 4, 'new notes text here', { confirmWrite: true }, mockFetch({ single: BLANK })), /empty/);
+  const unsent = FULL_ROW.slice();
+  unsent[20] = '';
+  await assert.rejects(setNotes(CFG, 4, 'new notes text here', { confirmWrite: true }, mockFetch({ single: unsent })), /Send Count/);
+});
+
+test('setNotes no-ops when the notes are unchanged', async () => {
+  const out = await setNotes(CFG, 3, 'Site looks like no power.', { confirmWrite: true }, mockFetch({ single: FULL_ROW }));
+  assert.equal(out.ok, true);
+  assert.equal(out.changed, false);
+  assert.equal(out.sheet_row, 3);
+});
+
+test('setNotes writes only column Q, readbacks, audits send-preserving change', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'tracker-notes-'));
+  process.env.TRACKER_AUDIT_FILE = join(dir, 'audit.jsonl');
+  const posts = [];
+  const inner = mockFetch({ single: FULL_ROW });
+  const f = async (u, o = {}) => {
+    if ((o.method || 'GET') === 'POST' && String(u).includes('/values:batchUpdate')) {
+      posts.push(JSON.parse(o.body));
+    }
+    return inner(u, o);
+  };
+  const NOTES = 'LINK #1\\n<staged Copy Cell verbatim>\\n\\nLINK #2\\n<own link block>';
+  const out = await setNotes(CFG, 3, NOTES, { confirmWrite: true }, f);
+  delete process.env.TRACKER_AUDIT_FILE;
+  assert.equal(out.ok, true);
+  assert.equal(out.changed, true);
+  assert.equal(out.sheet_row, 3);
+  assert.equal(out.ticket, '');
+  assert.equal(out.send_count, '1', 'Send Count must be reported untouched');
+  // Only one range, no formula column, Q only.
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].data.length, 1);
+  assert.ok(posts[0].data[0].range.endsWith('!Q3:Q3'), `unexpected range ${posts[0].data[0].range}`);
+  assert.equal(posts[0].data[0].values[0].length, 1);
+  const entry = JSON.parse(readFileSync(join(dir, 'audit.jsonl'), 'utf8').trim());
+  assert.equal(entry.action, 'set_notes');
+  assert.equal(entry.sheet_row, 3);
+  assert.equal(entry.new_notes_chars, NOTES.length);
+  assert.equal(entry.old_notes_chars, 'Site looks like no power.'.length);
 });

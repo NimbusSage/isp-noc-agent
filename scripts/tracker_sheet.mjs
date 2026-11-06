@@ -28,6 +28,7 @@
 //   inspect                          sheet metadata + header signature + dropdowns + row count
 //   plan-append --data '<json>'      validate + dup-guard + print planned row (NO write)
 //   append --data '<json>' --confirm-write true     gated single-row append + readback + audit
+//   set-notes --row <n> --notes '<text>' --confirm-write true       gated Notes-cell update on a sent row
 //   export-training [--out file]     labeled JSONL of real rows (future local classifier)
 //
 // Two intents today, both still send via Send Count so N8N picks them up:
@@ -455,6 +456,70 @@ export async function inspectSheet(cfg, fetchImpl = fetch) {
   };
 }
 
+// set-notes — post-filing Notes-cell update (operator method: reformatting a
+// multi-link row's notes into per-link LINK #N blocks happens AFTER the ticket
+// is created, so the row must be edited in place, not re-appended).
+// Updates ONLY column Q on a row that has already sent (Send Count >= 1): a
+// note edit must never re-fire the alert (Send Count U untouched) or fight the
+// sheet automation (Ticket # F / Create Ticket R untouched). Empty rows and
+// rows that have not sent yet are refused — those belong to plan-append.
+export async function setNotes(cfg, rowNumber, notes, { confirmWrite = false } = {}, fetchImpl = fetch) {
+  if (cfg.access !== 'write') throw new Error('TRACKER_ACCESS is not write; escalate to Editor grant + ACCESS=write first');
+  if (!cfg.writeEnabled) throw new Error('TRACKER_WRITE_ENABLED is not true; write kill switch is off');
+  if (!confirmWrite) throw new Error('set-notes requires --confirm-write true (deliberate CLI gate)');
+  if (!Number.isInteger(rowNumber) || rowNumber <= 0) throw new Error('set-notes requires --row <positive integer>');
+  if (!String(notes ?? '').trim()) throw new Error('set-notes refuses an empty notes value (a blank note is never a fix)');
+  const headerRows = await readValues(cfg, `'${cfg.tab}'!A1:AT1`, fetchImpl);
+  const mismatches = checkHeaderSignature(headerRows[0] || []);
+  if (mismatches.length) throw new Error(`Header signature drift — refusing to write: ${JSON.stringify(mismatches)}`);
+  const sheetRow = await readValues(cfg, `'${cfg.tab}'!A${rowNumber}:U${rowNumber}`, fetchImpl);
+  const before = sheetRow[0] || [];
+  if (isRowEmpty(before)) {
+    throw new Error(`Row ${rowNumber} is empty — set-notes only edits rows a filer already sent; use plan-append to add a row`);
+  }
+  if (String(before[20] ?? '').trim() === '') {
+    throw new Error(`Row ${rowNumber} has blank Send Count — it has not sent yet; edit it in plan/append instead (a set-notes on an unsent row fights the filer)`);
+  }
+  const oldNotes = String(before[16] ?? '');
+  const newNotes = String(notes);
+  if (oldNotes.trim() === newNotes.trim()) {
+    return { ok: true, sheet_row: rowNumber, ticket: String(before[5] ?? '').trim(), changed: false, old_notes_chars: oldNotes.length, new_notes_chars: newNotes.length, audit_file: 'logs/tracker_sheet_audit.jsonl' };
+  }
+  const token = await tokenFor(cfg, GOOGLE_SHEETS, fetchImpl);
+  const res = await fetchImpl(
+    `${SHEETS_API}/${cfg.spreadsheetId}/values:batchUpdate`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        valueInputOption: 'USER_ENTERED',
+        data: [{ range: `'${cfg.tab}'!Q${rowNumber}:Q${rowNumber}`, values: [[newNotes]] }],
+      }),
+      signal: AbortSignal.timeout(30_000),
+    },
+  );
+  if (!res.ok) throw new Error(`Sheets notes write failed (HTTP ${res.status})`);
+  // Readback verify: exactly the Notes cell changed.
+  const readback = await readValues(cfg, `'${cfg.tab}'!A${rowNumber}:U${rowNumber}`, fetchImpl);
+  const after = readback[0] || [];
+  if (String(after[16] ?? '') !== newNotes) {
+    throw new Error(`Readback mismatch on Notes: read ${JSON.stringify(String(after[16] ?? '').slice(0, 60))}`);
+  }
+  const entry = {
+    ts: new Date().toISOString(),
+    action: 'set_notes',
+    sheet_row: rowNumber,
+    ticket: String(before[5] ?? '').trim(),
+    tower1: String(before[1] ?? '').trim(),
+    tower2: String(before[2] ?? '').trim(),
+    issue: String(before[6] ?? '').trim(),
+    old_notes_chars: oldNotes.length,
+    new_notes_chars: newNotes.length,
+  };
+  audit(entry);
+  return { ok: true, ...entry, changed: true, send_count: String(before[20] ?? '').trim(), audit_file: 'logs/tracker_sheet_audit.jsonl' };
+}
+
 export async function exportTraining(cfg, outFile, fetchImpl = fetch) {
   const rows = await readValues(cfg, `'${cfg.tab}'!A2:R1000`, fetchImpl);
   const lines = [];
@@ -484,9 +549,10 @@ export async function exportTraining(cfg, outFile, fetchImpl = fetch) {
 }
 
 function parseArgs(argv) {
-  const out = { command: argv[2] || '', data: null, confirmWrite: false, outFile: '', row: '', intervalMs: '', timeoutMs: '' };
+  const out = { command: argv[2] || '', data: null, confirmWrite: false, outFile: '', row: '', intervalMs: '', timeoutMs: '', notes: '' };
   for (let i = 3; i < argv.length; i++) {
     if (argv[i] === '--data') out.data = JSON.parse(argv[++i]);
+    else if (argv[i] === '--notes') out.notes = argv[++i];
     else if (argv[i] === '--confirm-write') out.confirmWrite = String(argv[++i]).toLowerCase() === 'true';
     else if (argv[i] === '--out') out.outFile = argv[++i];
     else if (argv[i] === '--row') out.row = argv[++i];
@@ -517,8 +583,12 @@ async function main() {
     console.log(JSON.stringify(await waitForTicket(cfg, row, opts)));
   } else if (args.command === 'export-training') {
     console.log(JSON.stringify(await exportTraining(cfg, args.outFile || ''), null, 2));
+  } else if (args.command === 'set-notes') {
+    const row = parseRowArg(args.row);
+    if (!String(args.notes || '').trim()) throw new Error("set-notes requires --notes '<text>'");
+    console.log(JSON.stringify(await setNotes(cfg, row, args.notes, { confirmWrite: args.confirmWrite }), null, 2));
   } else {
-    throw new Error('Usage: node scripts/tracker_sheet.mjs inspect | plan-append --data \'{...}\' | append --data \'{...}\' --confirm-write true | wait-for-ticket --row <n> [--interval-ms <ms>] [--timeout-ms <ms>] | export-training [--out file]');
+    throw new Error('Usage: node scripts/tracker_sheet.mjs inspect | plan-append --data \'{...}\' | append --data \'{...}\' --confirm-write true | set-notes --row <n> --notes \'<text>\' --confirm-write true | wait-for-ticket --row <n> [--interval-ms <ms>] [--timeout-ms <ms>] | export-training [--out file]');
   }
 }
 

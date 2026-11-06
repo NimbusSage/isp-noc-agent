@@ -143,12 +143,26 @@ limited-scope event — usually `LOW` or `MEDIUM`, not `HIGH`.
 
 `create a ticket ...` selects the ticket path; `create an alert ...` (grid outages, planned or prearranged power events, anything the operator wants alerted without a ticket) selects the alert-only path. The helper's `create_ticket` flag carries that intent and sets the sheet's `Create Ticket` column (R, col 17), which is what the sheet automation reads to create the real Sonar ticket and backfill `Ticket #` (column F): TRUE requests a real ticket, FALSE is alert-only. An omitted `create_ticket` means `true`. `Tech Who Reached Out to TH` is always `NOC Agent`. `send: false` stages a row without sending (`Send Count` blank); use it only when the operator says stage/draft/hold, and confirm which `Create Ticket` value the staged row should carry. End states: §10. Live duplicates: §11 rule 2.
 
+## 7a. One ticket, several links on one site (operator method)
+
+The operator files links anchored at the SAME tower site as ONE ticket: each
+link gets its own row, but only one row creates the real ticket. Staging
+rows are alert-only (`create_ticket:false` — `Create Ticket=FALSE`, Send
+Count=1; never `ticket:` here, this is NOT a §11-rule-2 duplicate row). On
+the ticket row (`create_ticket:true`) each staged row's `Copy Cell` text is
+pasted verbatim into the Notes, formatted as per-link blocks under
+`LINK #1`, `LINK #2` … headings — one block per link, every fact for a
+single link inside its own block, in the operator's manual-ticket form.
+Full step-by-step, notes format and the per-link §12/§13 follow-through:
+`references/multi-link-tickets.md`.
+
 ## 8. Notes standards (with verification evidence)
 
 Per-issue wording, worked examples and the port-comment stamp: `references/notes-standards.md` (read it before writing any `notes` value). Non-negotiable:
 
 - Notes carry what the NOC tech verified, terse: problem + down-since time + contact facts the operator actually gave. Never invent contact instructions (`contact TH in AM`, `before dispatching`). No IP lists, device counts, coordinates, analysis prose, timelines or `(Prompt: …)` quoting; the sheet copies the Notes cell into the real ticket description.
 - Link tickets: pull live signals + reported capacity first and cite both sides (dBm + Mbps); a turned-link claim needs §9.
+- Multi-link ticket rows (§7a): one block per link under a `LINK #N` heading; a staged row's Copy Cell rides inside its block VERBATIM; details for other links never bleed into another block. NO analysis prose inside a block — same per-link standards as §8 (signals + operator's own prose + bare counts only; no timelines, no `(Prompt: …)`).
 - No Ether notes always carry the customer count (`3x cx offline` style, `0 cx` when none), never in the AP IP column.
 - No Power: never write `power outage` / `grid outage` unless the TH confirmed it; write `no power observed to our devices`.
 - Ether 100mbps: resolve the exact switch port before filing (MyMate interfaces + live SSH verify); add the forced-PoE sentence when `poe-out=forced-on`; stamp the port comment only after the Ticket # is backfilled.
@@ -170,6 +184,7 @@ A `turned` claim needs a step-drop, not a drift:
 node scripts/tracker_sheet.mjs inspect
 node scripts/tracker_sheet.mjs plan-append --data '{...}'
 node scripts/tracker_sheet.mjs append --data '{...}' --confirm-write true
+node scripts/tracker_sheet.mjs set-notes --row <n> --notes '<text>' --confirm-write true
 node scripts/tracker_sheet.mjs wait-for-ticket --row <n> [--interval-ms 60000] [--timeout-ms 600000]
 node scripts/tracker_sheet.mjs export-training [--out file]
 ```
@@ -218,7 +233,14 @@ for changes: new tickets write `U=1`. The `Send to Auto Tracker` checkbox
 `send: false` stages the row (`U` blank) without sending. Resends/modifies
 increment the existing `U` value; that workflow is future work, not v1.
 
-Gates (append needs ALL): `TRACKER_ACCESS=write` +
+`set-notes` updates ONLY the Notes cell (Q) on a row that has already sent
+(Send Count ≥ 1) — the post-filing fix-up path for §7a per-link reformatting
+and clarity edits: never re-fires the alert (Send Count untouched), never
+fights the automation (Ticket #/Create Ticket untouched), refuses empty rows
+and rows whose Send Count is still blank (those belong to plan/append),
+audits old/new note lengths.
+
+Gates (append and set-notes need ALL): `TRACKER_ACCESS=write` +
 `TRACKER_WRITE_ENABLED=true` + `--confirm-write true`. The helper checks the
 header signature, validates Status/Issue/Priority/Towers against the live
 Pick List, refuses a **second ticket** on live duplicates (same towers +
@@ -272,6 +294,13 @@ After the row sends and the Sonar `Ticket #` comes back (`wait-for-ticket --row 
 
 Alert-only rows skip steps 1 and 3, including duplicate alert-only rows that carry an existing Ticket # (§11 rule 2). Alert-only GRID OUTAGE rows still get the step 2 notes on every down device, in the form `{M/D/YYYY} grid outage, alert only — no ticket, ticket # —` plus the suffix. Other alert-only rows have no standing note rule: ask the operator.
 
+A ticket covering several links (§7a) runs steps 1–3 ONCE for the Sonar
+site link and once PER LINK for the device notes and ST-side ticket links
+(each link keeps its own problem device and its own ST-side symbol; all
+reference the single Ticket #). §7a staged rows (alert-only, no ticket)
+skip §12 exactly like other alert-only rows — their content rides the
+single ticket on which the Copy Cell was pasted.
+
 ## 13. RSSI evidence chart for misaligned / chain-imbalance / turned link tickets
 
 For every filed row whose Issue is Link Misaligned (turned), Chain Imbalance, Faulty Dish/Radio, Radio Separation or Link Downgrade, post a follow-up comment with AP-side RSSI evidence after `wait-for-ticket` returns the Ticket # (same phase as §12). Data source, renderer rule, script flags, upload/attach mechanics and render gotchas: `references/rssi-evidence-chart.md`. Must not be lost:
@@ -279,4 +308,6 @@ For every filed row whose Issue is Link Misaligned (turned), Chain Imbalance, Fa
 - The NocAgent/UISP chart (`python3 scripts/rssi_drop_graph.py <uisp-device-id> ...`) is ALWAYS the deliverable, UISP first for Ubiquiti radios. The LibreNMS native render is only the automatic fallback (`--librenms-fallback`) when UISP has no usable data or the device is not in UISP.
 - AP side, unless only the ST exists or has good data. Step-drop of 6 dB or more that stays down = turned; slow decline with recovery = foliage; unavailable history = `unknown history`.
 - Fail closed on an unvalidated PNG. Sonar strips inline `data:` images: upload with `POST /api/files` (multipart field `files[0]`), attach to the comment, embed `<img src="files/<id>">`.
+- A ticket covering several links (§7a) gets ONE chart PER LINK — each link's own AP-side render, all attached to the SAME ticket; a single chart standing in for both is wrong (worked miss: a two-link ticket carried only the ticket row's chart and its second link had none). Reference each chart back to its `LINK #N` block in the row notes, in that same order.
+- Watch the `--series` flag: the renderer's default series keys are the 60 GHz ones (`signal60g,remoteSignal60g`); an airMax 5 GHz radio needs `--series signal,remoteSignal` (worked miss: default keys on a 5 GHz device gave an empty series and a crash).
 

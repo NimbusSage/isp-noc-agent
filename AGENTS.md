@@ -64,7 +64,7 @@ Load when the trigger applies.
 - `sonar-api` — Sonar GraphQL: tickets, accounts, inventory, mutations
 - `mymate` — MyMate monitor API: status, outages, links, notes, ticket links
 - `librenms` — LibreNMS corroboration (not site truth)
-- `tracker-sheet` — "create a ticket" / "create an alert": one validated NOC Ticket Tracker row (`scripts/tracker_sheet.mjs`) plus follow-through
+- `tracker-sheet` — "create a ticket" / "create an alert": one validated NOC Ticket Tracker row (`scripts/tracker_sheet.mjs`) plus follow-through; several links on one site → ONE ticket via §7a staged alert-only rows + verbatim Copy Cells under `LINK #N` note headings
 - `schedule-field-tech` — dispatch a tech from a ticket to Google Calendar (`scripts/schedule_dispatch.mjs`)
 - `create-site` — a NEW site across Tower Directory, Sonar, UISP, MyMate
 - `program-new-device` — brand-new device bring-up: IPs, programming, monitoring registration
