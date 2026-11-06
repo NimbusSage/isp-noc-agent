@@ -12,7 +12,8 @@ A skills system for ISP network operations: it reads and categorizes support tic
 ## Mode A — the agent, right now
 
 ```bash
-git clone <repo-url> /any/path && cd /any/path
+git clone https://github.com/NimbusSage/isp-noc-agent.git ~/NocAgent && cd ~/NocAgent
+# open your AI agent of choice from the NocAgent directory
 onboard me            # guided setup skill (from a blank checkout to verified credentials)
 ```
 
