@@ -12,10 +12,11 @@ A skills system for ISP network operations: it reads and categorizes support tic
 ## Mode A — the agent, right now
 
 ```bash
-git clone https://github.com/NimbusSage/isp-noc-agent.git ~/NocAgent && cd ~/NocAgent
-# open your AI agent of choice from the NocAgent directory
-onboard me            # guided setup skill (from a blank checkout to verified credentials)
+git clone https://github.com/NimbusSage/isp-noc-agent.git ~/NocAgent
+cd ~/NocAgent
 ```
+
+Open your AI agent of choice in that directory and say **"onboard me"** — the guided setup skill takes a blank checkout to verified credentials, one tier at a time. Mode A needs none of the server pieces.
 
 Then just ask, in plain language:
 
@@ -24,7 +25,7 @@ Then just ask, in plain language:
 - *"Create a site pin for <new fiber cabinet>" / "Rename this tower-host"*
 - *"Schedule a field tech from this ticket" / "File this as an NOC ticket"*
 - *"Restore this factory-reset radio" / "Temp-connect this site until the fiber is repaired"*
-- *"Onboard me" / *"Summarize this ticket's wireless health"*
+- *"Onboard me"* / *"Summarize this ticket's wireless health"*
 
 Every credential is verified read-only by the doctor: `python3 scripts/doctor.py`.
 
