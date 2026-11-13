@@ -142,6 +142,20 @@ test('firstEmptyRow scans top-down', () => {
   assert.equal(firstEmptyRow([FULL_ROW.slice(0, 6)]), -1);
 });
 
+test('tech follows this install AGENT_NAME, so two agents stay distinguishable', () => {
+  const saved = process.env.AGENT_NAME;
+  try {
+    process.env.AGENT_NAME = "Ethan's Agent";
+    assert.equal(validateTicket(TICKET, DD).tech, "Ethan's Agent");
+    assert.equal(validateTicket({ ...TICKET, tech: 'NOC Agent' }, DD).tech, 'NOC Agent');
+    process.env.AGENT_NAME = '  <b>Hub</b>   Agent ';
+    assert.equal(validateTicket(TICKET, DD).tech, 'b Hub /b Agent');
+  } finally {
+    if (saved === undefined) delete process.env.AGENT_NAME;
+    else process.env.AGENT_NAME = saved;
+  }
+});
+
 test('validate accepts a good ticket, defaults LOW + NOC Agent', () => {
   const { errors, priority, tech } = validateTicket(TICKET, DD);
   assert.deepEqual(errors, []);

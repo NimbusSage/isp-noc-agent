@@ -195,6 +195,7 @@ NocAgent/
 │   │   └── fixtures/                         # 12 files
 │   ├── hooks/                                # Claude Code hook that blocks edits writing secrets
 │   │   └── claude_guard.py                   # Claude Code PreToolUse guard: block edits that would write secrets
+│   ├── agent_identity.py                     # What THIS install's agent calls itself
 │   ├── airos_rename.py                       # AirOS rename executor: anchored single-key SSID edits with snapshot/verify/rollback
 │   ├── backup_runtime_config.py              # Archive NocAgent's runtime secrets and state OUTSIDE the repo
 │   ├── build_denylist.py                     # Build scripts/leak_denylist.sha256 from private word lists
@@ -264,7 +265,7 @@ NocAgent/
 │   ├── tree_guard.py                         # Notice when the running checkout stops matching what was reviewed and committed (stdlib + git)
 │   ├── wave_gui.mjs                          # Wave radio web UI driver (puppeteer-core + system Chrome)
 │   ├── wave_rename.py                        # WaveOS rename executor: jq-filter SSID/hostname edits with snapshot/verify/rollback
-│   └── (49 test files)                       # matching *.test.mjs, test_*.py
+│   └── (50 test files)                       # matching *.test.mjs, test_*.py
 ├── server/                                   # Node.js/Express webhook server and its batch prompt template
 │   ├── batch_prompt_template.md
 │   ├── index.js

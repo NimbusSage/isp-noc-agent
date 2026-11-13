@@ -44,6 +44,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import agent_identity  # noqa: E402
 import decision_log  # noqa: E402
 import envfile  # noqa: E402
 import gql_client  # noqa: E402
@@ -52,6 +53,7 @@ import noc_config  # noqa: E402
 import statefile  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
+AGENT = agent_identity.name()
 
 
 def _group_id(env_names, profile_key):
@@ -110,7 +112,7 @@ def send_chat(report: dict) -> None:
         return
     m = report["metrics"]
     lines = [
-        "*NOC Agent — Weekly Metrics*",
+        f"*{AGENT} — Weekly Metrics*",
         f"Window: {report['window']['since'][:10]} → {report['window']['until'][:10]}",
         "",
         f"• Processed: *{m['total_processed']}* "
@@ -132,7 +134,7 @@ def send_chat(report: dict) -> None:
             "cardId": "noc-weekly-metrics",
             "card": {
                 "header": {
-                    "title": "\u2705 NOC Agent \u2014 Weekly Metrics",
+                    "title": f"\u2705 {AGENT} \u2014 Weekly Metrics",
                     "subtitle": f"{report['window']['since'][:10]} \u2014 {report['window']['until'][:10]}",
                     "imageUrl": "https://fonts.gstatic.com/s/i/materialicons/check_circle/v1/24px.svg",
                     "imageAltText": "Resolved",

@@ -80,7 +80,14 @@ shred -u /root/nocagent-config-<stamp>.tgz.enc ~/.config/nocagent/backup_passphr
 
 This places `.env`, the encrypted credential store, the secret overlays and each OAuth file (at the path its `*_OAUTH_FILE` setting names, if that is under your home directory). Add `--with-state` to bring the decision log and circuit-breaker state as well. Anything it cannot place is listed as "not placed"; copy those by hand.
 
-Then change what is specific to the hub in `.env`: the bind address and port you want n8n to call, and `AGENT_MODEL`. Use `python3 scripts/env_set.py <NAME>` for any secret.
+Then change what is specific to the hub in `.env`: the bind address and port you want n8n to call, `AGENT_MODEL`, and `AGENT_NAME`. Use `python3 scripts/env_set.py <NAME>` for any secret.
+
+The last one matters more than it looks. `AGENT_NAME` is what this machine's agent calls
+itself in the tech column of tracker rows and on the weekly metrics card. Set it to
+`NOC Agent` here; a teammate's own install carries their own name ("Ethan's Agent").
+Both agents then write to the same sheets and the same Chat space without anyone having
+to guess which box produced a row. It is per install, so it never goes in the shared
+site-pack.
 
 ## 6. Log in with the team model account
 

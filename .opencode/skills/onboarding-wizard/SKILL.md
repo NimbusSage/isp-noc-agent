@@ -67,8 +67,13 @@ Say: "This checkout is not assumed to be a production box. It may be a laptop or
 VM. Phases 0 and T0 touch only this repo folder. Nothing is installed system-wide
 unless you opt in to the optional server in T2."
 
-1. **Harness.** Ask which coding agent is running you: `opencode`, `claude` (Claude
-   Code), `codex`, `gemini`, `cursor`, `vscode`, or `generic`. Not sure: `generic`.
+1. **Harness.** Ask which coding agent is running you:   `opencode`, `claude` (Claude Code), `codex`, `gemini`, `cursor`, `vscode`, or `generic`. Not sure: `generic`.
+   In the same breath, ask what this install's agent should be called: a company hub is
+   usually `NOC Agent`, a tech's own machine their own name ("Ethan's Agent"). The name
+   is what appears in the tech column of tracker rows and on the metrics card, so two
+   agents in one organization stay distinguishable. It is per install and not a secret:
+   `python3 scripts/env_set.py AGENT_NAME`. If they have no preference, leave it unset
+   and the default `NOC Agent` applies.
 2. **Prerequisites.** Run `python3 --version`, `node --version`, `git --version`.
    Needs python3 3.9+, node 20+ (18 still runs but is end-of-life), git. `sshpass` is
    optional (only the reprogram and bring-up skills use it). Install the server's
