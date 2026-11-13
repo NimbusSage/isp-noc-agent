@@ -101,6 +101,7 @@ All secrets live in `.env` at the repo root. This file is gitignored and never c
 | `BTEST_PASSWORD` | Only for a dedicated btest account | — | Operator-supplied at runtime; password of the dedicated btest account some fiber routers use (`path-analyzer`). Never stored in the repo |
 | `PATH_TRIAGE_MODE` | No | `direct` | Triage mode `direct` (live) vs `analyzer` rollback |
 | `AGENT_MODEL` | No | `opencode/big-pickle` | Model for agent runs; `OPENCODE_MODEL` is the legacy alias, read when `AGENT_MODEL` is unset |
+| `AGENT_NAME` | No | `NOC Agent` | What this install's agent calls itself where it writes its own name: the tech column of a tracker row and the weekly metrics card. Per install, never in the shared site-pack, so a hub's agent and a tech's own agent stay distinguishable |
 | `MAX_BATCH_SIZE` | No | `3` | Max tickets per agent batch; larger bursts split into sequential jobs. Server refuses prompts estimated above 180,000 tokens (characters divided by 4); default model context window is 250,000 tokens |
 | `BOUNCE_AUTONOMOUS_ENABLED` | No | `false` | Master kill switch: `false` blocks ALL autonomous bounces (`sonar_bounce.py` exit 4) |
 | `BREAKER_WINDOW_SEC` | No | `604800` | Circuit breaker rolling window (7 days) |

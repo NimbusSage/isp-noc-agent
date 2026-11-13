@@ -192,7 +192,15 @@ export function validateTicket(data, dropdowns) {
   if (data.ticket && String(data.ticket).trim() && data.create_ticket !== false) {
     errors.push(`ticket (Ticket #) may only be set on alert-only rows (create_ticket:false); the automation owns F on the ticket path`);
   }
-  return { errors, priority, tech: String(data.tech || 'NOC Agent').trim() || 'NOC Agent' };
+  return { errors, priority, tech: String(data.tech || defaultTech()).trim() || defaultTech() };
+}
+
+// Tech column default. This install's agent name (AGENT_NAME in .env) so a hub's
+// "NOC Agent" and a tech's own agent never look like the same author; same hygiene
+// as scripts/agent_identity.py (no control characters, no angle brackets, 60 max).
+function defaultTech(env = process.env) {
+  const raw = String(env.AGENT_NAME || '').replace(/[\u0000-\u001f\u007f<>]/g, ' ').replace(/\s+/g, ' ').trim();
+  return raw.slice(0, 60).trim() || 'NOC Agent';
 }
 
 const bool = (v) => (String(v ?? '').toUpperCase() === 'TRUE' ? 'TRUE' : 'FALSE');
@@ -497,7 +505,7 @@ function parseArgs(argv) {
 }
 
 async function main() {
-  loadEnvPrefixes(['TRACKER_']);   // only the tracker settings; the rest of .env is not read into the environment
+  loadEnvPrefixes(['TRACKER_', 'AGENT_NAME']);   // only these settings; the rest of .env is not read into the environment
   const args = parseArgs(process.argv);
   const cfg = loadConfig();
   if (args.command === 'inspect') {
