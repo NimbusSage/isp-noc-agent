@@ -119,6 +119,14 @@ the service addresses, Sonar IDs, topology, device table and roster arrive in th
 team's pack, so skip the registration in T1 step 3, the IDs in T2 step 2 and the
 site-pack phase. Your own tokens are still yours (TJ step 4).
 
+**Running the shared hub?** That machine also serves a web UI and a Google sign-in
+redirect, so it needs one trusted certificate. Do **not** forward 80 or 443 for it: the
+challenge goes through DNS-01 against the organization's own DNS server and the box
+stays unreachable from outside. Procedure: [docs/central-hub.md](../../../docs/central-hub.md)
+step 6b, commands and failure notes in `references/hub-tls.md`. You may run
+`python3 scripts/hub_tls.py --check` yourself; the operator runs `env_set.py` and
+anything with `sudo`.
+
 ---
 
 ## T0 - Demo (no credentials)

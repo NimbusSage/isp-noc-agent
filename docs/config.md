@@ -58,6 +58,18 @@ All secrets live in `.env` at the repo root. This file is gitignored and never c
 | `TEMP_OSPF_READ_ROWS` | No | `40` | Maximum preview rows (1–10000), columns capped at AZ |
 | `TEMP_OSPF_WRITE_ENABLED` | Only for approved row update | unset | Must equal `true` in addition to access=write and CLI `--confirm-write true` |
 | `TEMP_OSPF_HEADER_ROW` | Only for approved row update | `0` | One-based header row; live sheet uses `1` (paired writer refuses anything else) |
+| `HUB_TLS_HOSTNAME` | Only for hub HTTPS | — | Public host name of the hub; the Google sign-in redirect must match it exactly. The certificate needs no open port (DNS-01), so this can point at the LAN address |
+| `HUB_TLS_EMAIL` | Only for hub HTTPS | — | ACME account contact address (expiry notices) |
+| `HUB_TLS_DNS_PROVIDER` | No | `dnsupdate` | ACME DNS-01 backend: `dnsupdate` (RFC 2136 + TSIG, preferred) or `technitium` (HTTP API token, which can usually rewrite the whole zone) |
+| `HUB_TLS_STAGING` | No | `false` | Use the staging CA; the certificate it issues is not trusted by browsers |
+| `HUB_TLS_STATE_DIR` | No | `/etc/nocagent/lego` | lego state and certificate directory |
+| `HUB_TLS_UPSTREAM` | No | `127.0.0.1:8080` | Address the rendered Caddy site block proxies to |
+| `DNSUPDATE_NAMESERVER` | Only for `dnsupdate` | — | DNS server that accepts dynamic updates, `host` or `host:port` |
+| `DNSUPDATE_TSIG_KEY` | Only for `dnsupdate` | — | TSIG key name as configured in the DNS server |
+| `DNSUPDATE_TSIG_SECRET` | Only for `dnsupdate` | — | TSIG shared secret; set with `python3 scripts/env_set.py`, never in `.env` by hand |
+| `DNSUPDATE_TSIG_ALGORITHM` | No | `HMAC-SHA256` | TSIG algorithm: `HMAC-SHA512`, `HMAC-SHA256`, `HMAC-SHA1` or `HMAC-MD5` |
+| `TECHNITIUM_SERVER_BASE_URL` | Only for `technitium` | — | Base URL of the Technitium console, for example `https://dns.internal:5380` |
+| `TECHNITIUM_API_TOKEN` | Only for `technitium` | — | Technitium API token; set with `python3 scripts/env_set.py` |
 | `TEMP_OSPF_IN_USE_VALUE` | No | Boolean `true` | Checkbox value; the helper accepts only `true` (or `TRUE`) to check it |
 | `TEMP_OSPF_AUDIT_FILE` | No | `logs/temp-ospf-sheet.jsonl` | Local JSONL record of reservation attempts/outcomes |
 | `TRACKER_SPREADSHEET_ID` | Yes (Tracker Sheet helper) | *(no default — org-specific)* | Tracker spreadsheet ID from its URL; build a matching sheet per docs/setup/tracker-sheet-template.md |
