@@ -67,7 +67,7 @@ NocAgent/
 │       ├── ihn-auto-return/                  # SKILL.md
 │       ├── librenms/                         # SKILL.md
 │       ├── mymate/                           # SKILL.md
-│       ├── onboarding-wizard/                # SKILL.md, references/ (6 files)
+│       ├── onboarding-wizard/                # SKILL.md, references/ (7 files)
 │       ├── path-analyzer/                    # SKILL.md, references/ (4 files)
 │       ├── peak-scheduler/                   # SKILL.md
 │       ├── program-new-device/               # SKILL.md
@@ -92,6 +92,8 @@ NocAgent/
 │   ├── noc-backup.timer.template
 │   ├── noc-evals.service.template
 │   ├── noc-evals.timer.template
+│   ├── noc-hub-tls.service.template
+│   ├── noc-hub-tls.timer.template
 │   ├── noc-metrics.service.template
 │   ├── noc-metrics.timer.template
 │   ├── noc-treeguard.service.template
@@ -219,6 +221,7 @@ NocAgent/
 │   ├── gql_client.py                         # Minimal Sonar GraphQL client for the ops scripts
 │   ├── harness_setup.py                      # Harness portability setup for NocAgent (stdlib only, Python 3.9+)
 │   ├── hermetic_env.py                       # Import this from any test that runs git: it removes repository-local GIT_* variables
+│   ├── hub_tls.py                            # Trusted HTTPS for the central hub, issued over ACME DNS-01
 │   ├── install.sh                            # Deploy NocAgent at ANY path (no hardcoded install location)
 │   ├── inventory_resolve.mjs                 # Resolve a radio/site name to device IDs + management IPs with MyMate's server-side device search…
 │   ├── leak_denylist.sha256
@@ -264,7 +267,7 @@ NocAgent/
 │   ├── tree_guard.py                         # Notice when the running checkout stops matching what was reviewed and committed (stdlib + git)
 │   ├── wave_gui.mjs                          # Wave radio web UI driver (puppeteer-core + system Chrome)
 │   ├── wave_rename.py                        # WaveOS rename executor: jq-filter SSID/hostname edits with snapshot/verify/rollback
-│   └── (49 test files)                       # matching *.test.mjs, test_*.py
+│   └── (50 test files)                       # matching *.test.mjs, test_*.py
 ├── server/                                   # Node.js/Express webhook server and its batch prompt template
 │   ├── batch_prompt_template.md
 │   ├── index.js

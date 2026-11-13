@@ -1,0 +1,12 @@
+[Unit]
+Description=NocAgent Hub TLS Certificate Renewal Schedule (daily 04:23 local)
+
+[Timer]
+# Daily 04:23 local, off :00 and off the 03:17 backup. lego only replaces the
+# certificate when it is inside 30 days, so a daily run is cheap.
+OnCalendar=*-*-* 04:23:00
+Persistent=true
+RandomizedDelaySec=900
+
+[Install]
+WantedBy=timers.target

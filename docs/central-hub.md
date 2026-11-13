@@ -97,6 +97,66 @@ To use OpenRouter models as well, run `opencode auth login`, choose OpenRouter a
 
 Free tiers are small. OpenRouter's `:free` models allow 20 requests per minute and, until you have bought $10 of credit once, 50 requests per day (1,000 after that); the daily count resets at UTC midnight. One ticket analysis takes dozens of model requests (every tool call is one), so 50 a day covers only a couple of tickets. Free models can also be served by providers that log or train on prompts, and ticket text can include customer details: read the provider's data terms and your OpenRouter privacy settings before putting customer data through a free model, and list only the models you accept in `approved_models` (step 8). When the quota runs out, the batch fails and its tickets come back as `needs_human`; watch for that after the cutover.
 
+## 6b. Trusted HTTPS for the hub (only when a browser talks to it)
+
+No port has to be forwarded to get a certificate. The ACME DNS-01 challenge writes one
+`_acme-challenge.<host>` TXT record into your own DNS server and the CA reads it from
+there, so the hub's name can point at its private address while the box stays
+unreachable from the internet. Do not open 80 or 443 "just for the certificate": a
+forwarded port is reachable by everyone who finds it, and the certificate does not need
+one. If you ever do want the hub reachable from outside, put sign-in in front of
+everything on that port first ([permissions-policy.md](permissions-policy.md)).
+
+The steps below are written for Technitium; any server that accepts RFC 2136 works the
+same way. `HUB_TLS_DNS_PROVIDER=technitium` (the server's HTTP API) is the fallback for a
+server without dynamic updates, but an API token usually can rewrite the whole zone,
+while a TSIG key can be allowed to touch only the challenge record.
+
+1. **Name.** In the zone's console add `A hub.example.com -> 10.0.x.y` (the hub's LAN
+   address). This is the name people type and the name Google sign-in redirects to.
+2. **TSIG key.** Settings > TSIG > Add, algorithm HMAC-SHA256. Copy the key name and the
+   secret now; the secret is not shown again.
+3. **Allow the update.** In the zone, enable Dynamic Updates for that key, scoped to
+   `_acme-challenge.hub.example.com` and type `TXT`. Nothing else should be updatable
+   with it.
+4. **Settings.** The secret goes in with a hidden prompt; the rest are ordinary values:
+   ```bash
+   python3 scripts/env_set.py DNSUPDATE_TSIG_SECRET
+   ```
+   Then set `HUB_TLS_HOSTNAME=hub.example.com`, `HUB_TLS_EMAIL=<address that receives
+   expiry notices>`, `DNSUPDATE_NAMESERVER=<the DNS server>`, `DNSUPDATE_TSIG_KEY=<key
+   name from step 2>` in `.env` (the section "Hub" in [config.md](config.md)).
+5. **Check, then issue.** Staging first: it proves the DNS path without spending the
+   production rate limit, and its certificate is not trusted by browsers.
+   ```bash
+   python3 scripts/hub_tls.py --check
+   python3 scripts/hub_tls.py --issue --staging
+   python3 scripts/hub_tls.py --issue
+   ```
+6. **Caddy.** The script renders the site block (`tls` with the files lego renews, and
+   `reverse_proxy` to `HUB_TLS_UPSTREAM`, default `127.0.0.1:8080`), then you reload:
+   ```bash
+   sudo python3 scripts/hub_tls.py --write-caddy
+   sudo systemctl reload caddy
+   ```
+   After a run the key is `0640 root:caddy` when that group exists, so the proxy can read
+   it without it becoming world-readable.
+7. **Renewal.** `sudo bash scripts/install.sh --with-hub-tls` installs and enables
+   `noc-hub-tls.timer`, which runs `hub_tls.py --renew` daily; lego only replaces the
+   certificate inside 30 days and reloads Caddy. Check it with
+   `systemctl list-timers noc-hub-tls` and `journalctl -u noc-hub-tls`.
+
+Proof that it worked, from a machine on the LAN:
+
+```bash
+openssl s_client -connect hub.example.com:443 -servername hub.example.com </dev/null 2>/dev/null \
+  | openssl x509 -noout -subject -enddate
+curl -sSI https://hub.example.com/ | head -3
+```
+
+The name still appears in public Certificate Transparency logs, so it is not secret; the
+hub itself remains reachable only from your network.
+
 ## 7. Check everything before it takes tickets
 
 ```bash

@@ -1,0 +1,25 @@
+[Unit]
+Description=NocAgent Hub TLS Certificate Renewal (ACME DNS-01)
+Documentation=file://{{INSTALL_DIR}}/docs/central-hub.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory={{INSTALL_DIR}}
+EnvironmentFile={{INSTALL_DIR}}/.env
+# Issues over DNS-01 and renews 30 days before expiry; the certificate needs no open port.
+# Runs as root only because lego's state directory and /etc/nocagent are root-owned.
+# ProtectSystem is deliberately not set: the unit writes /etc/nocagent/lego and reloads Caddy.
+ExecStart=/usr/bin/python3 {{INSTALL_DIR}}/scripts/hub_tls.py --renew
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=600
+Nice=10
+NoNewPrivileges=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes

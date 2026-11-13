@@ -6,6 +6,7 @@
 #   sudo bash scripts/install.sh --no-mcp         # skip the MCP server build
 #   sudo bash scripts/install.sh --with-gui       # also `npm ci` the repo-root deps (puppeteer-core, for scripts/wave_gui.mjs)
 #   sudo bash scripts/install.sh --enable-backup  # also enable the daily noc-backup.timer (archives .env + credentials)
+#   sudo bash scripts/install.sh --with-hub-tls   # also install + enable the daily hub certificate timer (needs lego)
 #   sudo bash scripts/install.sh --no-start       # never start/restart noc-agent, only install + enable it
 #   sudo bash scripts/install.sh --protect-tree   # also make the checkout read-only for the service and its agents (takes effect on restart)
 #   sudo bash scripts/install.sh --unprotect-tree # remove that restriction again
@@ -22,12 +23,13 @@ NO_MCP=0
 DRY_RUN=0
 WITH_GUI=0
 ENABLE_BACKUP=0
+WITH_HUB_TLS=0
 NO_START=0
 PROTECT_TREE=0
 UNPROTECT_TREE=0
 NODE_BIN_ARG="${NODE_BIN:-}"
 
-usage() { sed -n '2,15p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -35,6 +37,7 @@ while [[ $# -gt 0 ]]; do
     --dry-run) DRY_RUN=1 ;;
     --with-gui) WITH_GUI=1 ;;
     --enable-backup) ENABLE_BACKUP=1 ;;
+    --with-hub-tls) WITH_HUB_TLS=1 ;;
     --no-start) NO_START=1 ;;
     --protect-tree) PROTECT_TREE=1 ;;
     --unprotect-tree) UNPROTECT_TREE=1 ;;
@@ -53,6 +56,7 @@ REEXEC_ARGS=()
 [[ $DRY_RUN -eq 1 ]] && REEXEC_ARGS+=(--dry-run)
 [[ $WITH_GUI -eq 1 ]] && REEXEC_ARGS+=(--with-gui)
 [[ $ENABLE_BACKUP -eq 1 ]] && REEXEC_ARGS+=(--enable-backup)
+[[ $WITH_HUB_TLS -eq 1 ]] && REEXEC_ARGS+=(--with-hub-tls)
 [[ $NO_START -eq 1 ]] && REEXEC_ARGS+=(--no-start)
 [[ $PROTECT_TREE -eq 1 ]] && REEXEC_ARGS+=(--protect-tree)
 [[ $UNPROTECT_TREE -eq 1 ]] && REEXEC_ARGS+=(--unprotect-tree)
@@ -140,6 +144,9 @@ fi
 # ---- 3. systemd units from templates (paths templated, never hardcoded) -------------------------------
 echo "-- generating systemd units for $INSTALL_DIR ..."
 UNIT_NAMES=(noc-agent.service noc-backup.service noc-metrics.service noc-evals.service noc-treeguard.service noc-backup.timer noc-metrics.timer noc-evals.timer noc-treeguard.timer)
+if [[ $WITH_HUB_TLS -eq 1 ]]; then
+  UNIT_NAMES+=(noc-hub-tls.service noc-hub-tls.timer)
+fi
 
 render_unit() {
   local tpl out
@@ -226,6 +233,12 @@ if [[ $ENABLE_BACKUP -eq 1 ]]; then
   DID+=("enabled and started noc-backup.timer (--enable-backup)")
 else
   SKIPPED+=("noc-backup.timer installed but NOT enabled: it archives .env + credentials.enc (re-run with --enable-backup, or: systemctl enable --now noc-backup.timer)")
+fi
+if [[ $WITH_HUB_TLS -eq 1 ]]; then
+  systemctl enable --now noc-hub-tls.timer
+  DID+=("enabled and started noc-hub-tls.timer (--with-hub-tls): daily certificate renewal for the hub")
+else
+  SKIPPED+=("hub certificate renewal timer (pass --with-hub-tls once scripts/hub_tls.py --check is green)")
 fi
 
 systemctl enable noc-agent.service
