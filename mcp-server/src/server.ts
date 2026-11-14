@@ -11,6 +11,7 @@ import { AuditLogger, type AuditEvent } from './audit/logger.js';
 import { resolveOperator } from './audit/operator.js';
 import { lookupLibreNmsDeviceByExactIp } from './inventory/librenms.js';
 import { RouterOsWriteSchema, planRouterOsWrite, executeRouterOsWrite, checkInfraWriteGates } from './writes/routeros-writes.js';
+import { RouterOsTempAccessSchema, planRouterOsTempAccess, executeRouterOsTempAccess, checkTempAccessGates, type RouterOsTempAccess } from './writes/routeros-temp-access.js';
 import { planTempOspf } from './temp-site/ospf.js';
 import { planTempRadio, checkExecuteGates, checkTransportGates, opToEdits, resolveStationPsk, redactCfgValues, readbackCommand } from './temp-site/radio.js';
 import { TempOspfApplySchema, applyOspfAdjacency, rollbackOspfAdjacency, checkRouterGates, TempMtFlipSchema, applyMtFlip, rollbackMtFlip, checkMtGates, TempApWdsSchema, applyApWds, TempMtBounceSchema, applyMtBounce, TempMtAliasSchema, applyMtAlias, removeMtAlias } from './temp-site/mikrotik.js';
@@ -162,6 +163,31 @@ export class NocMcpServer {
             execute: { type: 'boolean', description: 'Must be true; otherwise returns the dry-run plan only' },
           },
           required: ['op', 'host', 'deviceId', 'interfaze', 'reason', 'execute'],
+        },
+      },
+      {
+        name: 'routeros-temp-access',
+        description: 'GATED RouterOS temporary-access writes for factory-reset device recovery (closed op set: temp-address | temp-dhcp | temp-nat | temp-cleanup). Puts the router on the reset device subnet, serves a Wave a DHCP lease, NATs an airOS device, and cleans up — every object is tagged comment="temp reprogram-device" and cleanup removes only that tag. Same gates as routeros-write: NOC_WRITE_ENABLED=true, NOC_WRITE_ROUTEROS_TRANSPORT=verified, host in NOC_WRITE_ALLOWED_HOSTS, explicit execute:true, and a bound exact-device mikrotik-ssh credential. execute:false returns the dry-run plan.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            op: { type: 'string', description: 'temp-address | temp-dhcp | temp-nat | temp-cleanup' },
+            host: { type: 'string', description: 'Target router management IP (must be allowlisted)' },
+            deviceId: { type: 'string', description: 'Stable inventory device ID (must match exactly one credential binding)' },
+            interfaze: { type: 'string', description: 'Interface facing the reset device (all ops except temp-cleanup)' },
+            address: { type: 'string', description: 'temp-address: router address to add, e.g. 192.168.1.1/24 (RFC1918, /24../29)' },
+            poolName: { type: 'string', description: 'temp-dhcp: pool + server name, default waveDHCP' },
+            poolRange: { type: 'string', description: 'temp-dhcp: the single leased address, e.g. 192.168.1.100' },
+            network: { type: 'string', description: 'temp-dhcp/temp-nat: the temp subnet, e.g. 192.168.1.0/24' },
+            gateway: { type: 'string', description: 'temp-dhcp: router address handed to the radio, e.g. 192.168.1.1' },
+            dstAddress: { type: 'string', description: 'temp-nat: routable mgmt address for the dstnat (optional)' },
+            dstPort: { type: 'number', description: 'temp-nat: dstnat port (optional)' },
+            toAddress: { type: 'string', description: 'temp-nat: factory address on the reset device (optional)' },
+            toPort: { type: 'number', description: 'temp-nat: port on the reset device (optional)' },
+            reason: { type: 'string', description: 'Why this write is happening (audited)' },
+            execute: { type: 'boolean', description: 'Must be true; otherwise returns the dry-run plan only' },
+          },
+          required: ['op', 'host', 'deviceId', 'reason'],
         },
       },
       {
@@ -437,6 +463,62 @@ export class NocMcpServer {
     }
   }
 
+  /**
+   * Gated temp-access writes for factory-reset recovery. Same gate order as
+   * routeros-write: schema -> plan -> execute flag -> gates -> exact binding ->
+   * host policy -> connect. The exact-device binding is what keeps this from
+   * reaching any router the operator has not explicitly provisioned.
+   */
+  private async routerOsTempAccess(args: Record<string, unknown>): Promise<{
+    content: Array<{ type: 'text'; text: string }>;
+    isError?: boolean;
+  }> {
+    const parsed = RouterOsTempAccessSchema.safeParse(args);
+    const device = String((args as Record<string, unknown>).host ?? 'unknown');
+    const baseAudit = { timestamp: new Date().toISOString(), device, command: 'routeros-temp-access', category: 'execution', redactions: 0, durationMs: 0 };
+    if (!parsed.success) {
+      this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: 'schema validation failed' } });
+      return { content: [{ type: 'text', text: `Validation error: ${parsed.error.issues.map((i: { message: string }) => i.message).join(', ')}` }], isError: true };
+    }
+    const input: RouterOsTempAccess = parsed.data;
+    if (input.execute !== true) {
+      const plan = planRouterOsTempAccess(input);
+      this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: 'execute flag not set; plan only' } });
+      return { content: [{ type: 'text', text: JSON.stringify({ ...plan, note: 'execute was not true: dry-run plan only, nothing written.' }, null, 2) }], isError: !plan.valid };
+    }
+    const writePlan = planRouterOsTempAccess(input);
+    if (!writePlan.valid) {
+      this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: writePlan.error } });
+      return { content: [{ type: 'text', text: `Blocked: ${writePlan.error}` }], isError: true };
+    }
+    const gates = checkTempAccessGates(input.host);
+    if (!gates.ok) {
+      this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: gates.error } });
+      return { content: [{ type: 'text', text: `Blocked: ${gates.error}` }], isError: true };
+    }
+    const resolver = new CredentialResolver(await this.getStoreData());
+    const credential = resolver.resolveExactDevice('mikrotik-ssh', input.deviceId, input.host);
+    if (!credential) {
+      this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: 'no unique exact-device mikrotik-ssh binding' } });
+      return { content: [{ type: 'text', text: 'Blocked: no unique exact-device mikrotik-ssh credential is bound to this ID+host; type-wide credentials are never used for writes.' }], isError: true };
+    }
+    const startedAt = Date.now();
+    const hostPolicy = this.hostBlocked(args, input.host, 'routeros-temp-access');
+    if (hostPolicy) return hostPolicy;
+    const client = createDeviceClient(input.host, credential, 'mikrotik-ssh', this.config.limits.commandTimeoutMs) as MikroTikClient;
+    try {
+      await client.connect();
+      const result = await executeRouterOsTempAccess((cmd: string) => client.runRaw(cmd), input);
+      await client.disconnect().catch(() => { /* best effort */ });
+      this.auditWith(args, { ...baseAudit, outcome: 'success', durationMs: Date.now() - startedAt, metadata: { op: input.op, interfaze: input.interfaze, applied: result.output.length, skipped: result.skipped.length, reason: input.reason } });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      try { await client.disconnect(); } catch { /* noop */ }
+      this.auditWith(args, { ...baseAudit, outcome: 'error', durationMs: Date.now() - startedAt, metadata: { op: input.op, reason: this.errText(e, credential) } });
+      return { content: [{ type: 'text', text: `routeros-temp-access failed (${this.errText(e, credential)}). Inspect router state before retrying.` }], isError: true };
+    }
+  }
+
   async handleToolCall(name: string, rawArgs: Record<string, unknown>): Promise<{
     content: Array<{ type: 'text'; text: string }>;
     isError?: boolean;
@@ -488,6 +570,8 @@ export class NocMcpServer {
           return await this.tempApWds(args);
         case 'routeros-write':
           return await this.routerOsWrite(args);
+        case 'routeros-temp-access':
+          return await this.routerOsTempAccess(args);
         case 'lookup-device-by-exact-ip':
           return await this.lookupDeviceByExactIp(args);
         default:

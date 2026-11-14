@@ -176,6 +176,7 @@ NocAgent/
 │   │   │   ├── radio.ts
 │   │   │   └── snapshots.ts                  # Private storage for temp-site pre-apply snapshots (airOS system.cfg) and boot-id tripwire records
 │   │   ├── writes/                           # Gated RouterOS write executor: PoE and interface operations
+│   │   │   ├── routeros-temp-access.ts
 │   │   │   └── routeros-writes.ts
 │   │   ├── index.ts
 │   │   ├── register-tools.ts
@@ -183,7 +184,7 @@ NocAgent/
 │   │   ├── tool-cli.ts                       # Universal tool CLI — harness-independent access to the MCP executor
 │   │   └── tool-schemas.ts                   # Single source of truth for every tool's INPUT schema
 │   ├── state/                                # Rollback snapshots written by the temporary-site tools
-│   ├── tests/                                # 32 files
+│   ├── tests/                                # 33 files
 │   ├── .gitignore
 │   ├── package-lock.json
 │   ├── package.json
@@ -197,6 +198,7 @@ NocAgent/
 │   │   └── claude_guard.py                   # Claude Code PreToolUse guard: block edits that would write secrets
 │   ├── airos_rename.py                       # AirOS rename executor: anchored single-key SSID edits with snapshot/verify/rollback
 │   ├── backup_runtime_config.py              # Archive NocAgent's runtime secrets and state OUTSIDE the repo
+│   ├── bind_device.mjs                       # Pin an already-configured pool credential to ONE device (device ID + host), after proving it…
 │   ├── build_denylist.py                     # Build scripts/leak_denylist.sha256 from private word lists
 │   ├── chat_alert.py                         # Canonical Google Chat alert sender for NocAgent
 │   ├── circuit_breaker.py                    # Deterministic circuit breaker for NOC auto-bounces
@@ -253,6 +255,7 @@ NocAgent/
 │   ├── ssh_common.py                         # Safe ssh/sshpass invocation shared by the device-touching scripts
 │   ├── ssh_opts.mjs                          # Host-key policy shared by the node ops scripts (mirrors scripts/ssh_common.py)
 │   ├── ssh_opts.sh                           # Sourced by the bash ops scripts (mk.sh, temp_bgp_rollback.sh)
+│   ├── ssh_tunnel.py                         # One local port forward through a router, credentials from the store
 │   ├── statefile.py                          # Crash-safe, multi-process-safe state file primitives
 │   ├── team.py                               # Who is working, and what they may do: the team roster and the current operator (stdlib only)
 │   ├── temp_bgp_peering.py                   # Temp BGP Peering — Emergency Fiber Failover Usage: python3 scripts/temp_bgp_peering.py --network…

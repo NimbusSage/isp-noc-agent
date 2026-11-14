@@ -15,6 +15,7 @@
 import { z } from 'zod/v3';
 import { DeviceTypeSchema } from './credentials/schema.js';
 import { RouterOsWriteSchema } from './writes/routeros-writes.js';
+import { RouterOsTempAccessSchema } from './writes/routeros-temp-access.js';
 import {
   DeviceIdSchema,
   HostArgSchema,
@@ -81,6 +82,7 @@ export const toolSchemas: Record<string, ToolShape> = {
   },
   'list-device-types': {},
   'routeros-write': { ...RouterOsWriteSchema.shape },
+  'routeros-temp-access': { ...RouterOsTempAccessSchema.shape },
   'temp-radio-plan': { ...TempRadioShape },
   'temp-radio-apply': {
     ...TempRadioShape,
