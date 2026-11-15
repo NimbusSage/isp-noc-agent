@@ -141,6 +141,35 @@ class Commands(Base):
         self.assertEqual(resources.resolve("wiki").value, "https://wiki.corp-net.org")
         self.assertIn("wiki", self.run_cli("list")[1])
 
+    def test_unset_removes_the_registration_and_keeps_the_rest(self):
+        self.write_profile({"org": {"name": "Acme"},
+                           "resources": {"uisp": {"url": "https://uisp.corp-net.org"},
+                                         "librenms": {"url": "https://a.corp-net.org"}}})
+        code, out, _ = self.run_cli("unset", "uisp")
+        self.assertEqual(code, 0, out)
+        data = json.loads(self.profile.read_text())
+        self.assertNotIn("uisp", data["resources"])
+        self.assertIn("librenms", data["resources"])
+        self.assertEqual(data["org"]["name"], "Acme")
+        self.assertTrue((self.pack / "profile.json.bak").exists())
+        self.assertEqual(self.run_cli("get", "uisp")[0], 3)
+
+    def test_unset_says_when_an_environment_value_still_wins(self):
+        self.write_profile({"resources": {"uisp": {"url": "https://uisp.corp-net.org"}}})
+        with mock.patch.dict(os.environ, {"UISP_BASE_URL": "https://uisp.corp-net.org"}):
+            code, out, _ = self.run_cli("unset", "uisp")
+        self.assertEqual(code, 0)
+        self.assertIn("still resolves", out)
+
+    def test_unset_of_an_unregistered_name_exits_3(self):
+        self.assertEqual(self.run_cli("unset", "uisp")[0], 3)
+
+    def test_unset_is_refused_in_an_unattended_run(self):
+        self.write_profile({"resources": {"uisp": {"url": "https://uisp.corp-net.org"}}})
+        with mock.patch.dict(os.environ, {"NOC_UNATTENDED": "1"}):
+            self.assertEqual(self.run_cli("unset", "uisp")[0], 4)
+        self.assertIn("uisp", json.loads(self.profile.read_text())["resources"])
+
     def test_unattended_blocks_writes_but_not_reads(self):
         self.write_profile({"resources": {"uisp": {"url": "https://uisp.corp-net.org"}}})
         with mock.patch.dict(os.environ, {"NOC_UNATTENDED": "1"}):

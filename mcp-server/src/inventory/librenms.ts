@@ -3,6 +3,7 @@ import { isIP } from 'node:net';
 const MAX_RESPONSE_BYTES = 512 * 1024;
 const DEFAULT_STALE_AFTER_SECONDS = 15 * 60;
 const FUTURE_CLOCK_SKEW_SECONDS = 5 * 60;
+const MAX_API_MESSAGE_CHARS = 200;
 
 export interface LibreNmsDeviceSummary {
   deviceId: string | null;
@@ -23,7 +24,13 @@ export interface ExactIpLookupResult {
   queriedIp: string;
   source: 'LibreNMS';
   retrievedAt: string;
-  matchBasis: 'exact-IP endpoint; hostname must equal queried IP to assert identity';
+  matchBasis:
+    | 'exact-IP endpoint; hostname must equal queried IP to assert identity'
+    | 'LibreNMS ipv4 search; device ip/overwrite_ip must equal queried IP to assert identity';
+  /** Which bounded request produced the answer. */
+  searchUsed: 'device-endpoint' | 'ipv4-search';
+  /** LibreNMS's own words for a miss (e.g. "Device 10.0.0.1 does not exist"), never a secret. */
+  notFoundDetail?: string;
   device?: LibreNmsDeviceSummary;
   caution: string;
 }
@@ -95,7 +102,7 @@ function summarizeDevice(device: Record<string, unknown>, nowMs: number, staleAf
   };
 }
 
-function assertSafeBaseUrl(baseUrl: string): URL {
+export function assertSafeBaseUrl(baseUrl: string): URL {
   let parsed: URL;
   try {
     parsed = new URL(baseUrl);
@@ -108,7 +115,7 @@ function assertSafeBaseUrl(baseUrl: string): URL {
   return parsed;
 }
 
-async function readResponseBodyLimited(response: Response): Promise<string> {
+export async function readResponseBodyLimited(response: Response): Promise<string> {
   if (!response.body) {
     const text = await response.text();
     if (Buffer.byteLength(text, 'utf8') > MAX_RESPONSE_BYTES) {
@@ -143,6 +150,38 @@ async function readResponseBodyLimited(response: Response): Promise<string> {
   return new TextDecoder().decode(combined);
 }
 
+/** LibreNMS's own error text, bounded and stripped to one line. Never contains credentials. */
+function apiMessage(text: string): string | undefined {
+  try {
+    const body = JSON.parse(text) as { message?: unknown };
+    const message = body?.message;
+    if (typeof message === 'string' && message.trim()) {
+      return message.trim().replace(/\s+/g, ' ').slice(0, MAX_API_MESSAGE_CHARS);
+    }
+  } catch {
+    // Not JSON: no LibreNMS explanation to report.
+  }
+  return undefined;
+}
+
+function devicesFrom(text: string, what: string): unknown[] {
+  let body: unknown;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    throw new Error(`LibreNMS ${what} response was not valid JSON`);
+  }
+  if (!body || typeof body !== 'object' || !Array.isArray((body as { devices?: unknown }).devices)) {
+    throw new Error(`LibreNMS ${what} response did not contain a devices array`);
+  }
+  return (body as { devices: unknown[] }).devices;
+}
+
+function firstDevice(devices: unknown[]): Record<string, unknown> | null {
+  const first = devices[0];
+  return first && typeof first === 'object' && !Array.isArray(first) ? (first as Record<string, unknown>) : null;
+}
+
 export async function lookupLibreNmsDeviceByExactIp(
   ip: string,
   options: {
@@ -162,49 +201,88 @@ export async function lookupLibreNmsDeviceByExactIp(
   }
   const now = options.now ?? Date.now;
   const retrievedAt = new Date(now()).toISOString();
-  const response = await fetch(new URL(`/api/v0/devices/${encodeURIComponent(ip)}`, baseUrl), {
-    headers: { 'X-Auth-Token': options.token, Accept: 'application/json' },
-    signal: AbortSignal.timeout(options.timeoutMs),
-    redirect: 'error',
-  });
-  if (!response.ok) throw new Error(`LibreNMS lookup failed with HTTP ${response.status}`);
+  const staleAfterSeconds = options.staleAfterSeconds ?? DEFAULT_STALE_AFTER_SECONDS;
+  const caution =
+    'LibreNMS is identity/status corroboration only: this result does not establish site truth, radio role, current reachability, RF compatibility, or topology.';
 
-  const text = await readResponseBodyLimited(response);
+  const request = async (path: string): Promise<{ status: number; text: string }> => {
+    const response = await fetch(new URL(path, baseUrl), {
+      headers: { 'X-Auth-Token': options.token, Accept: 'application/json' },
+      signal: AbortSignal.timeout(options.timeoutMs),
+      redirect: 'error',
+    });
+    return { status: response.status, text: await readResponseBodyLimited(response) };
+  };
 
-  let body: unknown;
-  try {
-    body = JSON.parse(text);
-  } catch {
-    throw new Error('LibreNMS exact-IP response was not valid JSON');
+  // 1. Exact-IP endpoint: matches a device this address was added under.
+  //    404 is LibreNMS's normal answer for "no such device" — a miss, not an
+  //    outage. Treating it as an API error made every unmonitored device look
+  //    like a broken integration.
+  const exact = await request(`/api/v0/devices/${encodeURIComponent(ip)}`);
+  if (exact.status !== 404) {
+    if (exact.status !== 200) throw new Error(`LibreNMS lookup failed with HTTP ${exact.status}`);
+    const devices = devicesFrom(exact.text, 'exact-IP');
+    const baseResult = {
+      queriedIp: ip,
+      source: 'LibreNMS' as const,
+      retrievedAt,
+      matchBasis: 'exact-IP endpoint; hostname must equal queried IP to assert identity' as const,
+      searchUsed: 'device-endpoint' as const,
+      caution,
+    };
+    if (devices.length === 0) return { ...baseResult, status: 'not_found' };
+    if (devices.length !== 1 || !firstDevice(devices)) return { ...baseResult, status: 'ambiguous' };
+
+    const device = summarizeDevice(firstDevice(devices)!, now(), staleAfterSeconds);
+    if (device.hostname !== ip) {
+      return {
+        ...baseResult,
+        status: 'identity_unverified',
+        caution: `${caution} The endpoint returned one record, but its hostname was not the exact queried IPv4; no identity match is asserted.`,
+        device,
+      };
+    }
+    return { ...baseResult, status: 'matched', device };
   }
-  if (!body || typeof body !== 'object' || !Array.isArray((body as { devices?: unknown }).devices)) {
-    throw new Error('LibreNMS exact-IP response did not contain a devices array');
-  }
+  const notFoundDetail = apiMessage(exact.text);
 
-  const devices = (body as { devices: unknown[] }).devices;
-  const caution = 'LibreNMS is identity/status corroboration only: this result does not establish site truth, radio role, current reachability, RF compatibility, or topology.';
-  const baseResult = {
+  // 2. One bounded fallback: LibreNMS's server-side filtered ipv4 search. A
+  //    device polled by DNS name (or carrying the address in overwrite_ip) has
+  //    no /devices/{ip} endpoint, so without this it would read as unmonitored.
+  //    The filter runs on the server; only matches come back, so this is not a
+  //    bulk inventory download.
+  const search = await request(`/api/v0/devices?type=ipv4&query=${encodeURIComponent(ip)}`);
+  if (search.status !== 200) throw new Error(`LibreNMS ipv4 search failed with HTTP ${search.status}`);
+  const candidates = devicesFrom(search.text, 'ipv4 search').filter((entry) => entry && typeof entry === 'object' && !Array.isArray(entry)) as Record<string, unknown>[];
+  const matches = candidates.filter((entry) => entry.ip === ip || entry.overwrite_ip === ip);
+
+  const searchResult = {
     queriedIp: ip,
     source: 'LibreNMS' as const,
     retrievedAt,
-    matchBasis: 'exact-IP endpoint; hostname must equal queried IP to assert identity' as const,
+    matchBasis: 'LibreNMS ipv4 search; device ip/overwrite_ip must equal queried IP to assert identity' as const,
+    searchUsed: 'ipv4-search' as const,
     caution,
   };
 
-  if (devices.length === 0) return { ...baseResult, status: 'not_found' };
-  if (devices.length !== 1 || !devices[0] || typeof devices[0] !== 'object' || Array.isArray(devices[0])) {
-    return { ...baseResult, status: 'ambiguous' };
+  if (matches.length === 1) {
+    return { ...searchResult, status: 'matched', device: summarizeDevice(matches[0]!, now(), staleAfterSeconds) };
   }
-
-  const device = summarizeDevice(devices[0] as Record<string, unknown>, now(), options.staleAfterSeconds ?? DEFAULT_STALE_AFTER_SECONDS);
-  if (device.hostname !== ip) {
+  if (matches.length > 1) {
+    return { ...searchResult, status: 'ambiguous', caution: `${caution} More than one LibreNMS device claims this IP.` };
+  }
+  if (candidates.length > 0) {
     return {
-      ...baseResult,
+      ...searchResult,
       status: 'identity_unverified',
-      caution: `${caution} The API returned one record, but its hostname was not the exact queried IPv4; no identity match is asserted.`,
-      device,
+      caution: `${caution} The search returned a record whose ip/overwrite_ip was not the exact queried IPv4; no identity match is asserted.`,
+      device: summarizeDevice(candidates[0]!, now(), staleAfterSeconds),
     };
   }
-
-  return { ...baseResult, status: 'matched', device };
+  return {
+    ...searchResult,
+    status: 'not_found',
+    ...(notFoundDetail ? { notFoundDetail } : {}),
+    caution: `${caution} LibreNMS has no device at this address. That is not proof it is unmonitored elsewhere, and it says nothing about reachability.`,
+  };
 }

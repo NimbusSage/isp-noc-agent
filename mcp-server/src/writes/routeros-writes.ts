@@ -1,5 +1,5 @@
 import { z } from 'zod/v3';
-import { checkHostAllowlist } from '../temp-site/allowlist.js';
+import { checkWriteHost } from '../security/hosts.js';
 import { DeviceIdSchema, IDENT_RE, IdentSchema, Ipv4Schema, ReasonSchema } from '../security/validators.js';
 
 /**
@@ -10,7 +10,9 @@ import { DeviceIdSchema, IDENT_RE, IdentSchema, Ipv4Schema, ReasonSchema } from 
  *   1. NOC_WRITE_ENABLED=true            — master kill switch (default OFF)
  *   2. NOC_WRITE_ROUTEROS_TRANSPORT=verified — operator confirmed the exact
  *      commands' behavior on a lab/spare router first (one-time acknowledgement)
- *   3. NOC_WRITE_ALLOWED_HOSTS           — exact IPs and/or CIDR allowlist
+ *   3. write scope                       — private/link-local/loopback IPv4 by
+ *      default; NOC_WRITE_ALLOWED_HOSTS, when set, REPLACES that default (narrow
+ *      it, or add a public management address)
  *   4. execute=true                      — dry-run plan by default
  *   5. exact-device credential           — a single encrypted mikrotik-ssh
  *      binding must match deviceId+host; type-wide credentials are never used
@@ -166,7 +168,7 @@ export function checkInfraWriteGates(host: string): { ok: true } | { ok: false; 
   if (process.env.NOC_WRITE_ROUTEROS_TRANSPORT !== 'verified') {
     return { ok: false, error: 'RouterOS write transport not verified; confirm exact command behavior on a lab/spare router and set NOC_WRITE_ROUTEROS_TRANSPORT=verified' };
   }
-  return checkHostAllowlist(host, process.env.NOC_WRITE_ALLOWED_HOSTS, 'NOC_WRITE_ALLOWED_HOSTS');
+  return checkWriteHost(host);
 }
 
 export interface RouterOsWriteResult {

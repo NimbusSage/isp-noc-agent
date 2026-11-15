@@ -16,6 +16,8 @@ import { z } from 'zod/v3';
 import { DeviceTypeSchema } from './credentials/schema.js';
 import { RouterOsWriteSchema } from './writes/routeros-writes.js';
 import { RouterOsTempAccessSchema } from './writes/routeros-temp-access.js';
+import { SnmpConfigSchema } from './writes/snmp-config.js';
+import { LibrenmsAddSchema } from './inventory/librenms-add.js';
 import {
   DeviceIdSchema,
   HostArgSchema,
@@ -83,6 +85,8 @@ export const toolSchemas: Record<string, ToolShape> = {
   'list-device-types': {},
   'routeros-write': { ...RouterOsWriteSchema.shape },
   'routeros-temp-access': { ...RouterOsTempAccessSchema.shape },
+  'snmp-config': { ...SnmpConfigSchema.shape },
+  'librenms-add-device': { ...LibrenmsAddSchema.shape },
   'temp-radio-plan': { ...TempRadioShape },
   'temp-radio-apply': {
     ...TempRadioShape,
