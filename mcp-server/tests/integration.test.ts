@@ -15,7 +15,7 @@ describe('NocMcpServer', () => {
     });
 
     const tools = server.getToolDefinitions();
-    expect(tools).toHaveLength(18);
+    expect(tools).toHaveLength(20);
     expect(tools[0].name).toBe('run-diagnostics');
     expect(tools[0].inputSchema.required).toEqual(['host', 'deviceType', 'command']);
     expect(Object.keys(tools[0].inputSchema.properties)).toEqual(['host', 'deviceType', 'command', 'params']);
@@ -42,6 +42,10 @@ describe('NocMcpServer', () => {
     expect(tools[16].name).toBe('temp-ospf-plan');
     expect(tools[17].name).toBe('lookup-device-by-exact-ip');
     expect(tools[17].inputSchema.required).toEqual(['ip']);
+    expect(tools[18].name).toBe('snmp-config');
+    expect(tools[18].inputSchema.required).toEqual(['op', 'vendor', 'host', 'deviceId', 'reason']);
+    expect(tools[19].name).toBe('librenms-add-device');
+    expect(tools[19].inputSchema.required).toEqual(['host', 'reason']);
   });
 
   it('hides exact-IP lookup when disabled by configuration', async () => {

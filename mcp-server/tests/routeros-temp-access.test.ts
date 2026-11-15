@@ -217,7 +217,7 @@ describe('routeros-temp-access: gates fail closed', () => {
     }
   };
 
-  it('requires the kill switch, the transport acknowledgement and a host match', () => {
+  it('requires the kill switch and the transport acknowledgement, then uses the default write scope', () => {
     try {
       delete process.env.NOC_WRITE_ENABLED;
       delete process.env.NOC_WRITE_ROUTEROS_TRANSPORT;
@@ -226,7 +226,9 @@ describe('routeros-temp-access: gates fail closed', () => {
       process.env.NOC_WRITE_ENABLED = 'true';
       expect(checkTempAccessGates('10.20.30.40').ok).toBe(false);  // secret-scan:allow(address fixture for range/gate classification test)
       process.env.NOC_WRITE_ROUTEROS_TRANSPORT = 'verified';
-      expect(checkTempAccessGates('10.20.30.40').ok).toBe(false);  // secret-scan:allow(address fixture for range/gate classification test)
+      // Private space is the default write scope: no per-IP list needed.
+      expect(checkTempAccessGates('10.20.30.40').ok).toBe(true);  // secret-scan:allow(address fixture for range/gate classification test)
+      expect(checkTempAccessGates('8.8.8.8').ok).toBe(false);
       process.env.NOC_WRITE_ALLOWED_HOSTS = '10.20.0.0/16';  // secret-scan:allow(address fixture for range/gate classification test)
       expect(checkTempAccessGates('10.20.30.40').ok).toBe(true);  // secret-scan:allow(address fixture for range/gate classification test)
       expect(checkTempAccessGates('10.99.99.99').ok).toBe(false);  // secret-scan:allow(address fixture for range/gate classification test)

@@ -38,7 +38,13 @@ export class MikroTikClient implements DeviceClient {
         keepaliveInterval: 10000,
         keepaliveCountMax: 3,
         algorithms: {
-          kex: ['curve25519-sha256', 'curve25519-sha256@libssh.org', 'ecdh-sha2-nistp256', 'ecdh-sha2-nistp384', 'ecdh-sha2-nistp521'],
+          // RouterOS 6 offers group14-sha1 only; without it the handshake fails
+          // with "no matching key exchange algorithm" and reads as a bad password.
+          kex: [
+            'curve25519-sha256', 'curve25519-sha256@libssh.org',
+            'ecdh-sha2-nistp256', 'ecdh-sha2-nistp384', 'ecdh-sha2-nistp521',
+            'diffie-hellman-group14-sha1', 'diffie-hellman-group-exchange-sha1', 'diffie-hellman-group1-sha1',
+          ],
           serverHostKey: ['ssh-rsa', 'ecdsa-sha2-nistp256', 'ecdsa-sha2-nistp521', 'ssh-ed25519'],
         },
       });

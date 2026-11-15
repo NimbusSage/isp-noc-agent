@@ -177,14 +177,15 @@ NocAgent/
 │   │   │   └── snapshots.ts                  # Private storage for temp-site pre-apply snapshots (airOS system.cfg) and boot-id tripwire records
 │   │   ├── writes/                           # Gated RouterOS write executor: PoE and interface operations
 │   │   │   ├── routeros-temp-access.ts
-│   │   │   └── routeros-writes.ts
+│   │   │   ├── routeros-writes.ts
+│   │   │   └── snmp-config.ts
 │   │   ├── index.ts
 │   │   ├── register-tools.ts
 │   │   ├── server.ts
 │   │   ├── tool-cli.ts                       # Universal tool CLI — harness-independent access to the MCP executor
 │   │   └── tool-schemas.ts                   # Single source of truth for every tool's INPUT schema
 │   ├── state/                                # Rollback snapshots written by the temporary-site tools
-│   ├── tests/                                # 33 files
+│   ├── tests/                                # 35 files
 │   ├── .gitignore
 │   ├── package-lock.json
 │   ├── package.json

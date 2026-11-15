@@ -6,6 +6,7 @@
     python3 scripts/env_set.py --generate TICKET_WEBHOOK_AUTH_TOKEN
     python3 scripts/env_set.py --list-missing --tier 2      # required names still unset
     pass show nocagent/sonar | python3 scripts/env_set.py --stdin SONAR_TOKEN
+    python3 scripts/env_set.py --unset NOC_WRITE_ALLOWED_HOSTS   # drop a key, print no value
 
 In Claude Code run it as `! python3 scripts/env_set.py KEY`: the leading `!` runs it in
 your own shell, so the value you type never enters the conversation.
@@ -134,6 +135,20 @@ def update_text(text: str, key: str, value: str) -> str:
         i = end + 1
     out.extend(lines[i:])
     return "".join(out)
+
+
+def remove_assignments(text: str, key: str):
+    """Drop every active KEY assignment (multi-line quotes included). Returns (text, removed)."""
+    lines = text.splitlines(keepends=True)
+    spans = _assignment_spans(lines, key)
+    if not spans:
+        return text, 0
+    out, i = [], 0
+    for start, end in spans:
+        out.extend(lines[i:start])
+        i = end + 1
+    out.extend(lines[i:])
+    return "".join(out), len(spans)
 
 
 def current_value(text: str, key: str) -> str:
@@ -265,6 +280,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="write secrets.token_urlsafe(32) to KEY without printing it (repeatable)")
     p.add_argument("--force", action="store_true", help="let --generate replace an existing non-empty value")
     p.add_argument("--stdin", action="store_true", help="read the value of the single KEY from stdin instead of prompting")
+    p.add_argument("--unset", action="append", default=[], metavar="KEY",
+                   help="remove KEY from the file; reads and prints no value (repeatable)")
     p.add_argument("--list-missing", action="store_true", help="print REQUIRED names that are unset (never values)")
     p.add_argument("--tier", type=int, metavar="N", help="with --list-missing: tiers 0..N (see --exact)")
     p.add_argument("--exact", action="store_true", help="with --tier: only tier N")
@@ -315,8 +332,11 @@ def main(argv=None) -> int:
 
         keys = [validate_key(k) for k in args.keys]
         gen = [validate_key(k) for k in args.generate]
-        if not keys and not gen:
-            raise EnvSetError("give at least one KEY, --generate KEY, or --list-missing (see --help)")
+        unset = [validate_key(k) for k in args.unset]
+        if not keys and not gen and not unset:
+            raise EnvSetError("give at least one KEY, --generate KEY, --unset KEY, or --list-missing (see --help)")
+        if args.stdin and unset:
+            raise EnvSetError("--stdin and --unset cannot be combined")
         if args.stdin and len(keys) != 1:
             raise EnvSetError("--stdin needs exactly one KEY")
         if keys and not args.stdin and not _has_tty():
@@ -325,6 +345,13 @@ def main(argv=None) -> int:
 
         _prepare(env_file, example, args.fix_perms)
 
+        for key in unset:
+            new_text, removed = remove_assignments(env_file.read_text(encoding="utf-8"), key)
+            if removed:
+                atomic_write(env_file, new_text)
+                print(f"unset {key} (removed {removed} assignment{'s' if removed != 1 else ''})")
+            else:
+                print(f"unset {key} (not set)")
         for key in gen:
             if current_value(env_file.read_text(encoding="utf-8"), key) and not args.force:
                 raise EnvSetError(f"{key} already has a value; pass --force to replace it with a new random one")

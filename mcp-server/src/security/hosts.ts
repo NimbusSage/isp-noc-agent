@@ -173,6 +173,14 @@ export function hostMatches(entries: HostEntry[], host: string): boolean {
   return entries.some((e) => e.kind === 'name' && e.name === lower);
 }
 
+export const DEFAULT_WRITE_ALLOWED_HOSTS = [
+  '10.0.0.0/8',
+  '172.16.0.0/12',
+  '192.168.0.0/16',
+  '169.254.0.0/16',
+  '127.0.0.0/8',
+].join(',');
+
 export const DEFAULT_READ_ALLOWED_HOSTS = [
   '10.0.0.0/8',
   '172.16.0.0/12',
@@ -220,6 +228,43 @@ export function checkReadHost(host: string, env: NodeJS.ProcessEnv = process.env
     ok: false,
     error: `Host ${host} is not permitted by NOC_READ_ALLOWED_HOSTS (default when unset: private, loopback and link-local ranges only)`
       + (deviceType ? `; a ${deviceType} service host must be registered first: python3 scripts/resources.py set <name> <url>` : ''),
+  };
+}
+
+/**
+ * Write-host policy for the gated typed executors.
+ *
+ * Unset NOC_WRITE_ALLOWED_HOSTS means the private/link-local/loopback ranges this
+ * network lives in, so a write the operator just asked for never needs a .env edit
+ * first (operator decision: a per-incident IP list defeats the point of an agent).
+ * When set, the list REPLACES that default, so it narrows the scope or adds a real
+ * public management address.
+ *
+ * This is the outer scope only. What keeps a write honest is device-scoped: the
+ * closed typed op set, the kill switch, the transport acknowledgement, execute:true
+ * and the exact-device credential binding. Whether the operator actually named this
+ * device is an instruction-level rule (AGENTS.md "Standing authorization").
+ */
+export function checkWriteHost(host: string, env: NodeJS.ProcessEnv = process.env): HostCheck {
+  const syntax = hostSyntaxError(host);
+  if (syntax) return { ok: false, error: `Host rejected: ${syntax}` };
+  const configured = env.NOC_WRITE_ALLOWED_HOSTS?.trim();
+  let entries: HostEntry[];
+  try {
+    entries = parseHostList(configured ? configured : DEFAULT_WRITE_ALLOWED_HOSTS, {
+      allowIPv6: false,
+      allowNames: false,
+      allowBroad: !configured || broadCidrAllowed(env),
+    });
+  } catch (e) {
+    return { ok: false, error: `NOC_WRITE_ALLOWED_HOSTS is malformed (${e instanceof Error ? e.message : 'invalid'}); writes are blocked until it is fixed` };
+  }
+  if (hostMatches(entries, host)) return { ok: true };
+  return {
+    ok: false,
+    error: configured
+      ? `Host ${host} is not in NOC_WRITE_ALLOWED_HOSTS (exact IP or CIDR); that variable is set and therefore narrows the write scope`
+      : `Host ${host} is outside the default write scope (private, link-local and loopback IPv4). Set NOC_WRITE_ALLOWED_HOSTS only if this is a real management address.`,
   };
 }
 

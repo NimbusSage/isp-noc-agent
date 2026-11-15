@@ -46,7 +46,9 @@ describe('P0 regression: every registered tool has an input schema', () => {
     expect(names).toEqual(noc.getToolDefinitions().map((t) => t.name));
     expect(names).toContain('routeros-write');
     expect(names).toContain('routeros-temp-access');
-    expect(names).toHaveLength(18);
+    expect(names).toContain('snmp-config');
+    expect(names).toContain('librenms-add-device');
+    expect(names).toHaveLength(20);
   });
 
   it('registerTools fails fast, naming the tool, when a schema is missing', () => {
@@ -71,7 +73,9 @@ describe('P0 regression: every registered tool has an input schema', () => {
       const listed = await client.listTools();
       expect(listed.tools.map((t) => t.name)).toContain('routeros-write');
       expect(listed.tools.map((t) => t.name)).toContain('routeros-temp-access');
-      expect(listed.tools).toHaveLength(18);
+      expect(listed.tools.map((t) => t.name)).toContain('snmp-config');
+      expect(listed.tools.map((t) => t.name)).toContain('librenms-add-device');
+      expect(listed.tools).toHaveLength(20);
 
       // Dry-run plan works through the transport (no gates, no network).
       const ok = await client.callTool({

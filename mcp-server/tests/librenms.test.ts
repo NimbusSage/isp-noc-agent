@@ -13,8 +13,18 @@ const options = {
 
 function response(devices: unknown[]) {
   return {
+    status: 200,
     ok: true,
     text: async () => JSON.stringify({ status: 'ok', devices }),
+  };
+}
+
+/** LibreNMS's real 404 for an address it does not monitor. */
+function notFound(ip: string) {
+  return {
+    status: 404,
+    ok: false,
+    text: async () => JSON.stringify({ status: 'error', message: `Device ${ip} does not exist` }),
   };
 }
 
@@ -46,7 +56,9 @@ describe('LibreNMS exact-IP inventory lookup', () => {
       pollFreshness: 'fresh',
       pollAgeSeconds: 60,
     });
+    expect(result.searchUsed).toBe('device-endpoint');
     expect(result.caution).toContain('does not establish site truth');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
       new URL('/api/v0/devices/10.0.63.13', options.baseUrl),
       expect.objectContaining({
@@ -69,6 +81,69 @@ describe('LibreNMS exact-IP inventory lookup', () => {
 
     fetchMock.mockResolvedValueOnce(response([{}, {}]));
     expect((await lookupLibreNmsDeviceByExactIp('10.0.0.1', options)).status).toBe('ambiguous');
+  });
+
+  it('treats a 404 from the endpoint as "not monitored", not as an integration failure', async () => {
+    // This is the bug that made every unmonitored device look like a broken
+    // LibreNMS integration: 404 is the API's normal answer for a missing device.
+    fetchMock.mockResolvedValueOnce(notFound('10.0.0.1'));
+    fetchMock.mockResolvedValueOnce(response([]));
+    const result = await lookupLibreNmsDeviceByExactIp('10.0.0.1', options);
+    expect(result.status).toBe('not_found');
+    expect(result.searchUsed).toBe('ipv4-search');
+    expect(result.notFoundDetail).toBe('Device 10.0.0.1 does not exist');
+    expect(result.caution).toContain('no device at this address');
+    // Still bounded: one endpoint request, one filtered search.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      new URL('/api/v0/devices?type=ipv4&query=10.0.0.1', options.baseUrl),
+      expect.anything(),
+    );
+  });
+
+  it('finds a device polled by DNS name through the filtered ipv4 search', async () => {
+    // hostname is the DNS name, so /devices/{ip} 404s; the address lives in
+    // LibreNMS's ipv4 table and must still count as monitored.
+    fetchMock.mockResolvedValueOnce(notFound('10.0.0.1'));
+    fetchMock.mockResolvedValueOnce(response([
+      { device_id: 7, hostname: 'tower5-sw.example', sysName: 'tower5-sw', ip: '10.0.0.1', status: 1, last_polled: new Date(options.now() - 120_000).toISOString() },
+    ]));
+    const result = await lookupLibreNmsDeviceByExactIp('10.0.0.1', options);
+    expect(result.status).toBe('matched');
+    if (result.status !== 'matched') throw new Error('expected matched result');
+    expect(result.searchUsed).toBe('ipv4-search');
+    expect(result.matchBasis).toContain('ipv4 search');
+    expect(result.device).toMatchObject({ deviceId: '7', hostname: 'tower5-sw.example', pollFreshness: 'fresh' });
+  });
+
+  it('matches on overwrite_ip', async () => {
+    fetchMock.mockResolvedValueOnce(notFound('10.0.0.1'));
+    fetchMock.mockResolvedValueOnce(response([{ hostname: 'radio.example', ip: '192.0.2.9', overwrite_ip: '10.0.0.1' }]));
+    const result = await lookupLibreNmsDeviceByExactIp('10.0.0.1', options);
+    expect(result.status).toBe('matched');
+  });
+
+  it('refuses to assert identity when the search returns only a different address', async () => {
+    fetchMock.mockResolvedValueOnce(notFound('10.0.0.1'));
+    fetchMock.mockResolvedValueOnce(response([{ hostname: 'other', ip: '192.0.2.44' }]));
+    const result = await lookupLibreNmsDeviceByExactIp('10.0.0.1', options);
+    expect(result.status).toBe('identity_unverified');
+    expect(result.caution).toContain('not the exact queried IPv4');
+  });
+
+  it('reports ambiguity when more than one device claims the address', async () => {
+    fetchMock.mockResolvedValueOnce(notFound('10.0.0.1'));
+    fetchMock.mockResolvedValueOnce(response([{ hostname: 'a', ip: '10.0.0.1' }, { hostname: 'b', ip: '10.0.0.1' }]));
+    expect((await lookupLibreNmsDeviceByExactIp('10.0.0.1', options)).status).toBe('ambiguous');
+  });
+
+  it('still fails loudly on real API errors, including in the fallback', async () => {
+    fetchMock.mockResolvedValueOnce({ status: 401, ok: false, text: async () => '{"status":"error","message":"Unauthorized"}' });
+    await expect(lookupLibreNmsDeviceByExactIp('10.0.0.1', options)).rejects.toThrow('HTTP 401');
+
+    fetchMock.mockResolvedValueOnce(notFound('10.0.0.1'));
+    fetchMock.mockResolvedValueOnce({ status: 500, ok: false, text: async () => 'boom' });
+    await expect(lookupLibreNmsDeviceByExactIp('10.0.0.1', options)).rejects.toThrow('ipv4 search failed with HTTP 500');
   });
 
   it('reports naive local poll timestamps as timezone-unverified', async () => {
@@ -99,10 +174,10 @@ describe('LibreNMS exact-IP inventory lookup', () => {
     await expect(lookupLibreNmsDeviceByExactIp('host.example', options)).rejects.toThrow('IPv4');
     await expect(lookupLibreNmsDeviceByExactIp('10.0.0.1', { ...options, baseUrl: 'http://user:pass@host' })).rejects.toThrow('trusted HTTP(S) origin');
 
-    fetchMock.mockResolvedValueOnce({ ok: true, text: async () => 'x'.repeat(512 * 1024 + 1) });
+    fetchMock.mockResolvedValueOnce({ status: 200, ok: true, text: async () => 'x'.repeat(512 * 1024 + 1) });
     await expect(lookupLibreNmsDeviceByExactIp('10.0.0.1', options)).rejects.toThrow('size limit');
 
-    fetchMock.mockResolvedValueOnce({ ok: true, text: async () => '{"status":"ok"}' });
+    fetchMock.mockResolvedValueOnce({ status: 200, ok: true, text: async () => '{"status":"ok"}' });
     await expect(lookupLibreNmsDeviceByExactIp('10.0.0.1', options)).rejects.toThrow('devices array');
   });
 });

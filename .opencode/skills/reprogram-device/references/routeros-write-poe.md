@@ -26,7 +26,8 @@ Call shape: `routeros-write { op, host, deviceId, interfaze, reason, execute }`.
 # .env (operator-set; all default OFF/refusing)
 NOC_WRITE_ENABLED=true                        # master kill switch
 NOC_WRITE_ROUTEROS_TRANSPORT=verified         # one-time ack after lab/spare-router validation
-NOC_WRITE_ALLOWED_HOSTS=<exact IPs and/or CIDRs>   # same semantics as TEMP_SITE_ALLOWED_HOSTS
+# NOC_WRITE_ALLOWED_HOSTS=<exact IPs and/or CIDRs>  # OPTIONAL. Unset = private/link-local/loopback;
+#                                                  # set = replaces that default (narrow, or add a public mgmt IP)
 NOC_WRITE_POE_CYCLE_PAUSE_MS=10000            # power-off dwell for poe-cycle (integer 1000..60000)
 NOC_WRITE_POE_CYCLE_STRATEGY=forced-on        # or auto, if the port was originally auto
 ```

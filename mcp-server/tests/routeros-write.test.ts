@@ -26,17 +26,19 @@ describe('routeros-write planner', () => {
     expect(plain.ops[0].cmd).toContain('/interface disable');
   });
 
-  it('gates block until kill switch + transport verify + allowlist satisfied', () => {
+  it('gates block until kill switch + transport verify, then default to the private write scope', () => {
     const prev = process.env;
     process.env = { ...prev, NOC_WRITE_ENABLED: undefined, NOC_WRITE_ROUTEROS_TRANSPORT: undefined, NOC_WRITE_ALLOWED_HOSTS: undefined };
     expect(checkInfraWriteGates('10.0.1.5').ok).toBe(false);
     process.env.NOC_WRITE_ENABLED = 'true';
     expect(checkInfraWriteGates('10.0.1.5').ok).toBe(false);
     process.env.NOC_WRITE_ROUTEROS_TRANSPORT = 'verified';
-    expect(checkInfraWriteGates('10.0.1.5').ok).toBe(false);
-    process.env.NOC_WRITE_ALLOWED_HOSTS = '10.0.1.5,10.0.2.0/24';
     expect(checkInfraWriteGates('10.0.1.5').ok).toBe(true);
-    expect(checkInfraWriteGates('10.1.2.3').ok).toBe(false);
+    expect(checkInfraWriteGates('8.8.8.8').ok).toBe(false);
+    // An explicit list replaces the default, so it narrows.
+    process.env.NOC_WRITE_ALLOWED_HOSTS = '10.0.2.0/24';
+    expect(checkInfraWriteGates('10.0.1.5').ok).toBe(false);
+    expect(checkInfraWriteGates('10.0.2.9').ok).toBe(true);
     process.env = prev;
   });
 });

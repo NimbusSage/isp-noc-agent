@@ -152,6 +152,11 @@ dying at apply, then full routed verify from the agent (ping 0% loss,
 
 ### SNMP (site-wide convention, operator-set)
 
+Device is up but LibreNMS will not poll it? Work `references/snmp-librenms.md`
+in order (src-address, poller allow list, firewall UDP 161, loopback,
+sysName) before changing anything else; `snmp-config` applies the RouterOS
+standard config in one gated call.
+
 `services.snmpAgent` / ucfg key `services.snmp`:
 `enabled=true, community=<snmp-community>, location=[<device GPS lat,long>],
 contact=<org-contact>`. **The `[lat,long]` brackets are required syntax so

@@ -71,7 +71,10 @@ describe('lookup-device-by-exact-ip MCP tool', () => {
     const server = await makeServer({ inventory: { enabled: true, libreNmsTokenEnvVar: 'TEST_LIBRENMS_TOKEN', libreNmsBaseUrl: 'http://inventory.example', staleAfterSeconds: 900, lookupTimeoutMs: 5000 } });
     const result = await server.handleToolCall('lookup-device-by-exact-ip', { ip: '10.0.0.1' });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('no bulk inventory fallback');
+    // A 403 is a real API error: fail closed, name the cause, and never echo the
+    // response body or retry with a bulk listing.
+    expect(result.content[0].text).toContain('LibreNMS exact-IP lookup failed');
+    expect(result.content[0].text).toContain('HTTP 403');
     expect(result.content[0].text).not.toContain('should-not-be-returned');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });

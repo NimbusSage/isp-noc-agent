@@ -1,5 +1,5 @@
 import { z } from 'zod/v3';
-import { checkHostAllowlist } from '../temp-site/allowlist.js';
+import { checkWriteHost } from '../security/hosts.js';
 import { DeviceIdSchema, IDENT_RE, IdentSchema, IPV4_CIDR_RE, Ipv4Schema, ReasonSchema } from '../security/validators.js';
 
 /**
@@ -337,7 +337,7 @@ export function checkTempAccessGates(host: string): { ok: true } | { ok: false; 
   if (process.env.NOC_WRITE_ROUTEROS_TRANSPORT !== 'verified') {
     return { ok: false, error: 'RouterOS write transport not verified; confirm exact command behavior on a lab/spare router and set NOC_WRITE_ROUTEROS_TRANSPORT=verified' };
   }
-  return checkHostAllowlist(host, process.env.NOC_WRITE_ALLOWED_HOSTS, 'NOC_WRITE_ALLOWED_HOSTS');
+  return checkWriteHost(host);
 }
 
 export interface RouterOsTempAccessResult {
