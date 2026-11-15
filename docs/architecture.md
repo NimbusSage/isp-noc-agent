@@ -70,7 +70,7 @@ NocAgent/
 │       ├── onboarding-wizard/                # SKILL.md, references/ (6 files)
 │       ├── path-analyzer/                    # SKILL.md, references/ (4 files)
 │       ├── peak-scheduler/                   # SKILL.md
-│       ├── program-new-device/               # SKILL.md
+│       ├── program-new-device/               # SKILL.md, references/ (1 files)
 │       ├── rename-site/                      # SKILL.md, references/ (4 files)
 │       ├── reprogram-device/                 # SKILL.md, references/ (4 files)
 │       ├── schedule-field-tech/              # SKILL.md
@@ -160,7 +160,9 @@ NocAgent/
 │   │   │   ├── ubnt-uisp.ts
 │   │   │   └── ubnt-wave.ts
 │   │   ├── inventory/                        # Exact-IP device lookup in LibreNMS inventory
-│   │   │   └── librenms.ts
+│   │   │   ├── librenms-add.ts
+│   │   │   ├── librenms.ts
+│   │   │   └── snmp-probe.ts                 # Minimal SNMPv2c GET, dependency-free
 │   │   ├── redaction/                        # Redacts secrets from command output before it is returned
 │   │   │   ├── engine.ts
 │   │   │   └── patterns.ts
@@ -185,7 +187,7 @@ NocAgent/
 │   │   ├── tool-cli.ts                       # Universal tool CLI — harness-independent access to the MCP executor
 │   │   └── tool-schemas.ts                   # Single source of truth for every tool's INPUT schema
 │   ├── state/                                # Rollback snapshots written by the temporary-site tools
-│   ├── tests/                                # 35 files
+│   ├── tests/                                # 39 files
 │   ├── .gitignore
 │   ├── package-lock.json
 │   ├── package.json
