@@ -92,6 +92,44 @@ class Secrets(unittest.TestCase):
         self.assertNotIn("DNSUPDATE_TSIG_SECRET", env)
 
 
+class LegoCommandLine(unittest.TestCase):
+    def argv(self, action, flavor):
+        s = hub_tls.settings(dict(BASE), lego="/opt/lego")
+        with mock.patch.object(hub_tls, "lego_flavor", return_value=flavor):
+            return hub_tls.lego_argv(s, action)
+
+    def test_v5_puts_every_option_after_run(self):
+        argv = self.argv("run", "v5")
+        self.assertEqual(argv[:3], ["/opt/lego", "run", "--accept-tos"])
+        self.assertIn("--path", argv)
+        self.assertIn("-d", argv)
+        self.assertNotIn("--accept-tos", argv[3:], "lego 5 rejects it anywhere but the first slot after run")
+
+    def test_v5_renews_through_run_because_there_is_no_renew_command(self):
+        argv = self.argv("renew", "v5")
+        self.assertEqual(argv[1], "run")
+        self.assertIn("--renew-days", argv)
+        self.assertIn("--deploy-hook", argv)
+        self.assertNotIn("renew", argv[1:])
+        self.assertIn("systemctl", " ".join(argv))
+
+    def test_v4_keeps_the_global_flags_and_the_renew_subcommand(self):
+        argv = self.argv("renew", "v4")
+        self.assertEqual(argv[1], "--accept-tos")
+        self.assertIn("renew", argv)
+        self.assertIn("--renew-hook", argv)
+
+    def test_propagation_is_not_checked_against_this_hosts_resolvers(self):
+        for action in ("run", "renew"):
+            argv = self.argv(action, "v5")
+            self.assertIn("--dns.propagation.wait", argv)
+            self.assertNotIn("--dns.resolvers", argv)
+
+    def test_child_environment_accepts_the_terms_for_renew(self):
+        s = hub_tls.settings(dict(BASE), lego="/opt/lego")
+        self.assertEqual(hub_tls.provider_env(s, base_env={})["LEGO_ACCEPT_TOS"], "true")
+
+
 class Caddy(unittest.TestCase):
     def test_site_block_points_at_the_lego_files_and_the_upstream(self):
         s = hub_tls.settings(dict(BASE, HUB_TLS_UPSTREAM="127.0.0.1:9000"))
