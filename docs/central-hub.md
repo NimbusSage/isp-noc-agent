@@ -146,8 +146,11 @@ while a TSIG key can be allowed to touch only the challenge record.
    sudo python3 scripts/hub_tls.py --write-caddy
    sudo systemctl reload caddy
    ```
-   After a run the key is `0640 root:caddy` when that group exists, so the proxy can read
-   it without it becoming world-readable.
+   After a run the key is `0640 root:caddy` when that group exists and lego's state
+   directories are `0755`, so the proxy can reach the key without it becoming
+   world-readable. Without the directory step the proxy cannot even traverse in: lego
+   creates them `0700`, and Caddy fails with a permission error that looks like a
+   missing certificate.
 7. **Renewal.** `sudo bash scripts/install.sh --with-hub-tls` installs and enables
    `noc-hub-tls.timer`, which runs `hub_tls.py --renew` daily; lego only replaces the
    certificate inside 30 days and reloads Caddy. Check it with

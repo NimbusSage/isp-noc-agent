@@ -125,6 +125,7 @@ def normalize_tsig_algorithm(value: str) -> str:
 def provider_env(s: dict, base_env: dict | None = None) -> dict:
     """Environment for lego: the caller's environment plus this backend's variables."""
     env = dict(os.environ if base_env is None else base_env)
+    env.setdefault("LEGO_ACCEPT_TOS", "true")   # `renew` has no flag; the environment is the only way in
     for name in PROVIDERS[s["provider"]]:
         value = s["vars"].get(name, "")
         if name.endswith("_ALGORITHM"):
@@ -148,17 +149,47 @@ def missing_settings(s: dict) -> list:
     return problems
 
 
+_FLAVOR: dict = {}
+
+
+def lego_flavor(s: dict) -> str:
+    """'v5' when this lego has no `renew` subcommand, else 'v4'.
+
+    lego 5 dropped every global option and the `renew` subcommand: options belong after
+    `run`, and a renewal is `run --renew-days`. A v4 build still needs the older shape.
+    """
+    key = s["lego"]
+    if key in _FLAVOR:
+        return _FLAVOR[key]
+    try:
+        out = subprocess.run([lego_path(s), "--help"], capture_output=True, text=True, timeout=30)
+        flavor = "v4" if re.search(r"^\s+renew\b", out.stdout, re.M) else "v5"
+    except (OSError, subprocess.SubprocessError, HubTlsError):
+        flavor = "v5"   # nothing to ask: the current release shape is the safe guess
+    _FLAVOR[key] = flavor
+    return flavor
+
+
 def lego_argv(s: dict, action: str) -> list:
     """The command line for lego. No setting value is ever part of it."""
-    argv = [s["lego"], "--accept-tos", "--path", s["state_dir"], "--dns", s["provider"]]
+    # lego otherwise polls the recursive resolvers this host is configured with, and on a
+    # zone the organization hosts itself those can lag, be internal-only, or be dead
+    # entries nobody cleaned up - a timeout there fails an issuance whose DNS record is
+    # actually fine. The CA's own validation is the real check; give it a bounded wait.
+    common = ["--path", s["state_dir"], "--dns", s["provider"], "--dns.propagation.wait", "2m"]
     if s["email"]:
-        argv += ["--email", s["email"]]
+        common += ["--email", s["email"]]
     if s["server"]:
-        argv += ["--server", s["server"]]
-    argv += ["-d", s["hostname"]]
+        common += ["--server", s["server"]]
+    if lego_flavor(s) == "v4":
+        argv = [s["lego"], "--accept-tos", *common, "-d", s["hostname"]]
+        if action == "renew":
+            return argv + ["renew", "--days", "30", "--renew-hook", s["reload_cmd"]]
+        return argv + ["run"]
+    argv = [s["lego"], "run", "--accept-tos", *common, "-d", s["hostname"]]
     if action == "renew":
-        return argv + ["renew", "--days", "30", "--renew-hook", s["reload_cmd"]]
-    return argv + ["run"]
+        argv += ["--renew-days", "30", "--deploy-hook", s["reload_cmd"]]
+    return argv
 
 
 def lego_path(s: dict) -> str:
@@ -228,8 +259,13 @@ def caddy_site(s: dict) -> str:
     ])
 
 
-def relax_for_caddy(crt: Path, key: Path) -> str:
-    """Let the caddy service read the key without making it world-readable."""
+def relax_for_caddy(crt: Path, key: Path, state_dir: Path | None = None) -> str:
+    """Let the caddy service read the key without making it world-readable.
+
+    lego creates its state directories 0700, so handing the key to the caddy group is not
+    enough on its own: the proxy still cannot traverse into the directory that holds it.
+    The directories become 0755 (they contain no secrets) and only the key stays 0640.
+    """
     try:
         import grp
         gid = grp.getgrnam("caddy").gr_gid
@@ -237,7 +273,15 @@ def relax_for_caddy(crt: Path, key: Path) -> str:
         return "no 'caddy' group: the key stays owner-only; give the proxy access yourself if it runs as another user"
     if os.geteuid() != 0:
         return "not root: the key stays owner-only (rerun with sudo to hand it to the caddy group)"
+    directories = {crt.parent, crt.parent.parent}
+    if state_dir is not None:
+        directories.add(Path(state_dir))
+        if Path(state_dir).parent != Path("/"):
+            directories.add(Path(state_dir).parent)   # /etc/nocagent: lego creates it 0700 too
     try:
+        for directory in sorted(directories):
+            if directory.is_dir():
+                os.chmod(directory, 0o755)
         os.chown(key, -1, gid)
         os.chmod(key, 0o640)
         os.chmod(crt, 0o644)
@@ -355,7 +399,7 @@ def main(argv=None) -> int:
             crt, key = cert_paths(s)
             print("certificate: " + str(crt))
             if not args.dry_run:
-                print("permissions: " + relax_for_caddy(crt, key))
+                print("permissions: " + relax_for_caddy(crt, key, Path(s["state_dir"])))
             return 0
 
         if args.write_caddy:
