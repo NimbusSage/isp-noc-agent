@@ -31,11 +31,13 @@ Restore a factory-reset Ubiquiti device to its previous working state using its 
 
 ## Access rules: MCP first, operator-led raw SSH as the exception
 
-Restoring a reset device needs router CLI work that no typed MCP tool covers (temporary address, NAT and DHCP entries, switch port checks). Rules:
+Restoring a reset device needs router changes, and those are typed tools now: temporary address, NAT, DHCP, SSH forwarding and cleanup are `routeros-temp-access`, and the switch/gateway checks are `run-diagnostics` reads. Rules:
 
-- Prefer typed tools. Reads: `run-diagnostics` (`ip-address`, `ip-arp`, `interface-list`, `ping`, ...). PoE and interface enable/disable: `routeros-write` (gates and procedure in `references/routeros-write-poe.md`).
-- Raw SSH from the agent is an operator-led exception, allowed ONLY for the temporary-access steps in this skill, one reviewed step at a time, with the operator present. The operator exports the device admin password in an environment variable in the agent's shell (`export SSHPASS=...`, typed by the operator, never pasted into chat or onto a command line). Use `sshpass -e`, never `sshpass -p`. Never read `credentials.json`, `.env` or the encrypted store to find it, and never write it to a file, log, comment or ticket. If `SSHPASS` is unset, ask the operator; do not look elsewhere.
-- Define once per session (router and switch hops):
+- Prefer typed tools. Reads: `run-diagnostics` (`ip-address`, `ip-arp`, `ip-dhcp-server`, `ip-dhcp-server-network`, `ip-pool`, `firewall-nat`, `ip-neighbor`, `bridge-port`, `bridge-host`, `interface-list`, `ping`, ...).
+- **Temporary access on the router goes through `routeros-temp-access`** (`temp-address`, `temp-dhcp`, `temp-nat`, `temp-ssh`, `temp-cleanup`): the router address for the factory subnet, the Wave DHCP server, the airOS NAT relay, SSH port forwarding, and the cleanup. A `temp-nat` relay also inserts one tagged `chain=forward action=accept place-before=0` scoped to the translated address/port — a production PPPoE router usually ends its forward chain in drop (`securemikrotik` here), which makes a relay exist but stay unreachable; do not hand-write that accept, the op does it. `temp-ssh` sets `/ip ssh forwarding-enabled=both`; leave it on (we keep it on most routers, so it is not cleaned up) and tunnel with `python3 scripts/ssh_tunnel.py --host <router> --local-port <local> --remote <device>:<port>` — a forward through the router reaches the factory address with no NAT and no firewall change at all, so prefer it when the relay path is blocked. It uses the encrypted exact-device `mikrotik-ssh` binding, so no operator password is needed for router work. Every object it creates carries `comment="temp reprogram-device"`, and `temp-cleanup` removes only that tag, so a pre-existing entry is never touched. Gated like `routeros-write` (`NOC_WRITE_ENABLED`, `NOC_WRITE_ROUTEROS_TRANSPORT`, `execute: true`, host in write scope — private by default, `NOC_WRITE_ALLOWED_HOSTS` only to narrow or add a public mgmt IP). If it refuses, report the gate it names and stop; never hand-write the change instead.
+- PoE and interface enable/disable: `routeros-write` (gates and procedure in `references/routeros-write-poe.md`).
+- Raw SSH from the agent is an operator-led exception for the **radio hop only** (airOS `/tmp/system.cfg` install, Wave `ucfg`), one reviewed step at a time, with the operator present. Router work uses the MCP tools above, so a router admin password is never needed. For a radio hop the operator exports the device password in an environment variable in the agent's shell (`export SSHPASS=...`, typed by the operator, never pasted into chat or onto a command line); a factory-default radio takes the public vendor default `ubnt`. Use `sshpass -e`, never `sshpass -p`. Never read `credentials.json`, `.env` or the encrypted store to find it, and never write it to a file, log, comment or ticket. If `SSHPASS` is unset, ask the operator; do not look elsewhere.
+- Define once per session, only for the hops where no typed tool has the op (switch/radio hops):
 
 ```bash
 MT_SSH='sshpass -e ssh -o StrictHostKeyChecking=accept-new -o PreferredAuthentications=password -o PubkeyAuthentication=no -o ConnectTimeout=8'
@@ -137,7 +139,7 @@ grep -E '^netmode=|^netconf\.[0-9]+\.(ip|netmask|devname)=|^route\.1\.gateway=|^
 - SSH to the gateway under the "Access rules" procedure above (the operator supplies the router admin password in `SSHPASS`):
 
 ```bash
-$MT_SSH admin@<gateway_ip> '/system identity print'
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<gateway_ip>","deviceType":"mikrotik-ssh","command":"system-identity","params":{}}'
 ```
 
 **Backhaul radio** — named `<siteA>` + `2` + `<siteB>` + `AP` (AP side) or `ST` (ST side), e.g. `gamma2quebecAP`, `quebec2gammaST` (actual site names, not ticket abbreviations):
@@ -156,7 +158,7 @@ $MT_SSH admin@<gateway_ip> '/system identity print'
 Some APs plug into a **sector switch**, not the main gateway router. Identify the sector switch and log into it directly — do NOT assume the config's `route.1.gateway` is where the AP hangs.
 
 How to find the sector switch:
-1. SSH to the config's gateway (from Step 2b) and check its neighbors + PPPoE sessions: `/ip neighbor print`, `/ppp active print`.
+1. Check the config's gateway (from Step 2b) for neighbors + PPPoE sessions with `run-diagnostics` (`ip-neighbor`, `ppp-active`).
 2. Look for a device named like the site name followed by `sectorswitch` (e.g., `sigmasectorswitch`) as a PPPoE client. Its `ADDRESS` in `/ppp active print` is its PPPoE session IP (e.g., `10.0.44.5`) — SSH to that with the MikroTik creds.
 3. The sector switch's ports are commented with the attached APs (`;;; 5n`, `;;; 5s`, ...). Confirm the target AP's port and its state. Disabled ports (e.g., `X` flag) mean that AP is currently powered off — enable it when ready to work on that device:
    ```bash
@@ -191,7 +193,7 @@ Backhaul radios — especially the "bridged/switched" parts of the network — o
 The router's interface comments name the attached APs (`;;; 5n`, `;;; 5s`, ...):
 
 ```bash
-$MT_SSH admin@<gateway> '/interface print detail where comment!=""'
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<gateway>","deviceType":"mikrotik-ssh","command":"interface-list","params":{}}'
 ```
 
 Find the comment matching the device name (e.g., `5n` → `ether2`).
@@ -201,7 +203,7 @@ Find the comment matching the device name (e.g., `5n` → `ether2`).
 If the port is a bridge member (common — APs are bridged), the IP must go on the **bridge**, not the port:
 
 ```bash
-$MT_SSH admin@<gateway> '/interface bridge port print'
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<gateway>","deviceType":"mikrotik-ssh","command":"bridge-port","params":{}}'
 ```
 
 If the device's port is in the bridge → use the bridge name (e.g., `bridge1`). Otherwise use the port name directly.
@@ -210,22 +212,12 @@ If the device's port is in the bridge → use the bridge name (e.g., `bridge1`).
 
 A factory-reset airOS device sits at `192.168.1.20/24` with NO default route. You need three temp changes (all tagged `comment="temp reprogram-device"` so they're identifiable for cleanup):
 
+Two gated calls: the address, then the NAT pair (srcnat masquerade is REQUIRED so the AP's replies reach the router — the AP has no default route and won't answer off-subnet sources; the dstnat is what makes `192.168.1.20` reachable for SSH from the agent, so use the router's loopback/mgmt IP — find it with `ip-address`):
+
 ```bash
-# 1. Put the router on the reset device's subnet (use the L3 interface from 3b)
-$MT_SSH admin@<gateway> \
-  '/ip address add address=192.168.1.1/24 interface=<bridge_or_port> comment="temp reprogram-device"'
+node mcp-server/dist/tool-cli.js routeros-temp-access '{"op":"temp-address","host":"<gateway>","deviceId":"<router_inventory_id>","interfaze":"<bridge_or_port>","address":"192.168.1.1/24","reason":"factory-reset AP temp access","execute":true}'
 
-# 2. Masquerade traffic to 192.168.1.0/24 — REQUIRED so the AP's replies reach
-#    the router (the AP has no default route and won't answer off-subnet sources)
-$MT_SSH admin@<gateway> \
-  '/ip firewall nat add chain=srcnat action=masquerade dst-address=192.168.1.0/24 out-interface=<bridge_or_port> comment="temp reprogram-device"'
-
-# 3. dst-nat to a routable router IP. NOTE: many gateways have NO ssh/telnet client,
-#    and the agent host may not be able to route to 192.168.1.0/24 directly, so NAT
-#    a reachable router address to the AP. The router's loopback IP is ideal.
-#    (Find it: /ip address print where interface=loopback)
-$MT_SSH admin@<gateway> \
-  '/ip firewall nat add chain=dstnat action=dst-nat protocol=tcp dst-address=<router_loopback_or_mgmt_ip> dst-port=2222 to-addresses=192.168.1.20 to-ports=22 comment="temp reprogram-device"'
+node mcp-server/dist/tool-cli.js routeros-temp-access '{"op":"temp-nat","host":"<gateway>","deviceId":"<router_inventory_id>","interfaze":"<bridge_or_port>","network":"192.168.1.0/24","dstAddress":"<router_loopback_or_mgmt_ip>","dstPort":2222,"toAddress":"192.168.1.20","toPort":22,"reason":"factory-reset AP temp access","execute":true}'
 ```
 
 > **Alternative to step 3c/3:** if the agent host is directly on the routed backbone, add a host route and SSH straight to 192.168.1.20 — `ip route add 192.168.1.0/24 via <gateway>`. If `ip route` errors with `Nexthop has invalid gateway`, the gateway isn't on-link for you → use the dst-nat method instead (it always works).
@@ -233,7 +225,7 @@ $MT_SSH admin@<gateway> \
 ### 3d. Confirm the reset device is there
 
 ```bash
-$MT_SSH admin@<gateway> '/ping 192.168.1.20 count=3'
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<gateway>","deviceType":"mikrotik-ssh","command":"ping","params":{"address":"192.168.1.20","count":3}}'
 ```
 
 If it doesn't answer: the device may be powered off, PoE-failed, or mid-boot — report and stop (do not leave temp rules behind — clean up first, see Step 5).
@@ -248,30 +240,23 @@ If the radio answers ping/ARP but every TCP connect times out, with TTL 255 repl
 
 Wave/MLO radios **ping on `192.168.1.20` but have NO SSH by default in factory mode**. They must grab a DHCP lease before they become manageable. Do NOT add the airOS NAT rules for waves — add the DHCP server instead:
 
-1. Ensure `192.168.1.1/24` exists on the interface facing the device (there is often a disabled leftover from a prior job — reuse/enable it rather than adding a duplicate):
+1. **Look before you add.** There is often a disabled or leftover `192.168.1.1/24` from a prior job:
    ```bash
-   $MT_SSH admin@<gateway> \
-     '/ip address print where address~"192.168.1."'
-   # If a disabled one exists on the right interface, enable it:
-   #   /ip address enable [find where address="192.168.1.1/24"]
-   # Otherwise add one (tag it "temp reprogram-device"):
-   #   /ip address add address=192.168.1.1/24 interface=<iface> comment="temp reprogram-device"
+   node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<gateway>","deviceType":"mikrotik-ssh","command":"ip-address","params":{}}'
+   node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<gateway>","deviceType":"mikrotik-ssh","command":"ip-pool","params":{}}'
+   node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<gateway>","deviceType":"mikrotik-ssh","command":"ip-dhcp-server","params":{}}'
+   node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<gateway>","deviceType":"mikrotik-ssh","command":"ip-dhcp-server-network","params":{}}'
    ```
 
-2. Create the DHCP server (all tagged `comment="temp reprogram-device"` for cleanup). **The single-IP pool at `192.168.1.100` is the standard**:
+2. One gated call creates the address, the single-address pool (**`192.168.1.100` is the house standard**), the DHCP server and the network entry. Each step probes first and is skipped when the object already exists, so a leftover from a prior job is reused rather than duplicated:
    ```bash
-   $MT_SSH admin@<gateway> \
-     '/ip pool add name=waveDHCP ranges=192.168.1.100 comment="temp reprogram-device"'
-   $MT_SSH admin@<gateway> \
-     '/ip dhcp-server add address-pool=waveDHCP interface=<iface_facing_device> lease-time=5m name=waveDHCP comment="temp reprogram-device"'
-   $MT_SSH admin@<gateway> \
-     '/ip dhcp-server network add address=192.168.1.0/24 gateway=192.168.1.1 comment="temp reprogram-device"'
+   node mcp-server/dist/tool-cli.js routeros-temp-access '{"op":"temp-dhcp","host":"<gateway>","deviceId":"<router_inventory_id>","interfaze":"<iface_facing_device>","network":"192.168.1.0/24","gateway":"192.168.1.1","poolRange":"192.168.1.100","reason":"factory-reset wave needs a DHCP lease to enable SSH","execute":true}'
    ```
-   If `waveDHCP` or the network entry already exists from a prior job, reuse them (`/ip pool print`, `/ip dhcp-server print`, `/ip dhcp-server network print` to check).
+   The result lists `skipped` steps (already present) and a tagged `verify` read-back.
 
-3. Wait for the wave to grab a lease (can take a while). Poll leases:
+3. Wait for the wave to grab a lease (can take a while; the call above also returns a `lease` snapshot). Poll leases:
    ```bash
-   $MT_SSH admin@<gateway> '/ip dhcp-server lease print'
+   node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<gateway>","deviceType":"mikrotik-ssh","command":"ip-dhcp-lease","params":{}}'
    ```
    Look for a lease on `192.168.1.100`. Give it up to ~5 minutes.
 
@@ -385,19 +370,14 @@ The original management IP must be live on `br0` and the SSID must be broadcasti
 **5b. Clean up ALL temp changes** — this is REQUIRED; do not leave the network modified:
 
 ```bash
-# Remove temp NAT rules + address on the gateway (identified by comment)
-$MT_SSH admin@<gateway> \
-  '/ip firewall nat remove [find where comment="temp reprogram-device"]; /ip address remove [find where comment="temp reprogram-device"]'
+# One gated call removes every object this tool tagged (address, NAT, DHCP server,
+# network, pool) in dependency order. It covers multi-wave jobs too (waveDHCP,
+# waveDHCP2, ...) in a single pass, and never touches an untagged pre-existing entry.
+node mcp-server/dist/tool-cli.js routeros-temp-access '{"op":"temp-cleanup","host":"<gateway>","deviceId":"<router_inventory_id>","reason":"factory-reset restore finished","execute":true}'
 
-# Wave devices: also remove the temp DHCP server, network, and pool (identified by comment).
-# This removes EVERY temp entry at once, so it covers multi-wave jobs (waveDHCP, waveDHCP2,
-# waveDHCP3, ...) in a single pass — no need to enumerate names.
-$MT_SSH admin@<gateway> \
-  '/ip dhcp-server remove [find where comment="temp reprogram-device"]; /ip dhcp-server network remove [find where comment="temp reprogram-device"]; /ip pool remove [find where comment="temp reprogram-device"]'
-
-# Verify nothing temp survives — every one of these should print empty:
-$MT_SSH admin@<gateway> \
-  '/ip dhcp-server print detail where comment="temp reprogram-device"; /ip dhcp-server network print where comment="temp reprogram-device"; /ip pool print where comment="temp reprogram-device"; /ip address print where comment="temp reprogram-device"; /ip firewall nat print where comment="temp reprogram-device"'
+# The call returns tagged verify prints for all six sections — every one must be empty.
+# Cross-check with the read tools if anything looks off:
+node mcp-server/dist/tool-cli.js run-diagnostics '{"host":"<gateway>","deviceType":"mikrotik-ssh","command":"firewall-nat","params":{}}'
 
 # If you added a host route on the agent box, remove it too
 ip route del 192.168.1.0/24 via <gateway> 2>/dev/null || true

@@ -10,14 +10,36 @@ import { RedactionEngine } from './redaction/engine.js';
 import { AuditLogger, type AuditEvent } from './audit/logger.js';
 import { resolveOperator } from './audit/operator.js';
 import { lookupLibreNmsDeviceByExactIp } from './inventory/librenms.js';
+import { LibrenmsAddSchema, postLibrenmsDevice, librenmsAddRequestPreview } from './inventory/librenms-add.js';
+import { snmpGetSysName } from './inventory/snmp-probe.js';
 import { RouterOsWriteSchema, planRouterOsWrite, executeRouterOsWrite, checkInfraWriteGates } from './writes/routeros-writes.js';
+import {
+  SnmpConfigSchema,
+  planSnmpConfig,
+  redactPlan,
+  redactCommunity,
+  redactVerifyOutput,
+  readSnmpSettings,
+  checkSnmpWriteGates,
+  executeMikrotikSnmp,
+  executeWaveSnmp,
+  waveSnmpOnlyView,
+  poolCredentialsEnabled,
+  poolCredentialTries,
+  interleavePoolCandidates,
+  VENDOR_DEVICE_TYPES,
+  type SnmpConfig,
+  type SnmpPlan,
+  type SnmpSettings,
+} from './writes/snmp-config.js';
+import { RouterOsTempAccessSchema, planRouterOsTempAccess, executeRouterOsTempAccess, checkTempAccessGates, type RouterOsTempAccess } from './writes/routeros-temp-access.js';
 import { planTempOspf } from './temp-site/ospf.js';
 import { planTempRadio, checkExecuteGates, checkTransportGates, opToEdits, resolveStationPsk, redactCfgValues, readbackCommand } from './temp-site/radio.js';
 import { TempOspfApplySchema, applyOspfAdjacency, rollbackOspfAdjacency, checkRouterGates, TempMtFlipSchema, applyMtFlip, rollbackMtFlip, checkMtGates, TempApWdsSchema, applyApWds, TempMtBounceSchema, applyMtBounce, TempMtAliasSchema, applyMtAlias, removeMtAlias } from './temp-site/mikrotik.js';
 import { MikroTikClient } from './devices/mikrotik.js';
 import { Ssh2Runner, applyCfgEdits, restoreSnapshot } from './temp-site/airos-ssh.js';
 import { parseToolArgs, runDiagnosticsShape, runExactDeviceDiagnosticsShape, toolSchemas } from './tool-schemas.js';
-import { checkReadHost, hostEnvProblems } from './security/hosts.js';
+import { checkReadHost, checkWriteHost, hostEnvProblems } from './security/hosts.js';
 import { stripControl } from './security/validators.js';
 import { setHostKeyEventSink } from './security/hostkeys.js';
 import { readSnapshotFile, removeSnapshotFile, snapshotName, writeSnapshotFile } from './temp-site/snapshots.js';
@@ -150,7 +172,7 @@ export class NocMcpServer {
       },
       {
         name: 'routeros-write',
-        description: 'GATED RouterOS infrastructure write (closed op set: poe-off/poe-forced-on/poe-auto/poe-cycle/interface-enable/interface-disable). Requires NOC_WRITE_ENABLED=true, NOC_WRITE_ROUTEROS_TRANSPORT=verified, host in NOC_WRITE_ALLOWED_HOSTS, explicit execute:true, reason text, and a bound exact-device mikrotik-ssh credential. execute:false returns the dry-run plan.',
+        description: 'GATED RouterOS infrastructure write (closed op set: poe-off/poe-forced-on/poe-auto/poe-cycle/interface-enable/interface-disable). Requires NOC_WRITE_ENABLED=true, NOC_WRITE_ROUTEROS_TRANSPORT=verified, a host in write scope (private/link-local/loopback by default), explicit execute:true, reason text, and a bound exact-device mikrotik-ssh credential. execute:false returns the dry-run plan.',
         inputSchema: {
           type: 'object' as const,
           properties: {
@@ -162,6 +184,31 @@ export class NocMcpServer {
             execute: { type: 'boolean', description: 'Must be true; otherwise returns the dry-run plan only' },
           },
           required: ['op', 'host', 'deviceId', 'interfaze', 'reason', 'execute'],
+        },
+      },
+      {
+        name: 'routeros-temp-access',
+        description: 'GATED RouterOS temporary-access writes for factory-reset device recovery (closed op set: temp-address | temp-dhcp | temp-nat | temp-cleanup). Puts the router on the reset device subnet, serves a Wave a DHCP lease, NATs an airOS device, and cleans up — every object is tagged comment="temp reprogram-device" and cleanup removes only that tag. Same gates as routeros-write: NOC_WRITE_ENABLED=true, NOC_WRITE_ROUTEROS_TRANSPORT=verified, a host in write scope, explicit execute:true, and a bound exact-device mikrotik-ssh credential. execute:false returns the dry-run plan.',
+        inputSchema: {
+          type: 'object' as const,
+          properties: {
+            op: { type: 'string', description: 'temp-address | temp-dhcp | temp-nat | temp-cleanup' },
+            host: { type: 'string', description: 'Target router management IP (must be allowlisted)' },
+            deviceId: { type: 'string', description: 'Stable inventory device ID (must match exactly one credential binding)' },
+            interfaze: { type: 'string', description: 'Interface facing the reset device (all ops except temp-cleanup)' },
+            address: { type: 'string', description: 'temp-address: router address to add, e.g. 192.168.1.1/24 (RFC1918, /24../29)' },
+            poolName: { type: 'string', description: 'temp-dhcp: pool + server name, default waveDHCP' },
+            poolRange: { type: 'string', description: 'temp-dhcp: the single leased address, e.g. 192.168.1.100' },
+            network: { type: 'string', description: 'temp-dhcp/temp-nat: the temp subnet, e.g. 192.168.1.0/24' },
+            gateway: { type: 'string', description: 'temp-dhcp: router address handed to the radio, e.g. 192.168.1.1' },
+            dstAddress: { type: 'string', description: 'temp-nat: routable mgmt address for the dstnat (optional)' },
+            dstPort: { type: 'number', description: 'temp-nat: dstnat port (optional)' },
+            toAddress: { type: 'string', description: 'temp-nat: factory address on the reset device (optional)' },
+            toPort: { type: 'number', description: 'temp-nat: port on the reset device (optional)' },
+            reason: { type: 'string', description: 'Why this write is happening (audited)' },
+            execute: { type: 'boolean', description: 'Must be true; otherwise returns the dry-run plan only' },
+          },
+          required: ['op', 'host', 'deviceId', 'reason'],
         },
       },
       {
@@ -376,6 +423,35 @@ export class NocMcpServer {
         },
       });
     }
+    definitions.push({
+      name: 'snmp-config',
+      description: 'GATED SNMP provisioning for devices that are up but unmonitored (closed op set: snmp-enable | snmp-verify; vendors: mikrotik RouterOS /snmp, airos /tmp/system.cfg, wave WaveOS ucfg services.snmp). snmp-enable applies the operator-standard config (read-only community with security=none, NOC_SNMP_COMMUNITY_ADDRESSES as addresses= when set, trap-community, and a stale /snmp src-address reset to ::) and needs NOC_WRITE_ENABLED=true, NOC_WRITE_SNMP_TRANSPORT=verified, a host in write scope (private/link-local/loopback by default), execute:true, and a credential (exact-device binding, or the device-type pool only when NOC_WRITE_SNMP_POOL_CREDENTIALS=true). The community comes only from NOC_SNMP_COMMUNITY and is redacted everywhere. snmp-verify is read-only. execute:false returns the dry-run plan.',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          op: { type: 'string', description: 'snmp-enable | snmp-verify', enum: ['snmp-enable', 'snmp-verify'] },
+          vendor: { type: 'string', description: 'mikrotik (RouterOS /snmp) | aios (airOS system.cfg snmp.* keys) | wave (WaveOS ucfg services.snmp)', enum: ['mikrotik', 'airos', 'wave'] },
+          host: { type: 'string', description: 'Device management IPv4' },
+          deviceId: { type: 'string', description: 'Inventory/device ID for the credential binding' },
+          reason: { type: 'string', description: 'Why this device needs SNMP now (audit trail)' },
+          execute: { type: 'boolean', description: 'false/absent = dry-run plan; true = apply' },
+        },
+        required: ['op', 'vendor', 'host', 'deviceId', 'reason'],
+      },
+    });
+    definitions.push({
+      name: 'librenms-add-device',
+      description: 'GATED LibreNMS device add for a device that already answers SNMP. Pre-flight is read-only: exact-IP lookup (refuses when the address is already monitored) and one SNMPv2c GET for sysName using NOC_SNMP_COMMUNITY — silence means no add, because LibreNMS would only create a device that never polls. The add request never sets force_add, so a sysName collision is refused by LibreNMS and reported verbatim rather than overridden. Needs NOC_WRITE_ENABLED=true, inventory.enabled with a token, a host in write scope, and execute:true. execute:false returns the plan for a device already proven to answer SNMP.',
+      inputSchema: {
+        type: 'object' as const,
+        properties: {
+          host: { type: 'string', description: 'Device management IPv4 to add' },
+          reason: { type: 'string', description: 'Why this device belongs in monitoring now (audit trail)' },
+          execute: { type: 'boolean', description: 'false/absent = dry-run plan; true = add' },
+        },
+        required: ['host', 'reason'],
+      },
+    });
     return definitions;
   }
 
@@ -437,6 +513,247 @@ export class NocMcpServer {
     }
   }
 
+  /**
+   * Gated temp-access writes for factory-reset recovery. Same gate order as
+   * routeros-write: schema -> plan -> execute flag -> gates -> exact binding ->
+   * host policy -> connect. The exact-device binding is what keeps this from
+   * reaching any router the operator has not explicitly provisioned.
+   */
+  private async routerOsTempAccess(args: Record<string, unknown>): Promise<{
+    content: Array<{ type: 'text'; text: string }>;
+    isError?: boolean;
+  }> {
+    const parsed = RouterOsTempAccessSchema.safeParse(args);
+    const device = String((args as Record<string, unknown>).host ?? 'unknown');
+    const baseAudit = { timestamp: new Date().toISOString(), device, command: 'routeros-temp-access', category: 'execution', redactions: 0, durationMs: 0 };
+    if (!parsed.success) {
+      this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: 'schema validation failed' } });
+      return { content: [{ type: 'text', text: `Validation error: ${parsed.error.issues.map((i: { message: string }) => i.message).join(', ')}` }], isError: true };
+    }
+    const input: RouterOsTempAccess = parsed.data;
+    if (input.execute !== true) {
+      const plan = planRouterOsTempAccess(input);
+      this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: 'execute flag not set; plan only' } });
+      return { content: [{ type: 'text', text: JSON.stringify({ ...plan, note: 'execute was not true: dry-run plan only, nothing written.' }, null, 2) }], isError: !plan.valid };
+    }
+    const writePlan = planRouterOsTempAccess(input);
+    if (!writePlan.valid) {
+      this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: writePlan.error } });
+      return { content: [{ type: 'text', text: `Blocked: ${writePlan.error}` }], isError: true };
+    }
+    const gates = checkTempAccessGates(input.host);
+    if (!gates.ok) {
+      this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: gates.error } });
+      return { content: [{ type: 'text', text: `Blocked: ${gates.error}` }], isError: true };
+    }
+    const resolver = new CredentialResolver(await this.getStoreData());
+    const credential = resolver.resolveExactDevice('mikrotik-ssh', input.deviceId, input.host);
+    if (!credential) {
+      this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: 'no unique exact-device mikrotik-ssh binding' } });
+      return { content: [{ type: 'text', text: 'Blocked: no unique exact-device mikrotik-ssh credential is bound to this ID+host; type-wide credentials are never used for writes.' }], isError: true };
+    }
+    const startedAt = Date.now();
+    const hostPolicy = this.hostBlocked(args, input.host, 'routeros-temp-access');
+    if (hostPolicy) return hostPolicy;
+    const client = createDeviceClient(input.host, credential, 'mikrotik-ssh', this.config.limits.commandTimeoutMs) as MikroTikClient;
+    try {
+      await client.connect();
+      const result = await executeRouterOsTempAccess((cmd: string) => client.runRaw(cmd), input);
+      await client.disconnect().catch(() => { /* best effort */ });
+      this.auditWith(args, { ...baseAudit, outcome: 'success', durationMs: Date.now() - startedAt, metadata: { op: input.op, interfaze: input.interfaze, applied: result.output.length, skipped: result.skipped.length, reason: input.reason } });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    } catch (e) {
+      try { await client.disconnect(); } catch { /* noop */ }
+      this.auditWith(args, { ...baseAudit, outcome: 'error', durationMs: Date.now() - startedAt, metadata: { op: input.op, reason: this.errText(e, credential) } });
+      return { content: [{ type: 'text', text: `routeros-temp-access failed (${this.errText(e, credential)}). Inspect router state before retrying.` }], isError: true };
+    }
+  }
+
+  /**
+   * Gated SNMP provisioning — enable the read-only SNMP service on a device that
+   * is up but unmonitored, before it is added to LibreNMS. Gate order matches the
+   * other executors: schema -> settings from env -> plan -> execute flag -> write
+   * gates (enable only) -> credential -> host policy -> connect.
+   *
+   * The one deliberate difference: credentials may come from the device-type
+   * pool the read path already uses, because the devices this exists for have no
+   * per-device binding yet. That needs NOC_WRITE_SNMP_POOL_CREDENTIALS=true, is
+   * tried in priority order with a bounded count, and still never leaves the
+   * store — audit records the credential NAME, never the secret. The community is
+   * read from the environment only and redacted from every result and audit line.
+   */
+  private async snmpConfig(args: Record<string, unknown>): Promise<{
+    content: Array<{ type: 'text'; text: string }>;
+    isError?: boolean;
+  }> {
+    const device = String((args as Record<string, unknown>).host ?? 'unknown');
+    const baseAudit = { timestamp: new Date().toISOString(), device, command: 'snmp-config', category: 'execution', redactions: 0, durationMs: 0 };
+    const parsed = SnmpConfigSchema.safeParse(args);
+    if (!parsed.success) {
+      this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: 'schema validation failed' } });
+      return { content: [{ type: 'text', text: `Validation error: ${parsed.error.issues.map((i: { message: string }) => i.message).join(', ')}` }], isError: true };
+    }
+    const input: SnmpConfig = parsed.data;
+
+    let settings: SnmpSettings | undefined;
+    if (input.op === 'snmp-enable') {
+      const settingsResult = readSnmpSettings();
+      if (!settingsResult.ok) {
+        this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: settingsResult.error } });
+        return { content: [{ type: 'text', text: `Blocked: ${settingsResult.error}` }], isError: true };
+      }
+      settings = settingsResult.settings;
+    }
+    const plan = planSnmpConfig(input, settings);
+    if (!plan.valid) {
+      this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: plan.error } });
+      return { content: [{ type: 'text', text: `Blocked: ${plan.error}` }], isError: true };
+    }
+    if (input.execute !== true) {
+      this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: 'execute flag not set; plan only' } });
+      return { content: [{ type: 'text', text: JSON.stringify({ ...redactPlan(plan, settings?.community), note: 'execute was not true: dry-run plan only, nothing written.' }, null, 2) }] };
+    }
+    if (input.op === 'snmp-enable') {
+      const gates = checkSnmpWriteGates(input.host);
+      if (!gates.ok) {
+        this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: gates.error } });
+        return { content: [{ type: 'text', text: `Blocked: ${gates.error}` }], isError: true };
+      }
+    }
+
+    const resolver = new CredentialResolver(await this.getStoreData());
+    const deviceTypes = VENDOR_DEVICE_TYPES[input.vendor];
+    const candidates: Array<{ credential: DeviceTypeCredential; source: string }> = [];
+    for (const dt of deviceTypes) {
+      const exact = resolver.resolveExactDevice(dt, input.deviceId, input.host);
+      if (exact) candidates.push({ credential: exact, source: `exact-device binding (${dt})` });
+    }
+    if (!candidates.length && poolCredentialsEnabled()) {
+      // Round-robin the pools so a small try budget still reaches the CPE pool.
+      const perPool = deviceTypes.map((dt) =>
+        resolver.resolveByType(dt).map((credential) => ({
+          credential,
+          source: `device-type pool ${dt} (NOC_WRITE_SNMP_POOL_CREDENTIALS=true)`,
+        })),
+      );
+      candidates.push(...interleavePoolCandidates(perPool).slice(0, poolCredentialTries()));
+    }
+    if (!candidates.length) {
+      this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: 'no credential for this device' } });
+      return { content: [{ type: 'text', text: 'Blocked: no exact-device credential is bound to this ID+host and NOC_WRITE_SNMP_POOL_CREDENTIALS is not true. Provision a binding, or opt the device-type pool in and re-run.' }], isError: true };
+    }
+    const hostPolicy = this.hostBlocked(args, input.host, 'snmp-config');
+    if (hostPolicy) return hostPolicy;
+
+    const startedAt = Date.now();
+    const failures: string[] = [];
+    for (const candidate of candidates) {
+      try {
+        const result = await this.runSnmpOnDevice(input, plan, settings, candidate.credential);
+        this.auditWith(args, {
+          ...baseAudit,
+          outcome: 'success',
+          durationMs: Date.now() - startedAt,
+          metadata: { op: input.op, vendor: input.vendor, credentialSource: candidate.source, credentialName: candidate.credential.name, attempts: failures.length + 1 },
+        });
+        const payload = {
+          ...result,
+          credentialSource: candidate.source,
+          credentialName: candidate.credential.name,
+          attempts: failures.length + 1,
+          plan: redactPlan(plan, settings?.community),
+          note: input.op === 'snmp-enable'
+            ? (input.vendor === 'wave'
+              ? `WaveOS services.snmp.community + contact (${settings?.contact ?? 'unset, left as it is'}) + enabled verified on the radio${result.locationSet ? `, location ${JSON.stringify(result.locationSet)} from its own GPS fix` : '; no GPS fix supplied, existing location untouched'}. librenms-add-device plus a successful poll is the only real proof SNMP answers.`
+              : input.vendor === 'airos'
+                ? `snmp.status + snmp.community verified in /tmp/system.cfg, sysContact ${JSON.stringify(settings?.contact ?? 'unset, left as it is')}${plan.location ? ` and location ${JSON.stringify(plan.location)}` : ''} where the build carries those lines. librenms-add-device plus a successful poll is the only real proof SNMP answers.`
+                : `Standard RouterOS config verified (community, addresses=, trap-community, src-address, sysContact ${JSON.stringify(settings?.contact ?? 'unset, left as it is')}${plan.location ? `, location ${JSON.stringify(plan.location)}` : ''}). librenms-add-device plus a successful poll is the only real proof SNMP answers.`)
+            : 'Read-only settings snapshot; nothing was written.',
+        };
+        // Two redactions, both needed: by shape first (any community name the
+        // read-back printed, including ours), then ours by value as a backstop.
+        // Shape first matters: redacting the value first leaves a placeholder with
+        // spaces, which the shape pass would then cut in half.
+        const rendered = redactCommunity(
+          redactVerifyOutput(JSON.stringify(payload, null, 2), input.vendor),
+          settings?.community,
+        );
+        return { content: [{ type: 'text', text: rendered }] };
+      } catch (e) {
+        failures.push(this.errText(e, candidate.credential));
+      }
+    }
+    this.auditWith(args, { ...baseAudit, outcome: 'error', durationMs: Date.now() - startedAt, metadata: { op: input.op, vendor: input.vendor, attempts: failures.length, reason: failures.join(' | ').slice(0, 300) } });
+    const detail = redactCommunity(failures.slice(0, 3).join(' | '), settings?.community);
+    return { content: [{ type: 'text', text: `snmp-config failed on every credential tried (${failures.length}). Inspect the device before retrying. Detail: ${detail}` }], isError: true };
+  }
+
+  /** Vendor transport for one credential. Throws so the caller can try the next one. */
+  private async runSnmpOnDevice(input: SnmpConfig, plan: SnmpPlan, settings: SnmpSettings | undefined, credential: DeviceTypeCredential): Promise<Record<string, unknown>> {
+    const timeout = this.config.limits.commandTimeoutMs;
+    if (input.vendor === 'mikrotik') {
+      const client = createDeviceClient(input.host, credential, 'mikrotik-ssh', timeout) as MikroTikClient;
+      try {
+        await client.connect();
+        if (input.op === 'snmp-verify') {
+          return { applied: false, verify: redactVerifyOutput(await client.runRaw(plan.verifyCmd ?? '/snmp print'), 'mikrotik') };
+        }
+        if (!settings) throw new Error('snmp-enable needs NOC_SNMP_COMMUNITY');
+        return { ...(await executeMikrotikSnmp((cmd: string) => client.runRaw(cmd), settings, plan)) };
+      } finally {
+        await client.disconnect().catch(() => { /* best effort */ });
+      }
+    }
+
+    if (input.vendor === 'wave') {
+      // WaveOS: `ucfg edit` + `ucfg commit` over the ubnt-wave credential pool.
+      const runner = new Ssh2Runner();
+      const readCmd = plan.waveReadCmd ?? 'ucfg show';
+      if (input.op === 'snmp-verify') {
+        // Never the raw ucfg dump: it also contains services.uisp.key and the
+        // wireless passphrase. Project services.snmp only.
+        return { applied: false, verify: waveSnmpOnlyView(await runner.exec(input.host, credential, readCmd, timeout)) };
+      }
+      if (!settings) throw new Error('snmp-enable needs NOC_SNMP_COMMUNITY');
+      const result = await executeWaveSnmp((cmd: string) => runner.exec(input.host, credential, cmd, timeout), settings, plan);
+      if (!result.committed) {
+        // Live config is proven; persistence is not. Say so rather than claim success.
+        return {
+          ...result,
+          warning: result.commitReported
+            ? 'ucfg commit returned but the radio never answered the post-commit re-read; persistence is unproven — run snmp-verify to confirm.'
+            : 'ucfg commit dropped the session and the post-commit re-read failed; the live config is correct but persistence is unproven — run snmp-verify to confirm.',
+        };
+      }
+      return { ...result };
+    }
+
+    const runner = new Ssh2Runner();
+    if (input.op === 'snmp-verify') {
+      return { applied: false, verify: redactVerifyOutput(await runner.exec(input.host, credential, plan.verifyCmd ?? "grep -E '^snmp\\.' /tmp/system.cfg", timeout), 'airos') };
+    }
+    if (!settings || !plan.edits?.length) throw new Error('snmp-enable needs a plan with airOS edits');
+    // sed cannot create a key: refuse before touching the radio rather than let the
+    // re-read fail and roll a half-applied config back.
+    const present = await runner.exec(input.host, credential, plan.verifyCmd ?? "grep -E '^snmp\\.' /tmp/system.cfg", timeout);
+    const missing = plan.edits.filter((e) => !present.includes(`${e.key}=`)).map((e) => e.key);
+    if (missing.length) {
+      throw new Error(`airOS build has no ${missing.join(', ')} line in /tmp/system.cfg; switch SNMP on once from the web UI, then re-run (nothing was written)`);
+    }
+    const edits = [...plan.edits, ...(plan.optionalEdits ?? []).filter((e) => present.includes(`${e.key}=`))];
+    const result = await applyCfgEdits(runner, input.host, credential, edits, async () => {
+      try {
+        const check = await runner.exec(input.host, credential, plan.verifyCmd ?? '', 20000);
+        // Redact before returning: this detail is the post-apply grep, and the
+        // community is on a line in it.
+        return { ok: edits.every((e) => check.includes(`${e.key}=${e.value}`)), detail: redactVerifyOutput(check.trim().slice(0, 300) || 'empty readback', 'airos') };
+      } catch (e) {
+        return { ok: false, detail: this.errText(e, credential) };
+      }
+    }, timeout);
+    return { ...result };
+  }
+
   async handleToolCall(name: string, rawArgs: Record<string, unknown>): Promise<{
     content: Array<{ type: 'text'; text: string }>;
     isError?: boolean;
@@ -488,6 +805,12 @@ export class NocMcpServer {
           return await this.tempApWds(args);
         case 'routeros-write':
           return await this.routerOsWrite(args);
+        case 'routeros-temp-access':
+          return await this.routerOsTempAccess(args);
+        case 'snmp-config':
+          return await this.snmpConfig(args);
+        case 'librenms-add-device':
+          return await this.librenmsAddDevice(args);
         case 'lookup-device-by-exact-ip':
           return await this.lookupDeviceByExactIp(args);
         default:
@@ -529,7 +852,134 @@ export class NocMcpServer {
       return { content: [{ type: 'text', text: output.length > this.config.limits.maxOutputBytes ? `${output.substring(0, this.config.limits.maxOutputBytes)}[truncated]` : output }] };
     } catch (error) {
       this.auditWith(args, { timestamp: new Date().toISOString(), device: parsed.data.ip, command: 'lookup-device-by-exact-ip', category: 'inventory', outcome: 'error', redactions: 0, durationMs: Date.now() - startedAt, metadata: { reason: this.errText(error) } });
-      return { content: [{ type: 'text', text: 'LibreNMS exact-IP lookup failed; no bulk inventory fallback was attempted.' }], isError: true };
+      // Surface the cause: a bare "lookup failed" is what hid a plain 404
+      // ("device does not exist") behind what looked like a broken integration.
+      return { content: [{ type: 'text', text: `LibreNMS exact-IP lookup failed: ${this.errText(error)}` }], isError: true };
+    }
+  }
+
+  /**
+   * Add one device to LibreNMS — only after it proves it answers SNMP.
+   *
+   * Order is deliberate: the exact-IP lookup runs first (an address that is
+   * already monitored must never be re-added), then one SNMPv2c GET for sysName
+   * with the monitoring community. Silence ends the call with no request sent:
+   * LibreNMS accepts nearly anything and then creates a device that never polls,
+   * which is the failure mode this pre-flight exists to prevent.
+   *
+   * `execute:false` returns the plan once SNMP is proven, so the operator can see
+   * exactly which device would be added before anything is written.
+   */
+  private async librenmsAddDevice(args: Record<string, unknown>): Promise<{
+    content: Array<{ type: 'text'; text: string }>;
+    isError?: boolean;
+  }> {
+    const device = String((args as Record<string, unknown>).host ?? 'unknown');
+    const baseAudit = { timestamp: new Date().toISOString(), device, command: 'librenms-add-device', category: 'inventory', redactions: 0, durationMs: 0 };
+    const parsed = LibrenmsAddSchema.safeParse(args);
+    if (!parsed.success) {
+      this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: 'schema validation failed' } });
+      return { content: [{ type: 'text', text: `Validation error: ${parsed.error.issues.map((i: { message: string }) => i.message).join(', ')}` }], isError: true };
+    }
+    const input = parsed.data;
+    if (!this.config.inventory.enabled) {
+      this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: 'inventory disabled by configuration' } });
+      return { content: [{ type: 'text', text: 'Blocked: LibreNMS inventory is disabled by configuration.' }], isError: true };
+    }
+    const token = process.env[this.config.inventory.libreNmsTokenEnvVar] ?? '';
+    if (!token.trim()) {
+      this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: 'no LibreNMS API token' } });
+      return { content: [{ type: 'text', text: `Blocked: ${this.config.inventory.libreNmsTokenEnvVar} is not set.` }], isError: true };
+    }
+    const settings = readSnmpSettings();
+    if (!settings.ok) {
+      this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: 'no SNMP community to probe with' } });
+      return { content: [{ type: 'text', text: `Blocked: ${settings.error} The community is needed to prove the device answers SNMP before adding it.` }], isError: true };
+    }
+
+    const startedAt = Date.now();
+    const lookupOptions = {
+      baseUrl: this.config.inventory.libreNmsBaseUrl,
+      token,
+      timeoutMs: this.config.inventory.lookupTimeoutMs,
+      staleAfterSeconds: this.config.inventory.staleAfterSeconds,
+    };
+    try {
+      const existing = await lookupLibreNmsDeviceByExactIp(input.host, lookupOptions);
+      if (existing.status === 'matched') {
+        this.auditWith(args, { ...baseAudit, outcome: 'blocked', durationMs: Date.now() - startedAt, metadata: { reason: 'address already monitored', deviceId: existing.device?.deviceId } });
+        return { content: [{ type: 'text', text: `Already monitored: ${input.host} is LibreNMS device_id ${existing.device?.deviceId ?? 'unknown'} (${existing.device?.hostname ?? 'no hostname'}). Nothing added.` }], isError: true };
+      }
+      if (existing.status === 'ambiguous' || existing.status === 'identity_unverified') {
+        this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: `lookup was ${existing.status}` } });
+        return { content: [{ type: 'text', text: `Not added: the exact-IP lookup returned ${existing.status} for ${input.host}. ${existing.caution} A human has to resolve which record is this device.` }], isError: true };
+      }
+
+      const probe = await snmpGetSysName(input.host, settings.settings.community, {
+        timeoutMs: Math.min(5000, Math.max(2000, this.config.inventory.lookupTimeoutMs)),
+      });
+      const snmp = { answered: probe.answered, sysName: probe.sysName ?? null, error: probe.error ?? null };
+      if (!probe.ok) {
+        this.auditWith(args, { ...baseAudit, outcome: 'blocked', durationMs: Date.now() - startedAt, metadata: { reason: 'device did not answer SNMP' } });
+        const why = redactCommunity(probe.error ?? 'no response', settings.settings.community);
+        return { content: [{ type: 'text', text: `Not added: ${input.host} did not answer SNMPv2c with the monitoring community (${why}). Enable SNMP first with snmp-config (vendor mikrotik|airos|wave), then retry — LibreNMS would otherwise create a device that never polls.` }], isError: true };
+      }
+
+      if (input.execute !== true) {
+        this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: 'execute flag not set; plan only' } });
+        return { content: [{ type: 'text', text: JSON.stringify({
+          wouldAdd: true,
+          host: input.host,
+          snmp,
+          request: librenmsAddRequestPreview(input.host),
+          note: 'execute was not true: dry-run plan only, nothing added. The device answered SNMP with the monitoring community, which is the precondition for adding it.',
+        }, null, 2) }] };
+      }
+      if (process.env.NOC_WRITE_ENABLED !== 'true') {
+        this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: 'writes disabled' } });
+        return { content: [{ type: 'text', text: 'Blocked: Writes disabled; require NOC_WRITE_ENABLED=true (kill switch, default off)' }], isError: true };
+      }
+      const hostPolicy = checkWriteHost(input.host);
+      if (!hostPolicy.ok) {
+        this.auditWith(args, { ...baseAudit, outcome: 'blocked', metadata: { reason: hostPolicy.error } });
+        return { content: [{ type: 'text', text: `Blocked: ${hostPolicy.error}` }], isError: true };
+      }
+
+      const result = await postLibrenmsDevice(input.host, settings.settings.community, {
+        baseUrl: this.config.inventory.libreNmsBaseUrl,
+        token,
+        timeoutMs: this.config.inventory.lookupTimeoutMs,
+      });
+      if (result.status !== 'added') {
+        this.auditWith(args, { ...baseAudit, outcome: 'error', durationMs: Date.now() - startedAt, metadata: { reason: result.message.slice(0, 200) } });
+        return { content: [{ type: 'text', text: `LibreNMS refused to add ${input.host}: ${redactCommunity(result.message, settings.settings.community)}. force_add was not used: a sysName collision or a discovery failure needs a human decision, not an override.` }], isError: true };
+      }
+
+      // Confirm what LibreNMS actually recorded and whether the first poll landed.
+      const confirmed = await lookupLibreNmsDeviceByExactIp(input.host, lookupOptions).catch(() => null);
+      this.auditWith(args, { ...baseAudit, outcome: 'success', durationMs: Date.now() - startedAt, metadata: { deviceId: result.deviceId, sysName: snmp.sysName, reason: input.reason } });
+      const payload = {
+        added: true,
+        host: input.host,
+        deviceId: result.deviceId,
+        message: result.message,
+        snmp,
+        confirmed: confirmed
+          ? {
+            lookup: confirmed.status,
+            hostname: confirmed.device?.hostname ?? null,
+            sysName: confirmed.device?.sysName ?? null,
+            status: confirmed.device?.libreNmsReportedStatus ?? null,
+            pollFreshness: confirmed.device?.pollFreshness ?? null,
+            lastPolled: confirmed.device?.lastPolled ?? null,
+          }
+          : null,
+        note: 'LibreNMS accepted the device. The first successful poll is the end-to-end proof of SNMP; re-run lookup-device-by-exact-ip after a few minutes and expect pollFreshness "fresh".',
+      };
+      return { content: [{ type: 'text', text: redactCommunity(JSON.stringify(payload, null, 2), settings.settings.community) }] };
+    } catch (error) {
+      this.auditWith(args, { ...baseAudit, outcome: 'error', durationMs: Date.now() - startedAt, metadata: { reason: this.errText(error) } });
+      return { content: [{ type: 'text', text: `librenms-add-device failed: ${this.errText(error)}` }], isError: true };
     }
   }
 

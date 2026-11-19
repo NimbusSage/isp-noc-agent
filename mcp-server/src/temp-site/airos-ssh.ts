@@ -37,6 +37,20 @@ export const ALLOWLISTED_KEYS = [
   // redacted in every log/audit surface; only the SOURCE is recorded.
   'wpasupplicant.profile.1.network.1.psk',
   'wpasupplicant.profile.1.network.1.key_mgmt.1.name',
+  // SNMP provisioning (snmp-config). These two lines only switch the read-only
+  // SNMP service on with the community the operator chose; there is no key here
+  // that changes management access or the radio, and the community value is
+  // redacted from every surface the way a PSK is.
+  'snmp.status',
+  'snmp.community',
+  // Present on most infrastructure radios (read alongside snmp.community): the
+  // standard config keeps it equal to the polling community.
+  'snmp.rocommunity',
+  // Identity fields, standardized across the estate: sysContact is the org
+  // contact, sysLocation the device's own GPS fix as `[lat, lon]` — the form
+  // LibreNMS renders on its map. Plain text, never a secret.
+  'snmp.contact',
+  'snmp.location',
 ] as const;
 export type AllowlistedKey = (typeof ALLOWLISTED_KEYS)[number];
 
@@ -119,7 +133,22 @@ export class Ssh2Runner implements SshRunner {
         // refuse them by default ("no matching host key type found").
         // Verified live against an airOS AP: without this block even
         // the correct password can never be tried.
+        //
+        // KEX must be spelled out too: ssh2's defaults are modern-only, and
+        // RouterOS 6 / older dropbear offer nothing but group14-sha1. Without
+        // these entries the handshake dies as "no matching key exchange
+        // algorithm" before a password is ever tried (field: 40% of a fleet
+        // sweep failed this way, looking exactly like bad credentials).
         algorithms: {
+          kex: [
+            'curve25519-sha256', 'curve25519-sha256@libssh.org',
+            'ecdh-sha2-nistp256', 'ecdh-sha2-nistp384', 'ecdh-sha2-nistp521',
+            'diffie-hellman-group14-sha1', 'diffie-hellman-group-exchange-sha1', 'diffie-hellman-group1-sha1',
+          ],
+          // ssh2 spells this `cipher` (singular). A `ciphers` key is silently
+          // ignored by the library, which is why the client must keep working
+          // with defaults for modern builds and only ADD the legacy entries.
+          cipher: ['aes128-ctr', 'aes192-ctr', 'aes256-ctr', 'aes128-gcm@openssh.com', 'aes256-gcm@openssh.com', 'aes128-cbc', '3des-cbc'],
           serverHostKey: ['ssh-rsa', 'rsa-sha2-256', 'rsa-sha2-512', 'ecdsa-sha2-nistp256', 'ssh-ed25519'],
         },
       });

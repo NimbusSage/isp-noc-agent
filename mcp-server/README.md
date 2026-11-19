@@ -185,7 +185,19 @@ Restore the owner-only pre-apply snapshot for an incident+host (SFTP put + softr
 
 ### `lookup-device-by-exact-ip`
 
-Read-only exact IPv4 lookup in LibreNMS using `GET /api/v0/devices/{ip}`. It makes one bounded request (no bulk-list fallback), returns identity fields plus source/retrieval time and poll freshness, and asserts a match only when the endpoint returns exactly one device whose hostname equals the queried IP. Stale, future-dated, missing or timezone-unverified poll times, ambiguous results, and hostname mismatches are explicit. LibreNMS-reported status is not proof of current reachability, site truth, radio role, RF compatibility, or topology. Configure `inventory.enabled`, `inventory.libreNmsBaseUrl`, and `inventory.libreNmsTokenEnvVar` in `config/server.json`; default token variable is `LIBRENMS_TOKEN`.
+Read-only exact IPv4 lookup in LibreNMS using `GET /api/v0/devices/{ip}`, with one bounded fallback to the server-side filtered `GET /api/v0/devices?type=ipv4&query={ip}` when that endpoint 404s (a device polled by DNS name, or one carrying the address in `overwrite_ip`, has no `{ip}` endpoint). Neither request downloads a bulk inventory: only the match set comes back. A 404 is LibreNMS's normal "device does not exist" answer and reports `not_found`, not an API error. It returns identity fields plus source/retrieval time and poll freshness, and asserts a match only when exactly one device's hostname (endpoint) or `ip`/`overwrite_ip` (search) equals the queried address. Stale, future-dated, missing or timezone-unverified poll times, ambiguous results, and hostname mismatches are explicit. LibreNMS-reported status is not proof of current reachability, site truth, radio role, RF compatibility, or topology. Configure `inventory.enabled`, `inventory.libreNmsBaseUrl`, and `inventory.libreNmsTokenEnvVar` in `config/server.json`; default token variable is `LIBRENMS_TOKEN`.
+
+### `librenms-add-device`
+
+Gated add of ONE device to LibreNMS, and only after that device proves it answers SNMP. Pre-flight is read-only: the exact-IP lookup refuses an address that is already monitored, then one SNMPv2c GET for `sysName` is sent to the device with the community from `NOC_SNMP_COMMUNITY` (a dependency-free BER client in `src/inventory/snmp-probe.ts`; the community never goes on a command line). No answer means no add — LibreNMS accepts nearly anything and would create a device that never polls.
+
+The request never sets `force_add`, so LibreNMS's refusal of a duplicate `sysName` (or a failed discovery) is reported verbatim instead of being overridden: a sysName collision is real information. Requires `execute:true`, `NOC_WRITE_ENABLED=true`, `inventory.enabled` with a token, and a host inside write scope. `execute:false` returns the plan for a device already proven to answer. The first successful poll is the end-to-end proof; re-run `lookup-device-by-exact-ip` and expect `pollFreshness: "fresh"`.
+
+### `snmp-config`
+
+Gated SNMP provisioning for devices that are up but unmonitored. Closed op set `snmp-enable` | `snmp-verify`, vendors `mikrotik` (RouterOS `/snmp`), `airos` (airOS `/tmp/system.cfg`), and `wave` (WaveOS `ucfg`). See `../docs/mcp-server.md` for the gates; the operator-standard config, the stale `src-address` repair, the org `sysContact` read from `NOC_SNMP_CONTACT` (the name identifies the organization, so it lives in the environment and never in this repository), and how `sysLocation` is filled from a device's own GPS fix as `[lat, lon]` are documented there.
+
+`sysLocation` is only ever a measured coordinate: pass `gps: { lat, lon }` from that device's own read (a Wave reports its fix via the `wave-gui` read, `radios.main.localPeer.gps`). Omit it and an existing location is left exactly as it was — a provisioning sweep must not overwrite estate data it did not measure. The value is validated against the `[lat, lon]` form LibreNMS maps.
 
 ### `list-device-types`
 

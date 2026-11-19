@@ -15,7 +15,7 @@ describe('NocMcpServer', () => {
     });
 
     const tools = server.getToolDefinitions();
-    expect(tools).toHaveLength(17);
+    expect(tools).toHaveLength(20);
     expect(tools[0].name).toBe('run-diagnostics');
     expect(tools[0].inputSchema.required).toEqual(['host', 'deviceType', 'command']);
     expect(Object.keys(tools[0].inputSchema.properties)).toEqual(['host', 'deviceType', 'command', 'params']);
@@ -25,20 +25,27 @@ describe('NocMcpServer', () => {
     expect(tools[2].name).toBe('list-device-types');
     expect(tools[2].inputSchema.required ?? []).toEqual([]);
     expect(tools[3].name).toBe('routeros-write');
-    expect(tools[4].name).toBe('temp-radio-plan');
-    expect(tools[5].name).toBe('temp-radio-apply');
-    expect(tools[6].name).toBe('temp-radio-rollback');
-    expect(tools[7].name).toBe('temp-ospf-apply');
-    expect(tools[8].name).toBe('temp-ospf-rollback');
-    expect(tools[9].name).toBe('temp-mt-flip');
-    expect(tools[10].name).toBe('temp-mt-rollback');
-    expect(tools[11].name).toBe('temp-ap-wds');
-    expect(tools[12].name).toBe('temp-mt-bounce');
-    expect(tools[13].name).toBe('temp-mt-alias');
-    expect(tools[14].name).toBe('temp-mt-alias-remove');
-    expect(tools[15].name).toBe('temp-ospf-plan');
-    expect(tools[16].name).toBe('lookup-device-by-exact-ip');
-    expect(tools[16].inputSchema.required).toEqual(['ip']);
+    expect(tools[3].name).toBe('routeros-write');
+    expect(tools[4].name).toBe('routeros-temp-access');
+    expect(tools[4].inputSchema.required).toEqual(['op', 'host', 'deviceId', 'reason']);
+    expect(tools[5].name).toBe('temp-radio-plan');
+    expect(tools[6].name).toBe('temp-radio-apply');
+    expect(tools[7].name).toBe('temp-radio-rollback');
+    expect(tools[8].name).toBe('temp-ospf-apply');
+    expect(tools[9].name).toBe('temp-ospf-rollback');
+    expect(tools[10].name).toBe('temp-mt-flip');
+    expect(tools[11].name).toBe('temp-mt-rollback');
+    expect(tools[12].name).toBe('temp-ap-wds');
+    expect(tools[13].name).toBe('temp-mt-bounce');
+    expect(tools[14].name).toBe('temp-mt-alias');
+    expect(tools[15].name).toBe('temp-mt-alias-remove');
+    expect(tools[16].name).toBe('temp-ospf-plan');
+    expect(tools[17].name).toBe('lookup-device-by-exact-ip');
+    expect(tools[17].inputSchema.required).toEqual(['ip']);
+    expect(tools[18].name).toBe('snmp-config');
+    expect(tools[18].inputSchema.required).toEqual(['op', 'vendor', 'host', 'deviceId', 'reason']);
+    expect(tools[19].name).toBe('librenms-add-device');
+    expect(tools[19].inputSchema.required).toEqual(['host', 'reason']);
   });
 
   it('hides exact-IP lookup when disabled by configuration', async () => {

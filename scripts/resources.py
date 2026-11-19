@@ -5,6 +5,7 @@
     python3 scripts/resources.py get uisp              # print the URL; exit 3 when it is not registered
     python3 scripts/resources.py get uisp --field host # just the host name
     python3 scripts/resources.py set uisp https://uisp.<your-domain>
+    python3 scripts/resources.py unset uisp          # remove a registration (env values are not touched)
     python3 scripts/resources.py migrate               # show what .env and older settings already hold
     python3 scripts/resources.py migrate --write       # register those values in site-pack/profile.json
     python3 scripts/resources.py check [--probe]       # validate the registry; --probe tries each URL without credentials
@@ -18,7 +19,7 @@ A resource that is not registered is not available. Ask the operator for it; nev
 address from an example in a skill, from another system's device list, or from DNS. Credentials
 go only to a registered resource.
 
-`set` and `migrate --write` change what the agent will trust, so they refuse to run when
+`set`, `unset` and `migrate --write` change what the agent will trust, so they refuse to run when
 NOC_UNATTENDED=1 (the webhook server sets it for batch agents). That is a guard against an agent
 registering an address on its own, not a security boundary: the agent shares the operator's
 account. Credentials go only to a registered resource: the MCP read-host policy enforces that for
@@ -354,6 +355,36 @@ def cmd_set(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_unset(args: argparse.Namespace) -> int:
+    refused = _refuse_if_unattended("`unset`")
+    if refused:
+        return refused
+    if not NAME_RE.match(args.name):
+        print("name must be lowercase letters, digits or _ (at most 41 characters)", file=sys.stderr)
+        return 2
+    profile = noc_config.load_profile()
+    reg = profile.get("resources")
+    if not isinstance(reg, dict) or not isinstance(reg.get(args.name), dict):
+        print("%s is not registered in the profile; nothing to remove." % args.name, file=sys.stderr)
+        return 3
+    del reg[args.name]
+    try:
+        path = write_profile(profile)
+    except OSError as e:
+        print("could not write the profile: %s" % e, file=sys.stderr)
+        return 2
+    print("removed %s from %s" % (args.name, path.name))
+    # The registration is gone, but an environment variable of the same resource
+    # still wins on lookup. Say so rather than let the next `get` surprise them.
+    try:
+        still = resolve(args.name)
+    except ResourceError:
+        still = None
+    if still is not None and still.value:
+        print("note: %s still resolves to the same value from %s; unset that too if it should be gone" % (args.name, still.source))
+    return 0
+
+
 def cmd_migrate(args: argparse.Namespace) -> int:
     if args.write:
         refused = _refuse_if_unattended("`migrate --write`")
@@ -449,12 +480,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     p.add_argument("name")
     p.add_argument("value")
     p.add_argument("--kind", choices=("url", "sheet"), default="url", help="for a name that is not in the catalog")
+    p = sub.add_parser("unset", help="remove a registration (operator only; environment variables are not touched)")
+    p.add_argument("name")
     p = sub.add_parser("migrate", help="collect values from .env and older settings")
     p.add_argument("--write", action="store_true")
     p = sub.add_parser("check", help="validate the registry")
     p.add_argument("--probe", action="store_true", help="also try each URL without credentials")
     args = ap.parse_args(argv)
-    return {"list": cmd_list, "get": cmd_get, "set": cmd_set, "migrate": cmd_migrate, "check": cmd_check}[args.cmd](args)
+    return {"list": cmd_list, "get": cmd_get, "set": cmd_set, "unset": cmd_unset, "migrate": cmd_migrate, "check": cmd_check}[args.cmd](args)
 
 
 if __name__ == "__main__":
