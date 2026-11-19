@@ -125,7 +125,6 @@ def normalize_tsig_algorithm(value: str) -> str:
 def provider_env(s: dict, base_env: dict | None = None) -> dict:
     """Environment for lego: the caller's environment plus this backend's variables."""
     env = dict(os.environ if base_env is None else base_env)
-    env.setdefault("LEGO_ACCEPT_TOS", "true")   # `renew` has no flag; the environment is the only way in
     for name in PROVIDERS[s["provider"]]:
         value = s["vars"].get(name, "")
         if name.endswith("_ALGORITHM"):
