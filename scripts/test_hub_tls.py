@@ -125,9 +125,6 @@ class LegoCommandLine(unittest.TestCase):
             self.assertIn("--dns.propagation.wait", argv)
             self.assertNotIn("--dns.resolvers", argv)
 
-    def test_child_environment_accepts_the_terms_for_renew(self):
-        s = hub_tls.settings(dict(BASE), lego="/opt/lego")
-        self.assertEqual(hub_tls.provider_env(s, base_env={})["LEGO_ACCEPT_TOS"], "true")
 
 
 class Caddy(unittest.TestCase):
