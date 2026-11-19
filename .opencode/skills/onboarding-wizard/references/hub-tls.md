@@ -10,7 +10,7 @@ does the ACME work.
 
 ## Ask the operator (one at a time)
 
-1. Public host name for the hub (for example `hub.example.com`) and the email that gets
+1. Public host name for the hub (for example `hub.<your-domain>`) and the email that gets
    certificate expiry notices.
 2. Which DNS server holds the zone and whether it accepts RFC 2136 dynamic updates
    (Technitium, BIND, PowerDNS, Knot: yes; NSD: no). If it does, the operator creates a

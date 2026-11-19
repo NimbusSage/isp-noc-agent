@@ -159,9 +159,9 @@ while a TSIG key can be allowed to touch only the challenge record.
 Proof that it worked, from a machine on the LAN:
 
 ```bash
-openssl s_client -connect hub.example.com:443 -servername hub.example.com </dev/null 2>/dev/null \
+openssl s_client -connect <host>:443 -servername <host> </dev/null 2>/dev/null \
   | openssl x509 -noout -subject -enddate
-curl -sSI https://hub.example.com/ | head -3
+curl -sSI https://<host>/ | head -3
 ```
 
 The name still appears in public Certificate Transparency logs, so it is not secret; the
